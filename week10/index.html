@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Week 10 Demos</title>
-<meta name="description" content="CE 7453 Week 10: interactive demonstrations of message passing on a graph, permutation invariance, value iteration, and Q-learning with exploration.">
+<meta name="description" content="CE 7453 Week 10: follow a message-passing pulse through a pipe network, try to break a permutation-invariant model, design a repair policy and compare it with the optimum, and bet on an exploration race.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -100,6 +100,46 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 </style>
 </head>
 <body>
+<style>
+/* components for the instructional formats */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.step { font-size: 15px; line-height: 1.5; }
+.step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
+.step p { margin: 6px 0; }
+.ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
+.ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
+.ask.no { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ask.ok { background: #1E3A2C; } :root:not([data-theme="light"]) .ask.no { background: #432426; } }
+:root[data-theme="dark"] .ask.ok { background: #1E3A2C; } :root[data-theme="dark"] .ask.no { background: #432426; }
+.quiz { font-size: 15px; }
+.quiz .q { margin: 0 0 8px; font-weight: 500; }
+.quiz .opts { display: grid; gap: 6px; }
+.quiz button { text-align: left; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.quiz button.right { border-color: #2E7D5B; background: #E3F2EA; }
+.quiz button.wrong { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quiz button.right { background: #1E3A2C; } :root:not([data-theme="light"]) .quiz button.wrong { background: #432426; } }
+:root[data-theme="dark"] .quiz button.right { background: #1E3A2C; } :root[data-theme="dark"] .quiz button.wrong { background: #432426; }
+.quiz .why { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { color: #2E7D5B; border-color: #2E7D5B; }
+.filelist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.filelist li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-family: var(--mono); font-size: 13px; cursor: grab; }
+.filelist li.drag { opacity: 0.5; }
+.filelist li .sw { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.filelist li .mv { margin-left: auto; display: flex; gap: 4px; }
+.filelist li .mv button { font: inherit; font-size: 12px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+.score { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.big { font-size: 28px; font-weight: 600; font-family: var(--mono); }
+canvas.hit { cursor: pointer; }
+.bet { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.bet button { font: inherit; font-size: 14px; padding: 8px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.bet button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+</style>
+
 <header>
   <a class="weeks" href="../">All weeks</a>
   <span class="course">CE 7453 &middot; Week 10 &middot; Geometry and reinforcement learning</span>
@@ -107,154 +147,131 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 </header>
 
 <nav role="tablist" aria-label="Demos">
-  <button role="tab" data-tab="passing" aria-selected="true">Message passing<span class="slide">slides 7, 8</span></button>
-  <button role="tab" data-tab="permute" aria-selected="false">Permutation invariance<span class="slide">slides 6, 10</span></button>
-  <button role="tab" data-tab="bellman" aria-selected="false">Value iteration<span class="slide">slides 15, 16</span></button>
-  <button role="tab" data-tab="qlearn" aria-selected="false">Q-learning and exploration<span class="slide">slide 17</span></button>
+  <button role="tab" data-tab="passing" aria-selected="true">Follow the pulse<span class="slide">slides 7, 8</span></button>
+  <button role="tab" data-tab="permute" aria-selected="false">Break the model<span class="slide">slides 6, 10</span></button>
+  <button role="tab" data-tab="bellman" aria-selected="false">Design the policy<span class="slide">slides 15, 16</span></button>
+  <button role="tab" data-tab="qlearn" aria-selected="false">The exploration race<span class="slide">slide 17</span></button>
 </nav>
 
 <main>
 
-<!-- ============ 1. MESSAGE PASSING ============ -->
+<!-- ============ 1. MESSAGE PASSING: guided walkthrough ============ -->
 <section class="demo active" id="passing" role="tabpanel">
-  <h2>Message passing: depth on a graph is measured in hops</h2>
-  <p class="lead">A small water network. One junction starts with a signal of 1, every other junction with 0. Each layer replaces every node's value by the normalized average of itself and its neighbours.</p>
-  <div class="grid">
-    <div class="plot two">
-      <canvas id="mpGraph" width="900" height="460"></canvas>
-      <canvas id="mpSpread" width="450" height="460"></canvas>
-    </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="mpK">layers K (hops) <output id="mpKOut">0</output></label>
-        <input type="range" id="mpK" min="0" max="12" step="1" value="0">
-        <div class="hint">0 is the input, each step is one message passing layer</div>
+  <h2>Follow the pulse through a water network</h2>
+  <p class="lead">A contaminant reading appears at one junction. A message passing layer spreads it one hop per layer. Walk through what each layer does, and predict before the page shows you.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="mpGraph" class="hit" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="mpStep"></div>
+      <div class="panel">
+        <div class="btns"><button id="mpBack">Back</button><button class="primary" id="mpNext">Next</button><button id="mpFree">Free play</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>hops so far</dt><dd id="mpK">0</dd>
+          <dt>junctions reached</dt><dd id="mpReach">1 / 12</dd>
+          <dt>spread across junctions</dt><dd id="mpStd">-</dd>
+        </dl>
       </div>
-      <div class="btns">
-        <button class="primary" id="mpStep">One more hop</button>
-        <button id="mpSource">Move the source</button>
-        <button id="mpReset">Reset</button>
-      </div>
-      <dl class="readout">
-        <dt>nodes reached so far</dt><dd id="mpReach">1 / 12</dd>
-        <dt>spread across nodes (std)</dt><dd id="mpStd">0.000</dd>
-        <dt>largest node value</dt><dd id="mpMax">1.000</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--blue)">node value (darker is larger)</span>
-        <span style="--c: var(--red)">source junction</span>
-      </div>
+      <div class="panel quiz" id="mpQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>The layer is X_{k+1} = D^{-1/2} (A + I) D^{-1/2} X_k with the weight matrix set to the identity and no nonlinearity, which is the Kipf and Welling propagation rule on slide 7 with the learnable part removed. One hop reaches the neighbours and two hops reach their neighbours in turn. The receptive field is a graph distance.</p>
-    <p>Keep adding hops and every node drifts toward the same value: the right panel shows the spread across nodes falling toward zero. That is oversmoothing, slide 8. Two or three layers is usually what a utility network needs, and the number of layers is a statement about how far a cause is allowed to travel.</p>
+    <p>Each layer is X_{k+1} = D^{-1/2} (A + I) D^{-1/2} X_k with the weight matrix set to the identity, which is the Kipf and Welling rule on slide 7 with the learnable part removed. The pulse is the signal; the animation is the sum over neighbours that every junction computes at once.</p>
   </div>
 </section>
 
-<!-- ============ 2. PERMUTATION INVARIANCE ============ -->
+<!-- ============ 2. PERMUTATION INVARIANCE: break the model ============ -->
 <section class="demo" id="permute" role="tabpanel">
-  <h2>Permutation invariance: renumber the points and nothing may change</h2>
-  <p class="lead">Eight scanned points. Two models read them: a plain network on the concatenated coordinates, and a shared encoder on each point followed by a max pool. Shuffle the file order and compare.</p>
-  <div class="grid">
+  <h2>Break the model: renumber the scan and see which model notices</h2>
+  <p class="lead">Eight points from a laser scan, listed in file order. Two models read the file. Your job is to change each model's answer. One of them will not let you.</p>
+  <div class="stage">
     <div class="plot two">
-      <canvas id="pmPoints" width="900" height="460"></canvas>
-      <canvas id="pmBars" width="450" height="460"></canvas>
+      <canvas id="pmPoints" class="hit" width="800" height="500"></canvas>
+      <canvas id="pmBars" width="400" height="500"></canvas>
     </div>
-    <div class="controls">
-      <div class="btns">
-        <button class="primary" id="pmShuffle">Shuffle the file order</button>
-        <button id="pmJitter">Move one point</button>
-        <button id="pmReset">Reset</button>
+    <div class="side">
+      <div class="panel">
+        <h3>the file, in order (drag rows or use the arrows)</h3>
+        <ul class="filelist" id="pmList"></ul>
       </div>
-      <dl class="readout">
-        <dt>shuffles so far</dt><dd id="pmCount">0</dd>
-        <dt>change in concatenated model</dt><dd id="pmDeltaC">0.000</dd>
-        <dt>change in pooled model</dt><dd id="pmDeltaP">0.000</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--red)">concatenate in file order, then a linear map</span>
-        <span style="--c: var(--blue)">shared encoder per point, then max over points</span>
+      <div class="panel">
+        <h3>challenges</h3>
+        <div class="ask" id="pmC1">1. Change the red model's output by at least 0.5 without moving any point. <span class="badge" id="pmB1">not yet</span></div>
+        <div class="ask" id="pmC2">2. Now change the blue model's output by at least 0.05. <span class="badge" id="pmB2">not yet</span></div>
+        <div class="btns"><button id="pmReset">Reset</button></div>
       </div>
+      <div class="panel quiz" id="pmQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>The numbers next to the points are their positions in the file. The red model multiplies the 16 concatenated coordinates by a fixed matrix, so it memorizes the order you typed the points in: shuffle and its output jumps. The blue model applies the same small encoder to every point and takes the maximum over points, and order cannot survive a max, so its output is identical after every shuffle.</p>
-    <p>Move one point and both outputs change, as they should. Order is bookkeeping and geometry is data. The model must answer to the second and ignore the first. That is the design constraint on slides 6 and 10, for point clouds and for graphs alike.</p>
+    <p>The red model multiplies the 16 concatenated coordinates by a fixed matrix, so it reads the order you typed the points in. The blue model applies one shared encoder to every point and takes the maximum over points. Order is bookkeeping and geometry is data; a model for scans and graphs must answer to the second and ignore the first, which is the constraint on slides 6 and 10.</p>
   </div>
 </section>
 
-<!-- ============ 3. VALUE ITERATION ============ -->
+<!-- ============ 3. VALUE ITERATION: design the policy ============ -->
 <section class="demo" id="bellman" role="tabpanel">
-  <h2>Value functions and the Bellman equation</h2>
-  <p class="lead">A 6 by 6 grid where the goal pays +1 and the spillway cells pay -1. A move slips sideways with probability 0.1. Sweep the Bellman update and watch the values and the greedy arrows settle.</p>
-  <div class="grid">
+  <h2>Design the operating policy, then see how close you got</h2>
+  <p class="lead">A pump crew moves across a 6 by 6 site. The pump station pays +1, the three spillway cells pay -1, and a move slips sideways one time in ten. Click cells to set the direction the crew takes from each one. Then evaluate your policy exactly and compare it with the optimum.</p>
+  <div class="stage">
     <div class="plot two">
-      <canvas id="viGrid" width="900" height="460"></canvas>
-      <canvas id="viConv" width="450" height="460"></canvas>
+      <canvas id="viGrid" class="hit" width="800" height="500"></canvas>
+      <canvas id="viConv" width="400" height="500"></canvas>
     </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="viGamma">discount gamma <output id="viGammaOut">0.90</output></label>
-        <input type="range" id="viGamma" min="0.50" max="0.99" step="0.01" value="0.90">
-        <div class="hint">near 1 plans for the long run, small is myopic</div>
+    <div class="side">
+      <div class="panel">
+        <h3>your policy</h3>
+        <div class="btns"><button class="primary" id="viEval">Evaluate my policy</button><button id="viReveal">Reveal the optimum</button><button id="viClear">Clear</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>expected return from start, yours</dt><dd id="viMine">-</dd>
+          <dt>expected return from start, optimal</dt><dd id="viOpt">-</dd>
+          <dt>your score</dt><dd id="viScore">-</dd>
+          <dt>cells where you differ from the optimum</dt><dd id="viDiff">-</dd>
+        </dl>
       </div>
-      <div class="btns">
-        <button class="primary" id="viSweep">One Bellman sweep</button>
-        <button id="viRun">Sweep to convergence</button>
-        <button id="viReset">Reset values to 0</button>
+      <div class="panel">
+        <div class="ctl">
+          <label for="viGamma">discount gamma <output id="viGammaOut">0.90</output></label>
+          <input type="range" id="viGamma" min="0.50" max="0.99" step="0.01" value="0.90">
+          <div class="hint">changes the optimum, so reveal it again</div>
+        </div>
       </div>
-      <dl class="readout">
-        <dt>sweeps done</dt><dd id="viN">0</dd>
-        <dt>largest change in the last sweep</dt><dd id="viDelta">-</dd>
-        <dt>value at the start cell</dt><dd id="viV0">0.000</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--blue)">value V(s), darker is higher</span>
-        <span style="--c: var(--ink)">greedy action</span>
-      </div>
+      <div class="panel quiz" id="viQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>Each sweep applies V(s) = max over actions of the expected reward now plus gamma times V at the next state, averaged over the slip. The right panel plots the largest change per sweep. It shrinks geometrically at rate gamma, so a discount near one takes many more sweeps, and slide 15 calls the discount a policy decision for that reason.</p>
-    <p>Once the values stop moving, read the policy off them: each arrow points to the neighbour with the highest expected value. Lower the discount and the arrows near the spillway stop caring about the far-away goal.</p>
+    <p>Evaluating a fixed policy solves V = r + gamma P V, one linear system. The reveal runs value iteration, V(s) = max over actions of expected reward plus gamma V(next), one sweep at a time, and the right panel shows the largest change per sweep shrinking at rate gamma. Reading the policy off the values is the last line of slide 16.</p>
   </div>
 </section>
 
-<!-- ============ 4. Q-LEARNING ============ -->
+<!-- ============ 4. Q-LEARNING: the race ============ -->
 <section class="demo" id="qlearn" role="tabpanel">
-  <h2>Q-learning, and the price of exploring</h2>
-  <p class="lead">Same grid, but now the agent does not know the transition rule. It acts, sees a reward and a next state, and nudges its Q estimate toward the Bellman target. The exploration rate decides how often it acts against its own best guess.</p>
-  <div class="grid">
-    <div class="plot two">
-      <canvas id="qlGrid" width="900" height="460"></canvas>
-      <canvas id="qlCurve" width="450" height="460"></canvas>
-    </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="qlEps">exploration rate epsilon <output id="qlEpsOut">0.10</output></label>
-        <input type="range" id="qlEps" min="0" max="0.5" step="0.01" value="0.10">
-        <div class="hint">0 is always greedy</div>
+  <h2>The exploration race</h2>
+  <p class="lead">Two crews learn the same site from experience with Q-learning. The left crew always takes its current best guess. The right crew acts at random a fraction of the time. Place your bet, then start the race.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="qlRace" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel">
+        <h3>your bet: after 150 episodes, whose greedy policy is better?</h3>
+        <div class="bet"><button id="betL" aria-pressed="false">Left, greedy</button><button id="betT" aria-pressed="false">About the same</button><button id="betR" aria-pressed="false">Right, exploring</button></div>
+        <div class="ctl" style="margin-top:10px">
+          <label for="qlEps">right crew's exploration rate <output id="qlEpsOut">0.10</output></label>
+          <input type="range" id="qlEps" min="0.02" max="0.5" step="0.01" value="0.10">
+        </div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="qlStart">Start the race</button><button id="qlReset">New site</button></div>
       </div>
-      <div class="btns">
-        <button class="primary" id="qlRun">Run 200 episodes</button>
-        <button id="qlReset">Start over</button>
+      <div class="panel">
+        <dl class="readout">
+          <dt>episodes run</dt><dd id="qlN">0 / 150</dd>
+          <dt>left, greedy policy return</dt><dd id="qlL">-</dd>
+          <dt>right, greedy policy return</dt><dd id="qlR">-</dd>
+          <dt>cells visited, left / right</dt><dd id="qlV">-</dd>
+        </dl>
+        <div class="ask" id="qlVerdict" hidden></div>
       </div>
-      <dl class="readout">
-        <dt>episodes so far</dt><dd id="qlN">0</dd>
-        <dt>return, mean of last 50 episodes</dt><dd id="qlRet">-</dd>
-        <dt>return of the greedy policy now</dt><dd id="qlGreedy">-</dd>
-        <dt>cells ever visited</dt><dd id="qlVisit">0 / 36</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--orange)">visit count, darker is more</span>
-        <span style="--c: var(--ink)">greedy action from Q</span>
-      </div>
+      <div class="panel quiz" id="qlQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>The update is Q(s, a) += alpha (r + gamma max_a' Q(s', a') - Q(s, a)), the one line on slide 17. Its target uses the best next action, which is why the agent learns the greedy policy while behaving with exploration. The learning rate is 0.1 and the discount 0.95. Each episode starts at the bottom left and ends at a terminal cell or after 100 steps.</p>
-    <p>Run with epsilon at 0 a few times from a fresh start. The first route that happened to work gets locked in, and the greedy return stays below what the grid allows because cells off that route are never visited. Raise epsilon and the agent pays in return during training, visible in the curve, and buys a better greedy policy, visible in the readout. That is the trade on slide 17, and it is a design choice.</p>
+    <p>Both crews use Q(s, a) += alpha (r + gamma max Q(s', .) - Q(s, a)), the one line on slide 17, with the same learning rate and discount. The only difference is how they behave while learning. The return quoted is for the greedy policy each crew would follow if learning stopped now, averaged over 100 runs.</p>
   </div>
 </section>
 
@@ -270,271 +287,259 @@ function css(name) { return getComputedStyle(document.documentElement).getProper
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function hexToRgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
 function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
-
-/* ---------- plotting on canvas (same helper as Week 9) ---------- */
-function Plot(canvas, opts) {
-  this.c = canvas; this.ctx = canvas.getContext("2d"); this.o = opts || {};
-  const dpr = window.devicePixelRatio || 1;
-  this.W = canvas.width; this.H = canvas.height;
-  canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr);
-  this.m = { l: 58, r: 14, t: 28, b: 44 };
+const PAL = ["#1F5C99", "#C9731F", "#2E7D5B", "#8E44AD", "#B3261E", "#0E8A8A", "#7A5C2E", "#D4A017"];
+function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
+Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
+Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+function quiz(el, spec) {
+  el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
+  const opts = el.querySelector(".opts"), why = el.querySelector(".why");
+  spec.options.forEach((o, i) => { const b = document.createElement("button"); b.textContent = o; b.addEventListener("click", () => { Array.from(opts.children).forEach(c => c.classList.remove("right", "wrong")); b.classList.add(i === spec.answer ? "right" : "wrong"); if (i !== spec.answer) opts.children[spec.answer].classList.add("right"); why.textContent = (i === spec.answer ? "Right. " : "No. ") + spec.why; }); opts.appendChild(b); });
 }
-Plot.prototype.fmt = function (v, d) { return (Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0)) ? v.toExponential(1) : v.toFixed(d); };
-Plot.prototype.begin = function (xlim, ylim) {
-  const ctx = this.ctx, o = this.o; this.xl = xlim; this.yl = ylim;
-  ctx.clearRect(0, 0, this.W, this.H);
-  ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H);
-  const ink = css("--ink"), muted = css("--muted"), line = css("--line");
-  ctx.font = "13px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "top";
-  const nx = 5, ny = 5;
-  ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.fillStyle = muted;
-  for (let i = 0; i <= nx; i++) {
-    const v = xlim[0] + (xlim[1] - xlim[0]) * i / nx, px = this.x(v);
-    ctx.beginPath(); ctx.moveTo(px, this.m.t); ctx.lineTo(px, this.H - this.m.b); ctx.stroke();
-    ctx.fillText(o.xfmt ? o.xfmt(v) : this.fmt(v, 2), px, this.H - this.m.b + 6);
-  }
-  ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (let i = 0; i <= ny; i++) {
-    const v = ylim[0] + (ylim[1] - ylim[0]) * i / ny, py = this.y(v);
-    ctx.beginPath(); ctx.moveTo(this.m.l, py); ctx.lineTo(this.W - this.m.r, py); ctx.stroke();
-    ctx.fillText(o.yfmt ? o.yfmt(v) : this.fmt(v, 1), this.m.l - 8, py);
-  }
-  ctx.font = "13px " + css("--sans"); ctx.fillStyle = ink;
-  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  if (o.xlabel) ctx.fillText(o.xlabel, (this.m.l + this.W - this.m.r) / 2, this.H - 8);
-  if (o.ylabel) { ctx.save(); ctx.translate(14, (this.m.t + this.H - this.m.b) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(o.ylabel, 0, 0); ctx.restore(); }
-  if (o.title) { ctx.textAlign = "left"; ctx.font = "500 14px " + css("--sans"); ctx.fillText(o.title, this.m.l, 18); }
-  ctx.save(); ctx.beginPath(); ctx.rect(this.m.l, this.m.t, this.W - this.m.l - this.m.r, this.H - this.m.t - this.m.b); ctx.clip();
-};
-Plot.prototype.end = function () { this.ctx.restore(); };
-Plot.prototype.x = function (v) { return this.m.l + (v - this.xl[0]) / (this.xl[1] - this.xl[0]) * (this.W - this.m.l - this.m.r); };
-Plot.prototype.y = function (v) { return this.H - this.m.b - (v - this.yl[0]) / (this.yl[1] - this.yl[0]) * (this.H - this.m.t - this.m.b); };
-Plot.prototype.line = function (xs, ys, color, width, dash) {
-  const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 2; ctx.setLineDash(dash || []);
-  ctx.beginPath(); for (let i = 0; i < xs.length; i++) { const px = this.x(xs[i]), py = this.y(ys[i]); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
-  ctx.stroke(); ctx.setLineDash([]);
-};
-Plot.prototype.dots = function (xs, ys, color, r) {
-  const ctx = this.ctx; ctx.fillStyle = color;
-  for (let i = 0; i < xs.length; i++) { ctx.beginPath(); ctx.arc(this.x(xs[i]), this.y(ys[i]), r || 5, 0, 2 * Math.PI); ctx.fill(); }
-};
-Plot.prototype.text = function (s, vx, vy, color, align) { const ctx = this.ctx; ctx.fillStyle = color; ctx.font = "13px " + css("--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "middle"; ctx.fillText(s, this.x(vx), this.y(vy)); };
 
-/* a plain canvas (no axes) for the graph and the grids */
-function Board(canvas) {
-  this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1;
-  this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr);
-}
-Board.prototype.clear = function (title) {
-  const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H);
-  if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); }
-};
-
-/* ================= 1. MESSAGE PASSING ================= */
+/* ================= 1. FOLLOW THE PULSE ================= */
 (function passing() {
-  // a small looped water network: 12 junctions, 15 pipes
   const P = [[80, 120], [230, 80], [400, 110], [560, 90], [720, 130], [150, 250], [320, 240], [480, 260], [650, 250], [220, 390], [420, 400], [600, 380]];
   const E = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [1, 6], [2, 6], [3, 7], [4, 8], [5, 6], [6, 7], [7, 8], [5, 9], [6, 10], [7, 10], [8, 11], [9, 10], [10, 11]];
-  const N = P.length;
-  const A = []; for (let i = 0; i < N; i++) { A.push(new Float64Array(N)); A[i][i] = 1; }
-  for (const [a, b] of E) { A[a][b] = 1; A[b][a] = 1; }
-  const deg = A.map(r => r.reduce((s, v) => s + v, 0));
-  const Ah = A.map((r, i) => r.map((v, j) => v / Math.sqrt(deg[i] * deg[j])));
-  function hop(x) { return Ah.map(r => r.reduce((s, v, j) => s + v * x[j], 0)); }
+  const N = P.length, A = []; for (let i = 0; i < N; i++) { A.push(new Float64Array(N)); A[i][i] = 1; } for (const [a, b] of E) { A[a][b] = 1; A[b][a] = 1; }
+  const deg = A.map(r => r.reduce((s, v) => s + v, 0)), Ah = A.map((r, i) => r.map((v, j) => v / Math.sqrt(deg[i] * deg[j])));
+  const hop = x => Ah.map(r => r.reduce((s, v, j) => s + v * x[j], 0));
   const board = new Board(document.getElementById("mpGraph"));
-  const pSpread = new Plot(document.getElementById("mpSpread"), { xlabel: "layers K", ylabel: "spread across nodes", title: "oversmoothing", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(2) });
-  const slider = document.getElementById("mpK"), out = document.getElementById("mpKOut");
-  let source = 0;
-  function series() { let x = new Float64Array(N); x[source] = 1; const xs = [x]; for (let k = 1; k <= 12; k++) { x = hop(x); xs.push(x); } return xs; }
+  const sx = (board.W - 80) / 700, sy = (board.H - 120) / 320, X = i => 40 + (P[i][0] - 60) * sx, Y = i => 70 + (P[i][1] - 70) * sy;
+  let source = 0, K = 0, xs = [], anim = null, phase = 1, highlight = null, picked = null, free = false, stepIdx = 0, answered = false;
+  function series() { let x = new Float64Array(N); x[source] = 1; xs = [x]; for (let k = 1; k <= 12; k++) { x = hop(x); xs.push(x); } }
   function std(x) { const m = x.reduce((s, v) => s + v, 0) / N; return Math.sqrt(x.reduce((s, v) => s + (v - m) ** 2, 0) / N); }
   function draw() {
-    const K = +slider.value; out.textContent = K;
-    const xs = series(), x = xs[K];
-    const stds = xs.map(std), vmax = Math.max.apply(null, x);
+    const x = xs[K], prev = xs[Math.max(0, K - 1)], vmax = Math.max.apply(null, x);
+    document.getElementById("mpK").textContent = K;
     document.getElementById("mpReach").textContent = x.filter(v => v > 1e-9).length + " / " + N;
-    document.getElementById("mpStd").textContent = stds[K].toFixed(3);
-    document.getElementById("mpMax").textContent = vmax.toFixed(3);
-    board.clear("the network after " + K + (K === 1 ? " hop" : " hops"));
-    const ctx = board.ctx, sx = (board.W - 60) / 700, sy = (board.H - 110) / 320;
-    const X = i => 30 + (P[i][0] - 60) * sx, Y = i => 62 + (P[i][1] - 70) * sy;
+    document.getElementById("mpStd").textContent = std(x).toFixed(3) + (K === 0 ? "" : "  (was " + std(xs[0]).toFixed(3) + " at hop 0)");
+    board.clear("the network after " + K + (K === 1 ? " hop" : " hops") + (phase < 1 ? ", messages in flight" : ""));
+    const ctx = board.ctx;
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 3;
     for (const [a, b] of E) { ctx.beginPath(); ctx.moveTo(X(a), Y(a)); ctx.lineTo(X(b), Y(b)); ctx.stroke(); }
+    // messages in flight: a dot leaves every node that has a value and moves toward each neighbour
+    if (phase < 1) { for (const [a, b] of E) for (const [u, v] of [[a, b], [b, a]]) { if (prev[u] < 1e-9) continue; const t = phase, px = X(u) + (X(v) - X(u)) * t, py = Y(u) + (Y(v) - Y(u)) * t; ctx.beginPath(); ctx.arc(px, py, 6, 0, 2 * Math.PI); ctx.fillStyle = css("--red"); ctx.fill(); } }
     for (let i = 0; i < N; i++) {
-      const t = vmax > 0 ? x[i] / vmax : 0;
-      ctx.beginPath(); ctx.arc(X(i), Y(i), 20, 0, 2 * Math.PI);
-      ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.08 + 0.92 * t); ctx.fill();
-      ctx.lineWidth = i === source ? 3.5 : 1.5; ctx.strokeStyle = i === source ? css("--red") : css("--grey"); ctx.stroke();
-      ctx.fillStyle = t > 0.55 ? "#fff" : css("--ink"); ctx.font = "12px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(x[i].toFixed(2), X(i), Y(i));
-      ctx.fillStyle = css("--muted"); ctx.font = "11px " + css("--sans"); ctx.fillText("J" + (i + 1), X(i), Y(i) - 28);
+      const val = phase < 1 ? prev[i] : x[i], t = vmax > 0 ? val / vmax : 0;
+      ctx.beginPath(); ctx.arc(X(i), Y(i), 24, 0, 2 * Math.PI); ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.08 + 0.92 * t); ctx.fill();
+      ctx.lineWidth = i === source ? 3.5 : (i === highlight ? 3.5 : 1.5); ctx.strokeStyle = i === source ? css("--red") : (i === highlight ? "#2E7D5B" : (i === picked ? css("--orange") : css("--grey"))); ctx.stroke();
+      ctx.fillStyle = t > 0.55 ? "#fff" : css("--ink"); ctx.font = "13px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(val.toFixed(2), X(i), Y(i));
+      ctx.fillStyle = css("--muted"); ctx.font = "12px " + css("--sans"); ctx.fillText("J" + (i + 1) + "  (" + (deg[i] - 1) + " pipes)", X(i), Y(i) - 33);
     }
-    pSpread.begin([0, 12], [0, 0.3]);
-    pSpread.line(xs.map((_, k) => k), stds, css("--ink"), 2);
-    pSpread.dots([K], [stds[K]], css("--red"), 6);
-    pSpread.end();
+    ctx.fillStyle = css("--muted"); ctx.font = "13px " + css("--sans"); ctx.textAlign = "left"; ctx.fillText("source junction outlined in red; darker fill is a larger value", 16, board.H - 14);
   }
-  slider.addEventListener("input", draw);
-  document.getElementById("mpStep").addEventListener("click", () => { slider.value = Math.min(12, +slider.value + 1); draw(); });
-  document.getElementById("mpSource").addEventListener("click", () => { source = (source + 5) % N; draw(); });
-  document.getElementById("mpReset").addEventListener("click", () => { slider.value = 0; source = 0; draw(); });
+  function animateTo(k, done) { if (anim) cancelAnimationFrame(anim); const target = Math.max(0, Math.min(12, k)); if (target <= K) { K = target; phase = 1; draw(); if (done) done(); return; } K = K + 1; phase = 0; const t0 = performance.now(); (function frame(now) { phase = Math.min(1, (now - t0) / 700); draw(); if (phase < 1) anim = requestAnimationFrame(frame); else if (K < target) animateTo(target, done); else if (done) done(); })(t0); }
+  const stepEl = document.getElementById("mpStep");
+  const steps = [
+    { html: '<span class="k">step 1 of 5</span><p>A reading of 1 appears at junction J1. Every other junction reads 0. Nothing has been passed yet; this is the input to the first layer.</p><p>Press Next to apply one layer.</p>', enter: () => { highlight = null; animateTo(0); } },
+    { html: '<span class="k">step 2 of 5</span><p>One layer. Every junction replaces its value with a weighted sum over itself and the junctions it shares a pipe with. J1 has two pipes, so after one hop only J2 and J6 hear it, and J1 itself keeps part of the reading.</p><p>Notice that J2 and J6 received different amounts: the weights divide by the square root of each junction\'s degree.</p>', enter: () => { highlight = null; animateTo(1); } },
+    { html: '<span class="k">step 3 of 5</span><p>Two layers reach the neighbours of neighbours. The receptive field is a graph distance.</p><p><b>Predict before the next hop.</b> After the third layer, which junction will hold the largest value? Click it on the network.</p>', enter: () => { highlight = null; picked = null; answered = false; animateTo(2); } },
+    { html: '', enter: () => { animateTo(3, () => { const x = xs[3]; let best = 0; for (let i = 1; i < N; i++) if (x[i] > x[best]) best = i; highlight = best; const ok = picked === best; stepEl.innerHTML = '<span class="k">step 4 of 5</span><div class="ask ' + (picked === null ? '' : (ok ? 'ok' : 'no')) + '">' + (picked === null ? 'You did not pick a junction. ' : (ok ? 'Correct: ' : 'Not quite: ')) + 'after three hops the largest value sits at <b>J' + (best + 1) + '</b> (outlined in green), with ' + x[best].toFixed(2) + '.' + (picked !== null && !ok ? ' You picked J' + (picked + 1) + ', which holds ' + x[picked].toFixed(2) + '.' : '') + '</div><p>The source keeps part of its own reading at every hop, and junctions with few pipes dilute less, so the largest value after a few hops is usually the source or a low-degree neighbour, and never the far junction with the most pipes.</p>'; draw(); }); } },
+    { html: '<span class="k">step 5 of 5</span><p>Keep stacking layers and watch the fills converge: every junction drifts toward the same value and the spread readout falls toward zero. That is oversmoothing, slide 8.</p><p>Two or three layers is usually what a utility network needs. The number of layers is a statement about how far a cause is allowed to travel.</p>', enter: () => { highlight = null; animateTo(12); } },
+  ];
+  function showStep(i) { stepIdx = Math.max(0, Math.min(steps.length - 1, i)); free = false; if (steps[stepIdx].html) stepEl.innerHTML = steps[stepIdx].html; steps[stepIdx].enter(); document.getElementById("mpNext").disabled = stepIdx === steps.length - 1; document.getElementById("mpBack").disabled = stepIdx === 0; }
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); let best = -1, bd = 1e9; for (let i = 0; i < N; i++) { const d = Math.hypot(mx - X(i), my - Y(i)); if (d < bd) { bd = d; best = i; } } if (bd > 30) return; if (free) { source = best; series(); K = 0; highlight = null; draw(); } else if (stepIdx === 2) { picked = best; draw(); } });
+  document.getElementById("mpNext").addEventListener("click", () => showStep(stepIdx + 1));
+  document.getElementById("mpBack").addEventListener("click", () => showStep(stepIdx - 1));
+  document.getElementById("mpFree").addEventListener("click", () => { free = true; highlight = null; picked = null; stepEl.innerHTML = '<span class="k">free play</span><p>Click any junction to make it the source, then use Back and Next to move one hop at a time.</p>'; document.getElementById("mpNext").disabled = false; document.getElementById("mpBack").disabled = false; document.getElementById("mpNext").onclick = null; });
+  // in free play the Next/Back buttons step the hop count
+  document.getElementById("mpNext").addEventListener("click", () => { if (free) animateTo(K + 1); }, true);
+  document.getElementById("mpBack").addEventListener("click", () => { if (free) animateTo(K - 1); }, true);
+  quiz(document.getElementById("mpQuiz"), { q: "A leak at one junction affects pressure up to four pipes away. How many message passing layers should the model have, at least?", options: ["One, the network is small", "Four, one per hop", "As many as possible"], answer: 1, why: "Information travels one hop per layer, so four hops need four layers. More than that drifts toward oversmoothing without adding reach that the physics needs." });
   window.addEventListener("themechange", draw);
-  draw();
+  series(); showStep(0);
+  // free-play guard: when not in free play the capture listeners above must not double-step
+  const origNext = document.getElementById("mpNext"), origBack = document.getElementById("mpBack");
+  origNext.addEventListener("click", ev => { if (free) ev.stopImmediatePropagation(); }, true);
+  origBack.addEventListener("click", ev => { if (free) ev.stopImmediatePropagation(); }, true);
 })();
 
-/* ================= 2. PERMUTATION INVARIANCE ================= */
+/* ================= 2. BREAK THE MODEL ================= */
 (function permute() {
   const base = [[0.15, 0.2], [0.35, 0.65], [0.5, 0.3], [0.7, 0.8], [0.85, 0.45], [0.25, 0.85], [0.6, 0.55], [0.9, 0.15]];
-  let pts = base.map(p => p.slice()), order = [0, 1, 2, 3, 4, 5, 6, 7], count = 0, rng = mulberry32(5);
-  // fixed "weights": a 3 x 16 matrix for the concatenated model, a shared 3-feature encoder for the pooled one
+  let pts, order, c0, p0, moved;
   const wr = mulberry32(99), Wc = []; for (let i = 0; i < 3; i++) { const row = []; for (let j = 0; j < 16; j++) row.push(wr() * 2 - 1); Wc.push(row); }
-  function concatModel() { const v = []; for (const i of order) v.push(pts[i][0], pts[i][1]); return Wc.map(r => r.reduce((s, w, j) => s + w * v[j], 0)); }
-  function enc(p) { return [p[0] - 0.5, p[1] - 0.5, (p[0] - 0.5) ** 2 + (p[1] - 0.5) ** 2]; }
-  function pooledModel() { const out = [-1e9, -1e9, -1e9]; for (const i of order) { const h = enc(pts[i]); for (let k = 0; k < 3; k++) out[k] = Math.max(out[k], h[k]); } return out; }
-  let refC = concatModel(), refP = pooledModel();
-  const board = new Board(document.getElementById("pmPoints"));
-  const pBars = new Plot(document.getElementById("pmBars"), { title: "the two outputs", ylabel: "output value", xfmt: v => "", yfmt: v => v.toFixed(1) });
-  function draw() {
-    const c = concatModel(), p = pooledModel();
-    const dC = Math.sqrt(c.reduce((s, v, k) => s + (v - refC[k]) ** 2, 0)), dP = Math.sqrt(p.reduce((s, v, k) => s + (v - refP[k]) ** 2, 0));
-    document.getElementById("pmCount").textContent = count;
-    document.getElementById("pmDeltaC").textContent = dC.toFixed(3);
-    document.getElementById("pmDeltaP").textContent = dP.toFixed(3);
-    board.clear("the scan, numbered in file order");
-    const ctx = board.ctx, X = v => 40 + v * (board.W - 80), Y = v => board.H - 30 - v * (board.H - 70);
-    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(X(0), Y(1), X(1) - X(0), Y(0) - Y(1));
+  const concat = () => { const v = []; for (const i of order) v.push(pts[i][0], pts[i][1]); return Wc.map(r => r.reduce((s, w, j) => s + w * v[j], 0)); };
+  const enc = p => [p[0] - 0.5, p[1] - 0.5, (p[0] - 0.5) ** 2 + (p[1] - 0.5) ** 2];
+  const pooled = () => { const out = [-1e9, -1e9, -1e9]; for (const i of order) { const h = enc(pts[i]); for (let k = 0; k < 3; k++) out[k] = Math.max(out[k], h[k]); } return out; };
+  const dist = (a, b) => Math.sqrt(a.reduce((s, v, k) => s + (v - b[k]) ** 2, 0));
+  const board = new Board(document.getElementById("pmPoints")), bars = new Board(document.getElementById("pmBars"));
+  const PX = v => 50 + v * (board.W - 100), PY = v => board.H - 40 - v * (board.H - 90);
+  const list = document.getElementById("pmList");
+  function reset() { pts = base.map(p => p.slice()); order = [0, 1, 2, 3, 4, 5, 6, 7]; moved = false; c0 = concat(); p0 = pooled(); render(); }
+  function renderList() {
+    list.innerHTML = "";
     order.forEach((i, rank) => {
-      ctx.beginPath(); ctx.arc(X(pts[i][0]), Y(pts[i][1]), 9, 0, 2 * Math.PI); ctx.fillStyle = css("--blue"); ctx.fill();
-      ctx.fillStyle = css("--ink"); ctx.font = "13px " + css("--mono"); ctx.textAlign = "left"; ctx.textBaseline = "middle";
-      ctx.fillText("#" + (rank + 1), X(pts[i][0]) + 14, Y(pts[i][1]) - 2);
+      const li = document.createElement("li"); li.draggable = true; li.dataset.rank = rank;
+      li.innerHTML = '<span class="sw" style="background:' + PAL[i] + '"></span>line ' + (rank + 1) + ': (' + pts[i][0].toFixed(2) + ', ' + pts[i][1].toFixed(2) + ')<span class="mv"><button data-d="-1" aria-label="move up">up</button><button data-d="1" aria-label="move down">down</button></span>';
+      li.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { const d = +b.dataset.d, j = rank + d; if (j < 0 || j >= order.length) return; [order[rank], order[j]] = [order[j], order[rank]]; render(); }));
+      li.addEventListener("dragstart", ev => { li.classList.add("drag"); ev.dataTransfer.setData("text/plain", String(rank)); });
+      li.addEventListener("dragend", () => li.classList.remove("drag"));
+      li.addEventListener("dragover", ev => ev.preventDefault());
+      li.addEventListener("drop", ev => { ev.preventDefault(); const from = +ev.dataTransfer.getData("text/plain"), to = rank; if (from === to) return; const it = order.splice(from, 1)[0]; order.splice(to, 0, it); render(); });
+      list.appendChild(li);
     });
-    pBars.begin([0, 7], [-1.5, 1.5]);
-    const ctx2 = pBars.ctx;
-    for (let k = 0; k < 3; k++) {
-      ctx2.fillStyle = css("--red"); ctx2.fillRect(pBars.x(0.6 + k), pBars.y(Math.max(0, c[k])), pBars.x(1) - pBars.x(0.6), Math.abs(pBars.y(c[k]) - pBars.y(0)));
-      ctx2.fillStyle = css("--blue"); ctx2.fillRect(pBars.x(4.1 + k), pBars.y(Math.max(0, p[k])), pBars.x(1) - pBars.x(0.6), Math.abs(pBars.y(p[k]) - pBars.y(0)));
-    }
-    pBars.line([0, 7], [0, 0], css("--grey"), 1);
-    pBars.text("concatenated", 0.6, 1.35, css("--red"), "left");
-    pBars.text("pooled", 4.1, 1.35, css("--blue"), "left");
-    pBars.end();
   }
-  document.getElementById("pmShuffle").addEventListener("click", () => { for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } count++; draw(); });
-  document.getElementById("pmJitter").addEventListener("click", () => { const i = Math.floor(rng() * 8); pts[i] = [Math.min(0.95, Math.max(0.05, pts[i][0] + (rng() - 0.5) * 0.3)), Math.min(0.95, Math.max(0.05, pts[i][1] + (rng() - 0.5) * 0.3))]; draw(); });
-  document.getElementById("pmReset").addEventListener("click", () => { pts = base.map(p => p.slice()); order = [0, 1, 2, 3, 4, 5, 6, 7]; count = 0; refC = concatModel(); refP = pooledModel(); draw(); });
-  window.addEventListener("themechange", draw);
-  draw();
+  function render() {
+    renderList();
+    const c = concat(), p = pooled(), dC = dist(c, c0), dP = dist(p, p0);
+    const b1 = document.getElementById("pmB1"), b2 = document.getElementById("pmB2"), c1 = document.getElementById("pmC1"), c2 = document.getElementById("pmC2");
+    const done1 = dC >= 0.5 && !moved; b1.textContent = done1 ? "done, change " + dC.toFixed(2) : (moved ? "a point moved, reset to retry" : "change so far " + dC.toFixed(2)); b1.className = "badge" + (done1 ? " done" : ""); c1.className = "ask" + (done1 ? " ok" : "");
+    const done2 = dP >= 0.05; b2.textContent = done2 ? "done, change " + dP.toFixed(3) + (moved ? ", and only after a point moved" : "") : "change so far " + dP.toFixed(3); b2.className = "badge" + (done2 ? " done" : ""); c2.className = "ask" + (done2 ? " ok" : (dC >= 0.5 && !moved ? " no" : ""));
+    if (!done2 && dC >= 0.5 && !moved) c2.innerHTML = '2. Now change the blue model\'s output by at least 0.05. <span class="badge" id="pmB2">change so far ' + dP.toFixed(3) + '</span><br><small>Reordering will never do it. Drag a point in the plot instead.</small>';
+    board.clear("the scan, numbered in file order (drag a point to move it)");
+    const ctx = board.ctx; ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(PX(0), PY(1), PX(1) - PX(0), PY(0) - PY(1));
+    order.forEach((i, rank) => { ctx.beginPath(); ctx.arc(PX(pts[i][0]), PY(pts[i][1]), 10, 0, 2 * Math.PI); ctx.fillStyle = PAL[i]; ctx.fill(); ctx.fillStyle = css("--ink"); ctx.font = "13px " + css("--mono"); ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText("line " + (rank + 1), PX(pts[i][0]) + 15, PY(pts[i][1]) - 2); });
+    bars.clear("the two outputs");
+    const bx = bars.ctx, y0 = bars.H / 2 + 20, sc = 90;
+    bx.strokeStyle = css("--line"); bx.beginPath(); bx.moveTo(30, y0); bx.lineTo(bars.W - 20, y0); bx.stroke();
+    for (let k = 0; k < 3; k++) {
+      bx.fillStyle = css("--red"); bx.fillRect(50 + k * 40, Math.min(y0, y0 - c[k] * sc), 28, Math.abs(c[k] * sc));
+      bx.fillStyle = css("--blue"); bx.fillRect(230 + k * 40, Math.min(y0, y0 - p[k] * sc), 28, Math.abs(p[k] * sc));
+      bx.strokeStyle = css("--grey"); bx.setLineDash([3, 3]); bx.beginPath(); bx.moveTo(50 + k * 40, y0 - c0[k] * sc); bx.lineTo(78 + k * 40, y0 - c0[k] * sc); bx.moveTo(230 + k * 40, y0 - p0[k] * sc); bx.lineTo(258 + k * 40, y0 - p0[k] * sc); bx.stroke(); bx.setLineDash([]);
+    }
+    bx.fillStyle = css("--red"); bx.font = "13px " + css("--sans"); bx.textAlign = "left"; bx.textBaseline = "alphabetic"; bx.fillText("concatenate, then linear", 50, 50);
+    bx.fillStyle = css("--blue"); bx.fillText("shared encoder, max pool", 230, 50);
+    bx.fillStyle = css("--muted"); bx.fillText("dashes: the original outputs", 50, 70);
+  }
+  let dragIdx = -1;
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); dragIdx = -1; let bd = 1e9; pts.forEach((p, i) => { const d = Math.hypot(mx - PX(p[0]), my - PY(p[1])); if (d < bd) { bd = d; dragIdx = i; } }); if (bd > 18) dragIdx = -1; });
+  window.addEventListener("mousemove", ev => { if (dragIdx < 0) return; const [mx, my] = board.pos(ev); pts[dragIdx] = [Math.min(1, Math.max(0, (mx - 50) / (board.W - 100))), Math.min(1, Math.max(0, (board.H - 40 - my) / (board.H - 90)))]; moved = true; render(); });
+  window.addEventListener("mouseup", () => { dragIdx = -1; });
+  document.getElementById("pmReset").addEventListener("click", reset);
+  quiz(document.getElementById("pmQuiz"), { q: "Which of these makes a model blind to the order of its inputs?", options: ["Concatenate the inputs and apply a matrix", "Sum, mean, or max over the inputs after a shared encoder", "Sort the inputs by their first coordinate, then concatenate"], answer: 1, why: "A symmetric function over the set gives the same answer for every ordering. Sorting is a trick that breaks when two points tie or move past each other, and concatenation keeps the order as a feature." });
+  window.addEventListener("themechange", render);
+  reset();
 })();
 
 /* ================= shared grid world ================= */
-const G = 6, GOAL = [5, 0], START = [0, 5], HAZ = [[3, 1], [3, 2], [3, 3]], SLIP = 0.1, STEP = 0;
-const ACTS = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // up, right, down, left (screen coordinates)
-function isHaz(x, y) { return HAZ.some(h => h[0] === x && h[1] === y); }
-function isGoal(x, y) { return x === GOAL[0] && y === GOAL[1]; }
-function terminal(x, y) { return isGoal(x, y) || isHaz(x, y); }
-function move(x, y, a) { const nx = Math.min(G - 1, Math.max(0, x + ACTS[a][0])), ny = Math.min(G - 1, Math.max(0, y + ACTS[a][1])); return [nx, ny]; }
-function reward(x, y) { return isGoal(x, y) ? 1 : isHaz(x, y) ? -1 : STEP; }
-// transition distribution: intended with 1 - SLIP, each perpendicular with SLIP / 2
-function outcomes(x, y, a) { return [[1 - SLIP, move(x, y, a)], [SLIP / 2, move(x, y, (a + 1) % 4)], [SLIP / 2, move(x, y, (a + 3) % 4)]]; }
-function drawGrid(board, title, cellFill, arrows, labels) {
-  board.clear(title);
-  const ctx = board.ctx, s = Math.min((board.W - 40) / G, (board.H - 50) / G), ox = (board.W - s * G) / 2, oy = 36;
+const G = 6, GOAL = [5, 0], START = [0, 5], HAZ = [[3, 1], [3, 2], [3, 3]], SLIP = 0.1;
+const ACTS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+const isHaz = (x, y) => HAZ.some(h => h[0] === x && h[1] === y), isGoal = (x, y) => x === GOAL[0] && y === GOAL[1], terminal = (x, y) => isGoal(x, y) || isHaz(x, y);
+const move = (x, y, a) => [Math.min(G - 1, Math.max(0, x + ACTS[a][0])), Math.min(G - 1, Math.max(0, y + ACTS[a][1]))];
+const reward = (x, y) => isGoal(x, y) ? 1 : isHaz(x, y) ? -1 : 0;
+const outcomes = (x, y, a) => [[1 - SLIP, move(x, y, a)], [SLIP / 2, move(x, y, (a + 1) % 4)], [SLIP / 2, move(x, y, (a + 3) % 4)]];
+function drawGrid(ctx, ox, oy, s, cellFill, arrows, labels, extra) {
   for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
     const X = ox + x * s, Y = oy + y * s;
-    ctx.fillStyle = cellFill(x, y); ctx.fillRect(X, Y, s, s);
-    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(X, Y, s, s);
-    if (isGoal(x, y)) { ctx.fillStyle = css("--blue"); ctx.font = "600 13px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("goal +1", X + s / 2, Y + s / 2); }
-    else if (isHaz(x, y)) { ctx.fillStyle = css("--red"); ctx.font = "600 13px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("-1", X + s / 2, Y + s / 2); }
+    ctx.fillStyle = cellFill(x, y); ctx.fillRect(X, Y, s, s); ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(X, Y, s, s);
+    if (isGoal(x, y)) { ctx.fillStyle = css("--blue"); ctx.font = "600 12px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("pump +1", X + s / 2, Y + s / 2); }
+    else if (isHaz(x, y)) { ctx.fillStyle = css("--red"); ctx.font = "600 12px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("-1", X + s / 2, Y + s / 2); }
     else {
-      const lab = labels(x, y); if (lab !== null) { ctx.fillStyle = css("--muted"); ctx.font = "11px " + css("--mono"); ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText(lab, X + 4, Y + 3); }
-      const a = arrows(x, y);
-      if (a !== null) {
-        const cx = X + s / 2, cy = Y + s / 2, L = s * 0.28, dx = ACTS[a][0] * L, dy = ACTS[a][1] * L;
-        ctx.strokeStyle = css("--ink"); ctx.fillStyle = css("--ink"); ctx.lineWidth = 2.2;
-        ctx.beginPath(); ctx.moveTo(cx - dx, cy - dy); ctx.lineTo(cx + dx, cy + dy); ctx.stroke();
-        const ang = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(cx + dx, cy + dy); ctx.lineTo(cx + dx - 8 * Math.cos(ang - 0.5), cy + dy - 8 * Math.sin(ang - 0.5)); ctx.lineTo(cx + dx - 8 * Math.cos(ang + 0.5), cy + dy - 8 * Math.sin(ang + 0.5)); ctx.closePath(); ctx.fill();
-      }
+      const lab = labels ? labels(x, y) : null; if (lab !== null) { ctx.fillStyle = css("--muted"); ctx.font = "11px " + css("--mono"); ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText(lab, X + 3, Y + 3); }
+      const a = arrows ? arrows(x, y) : null;
+      if (a !== null && a !== undefined) { const col = typeof a === "object" ? a.color : css("--ink"), dir = typeof a === "object" ? a.dir : a, L = s * 0.26, cx = X + s / 2, cy = Y + s / 2, dx = ACTS[dir][0] * L, dy = ACTS[dir][1] * L; ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = typeof a === "object" && a.thin ? 1.5 : 2.4; ctx.beginPath(); ctx.moveTo(cx - dx, cy - dy); ctx.lineTo(cx + dx, cy + dy); ctx.stroke(); const ang = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(cx + dx, cy + dy); ctx.lineTo(cx + dx - 8 * Math.cos(ang - 0.5), cy + dy - 8 * Math.sin(ang - 0.5)); ctx.lineTo(cx + dx - 8 * Math.cos(ang + 0.5), cy + dy - 8 * Math.sin(ang + 0.5)); ctx.closePath(); ctx.fill(); }
       if (x === START[0] && y === START[1]) { ctx.fillStyle = css("--muted"); ctx.font = "11px " + css("--sans"); ctx.textAlign = "right"; ctx.textBaseline = "bottom"; ctx.fillText("start", X + s - 4, Y + s - 3); }
+      if (extra) extra(x, y, X, Y);
     }
   }
 }
+function solveLinear(Mtx, rhs) { const n = rhs.length, A = Mtx.map((r, i) => Array.from(r).concat([rhs[i]])); for (let p = 0; p < n; p++) { let best = p; for (let r = p + 1; r < n; r++) if (Math.abs(A[r][p]) > Math.abs(A[best][p])) best = r; const tmp = A[p]; A[p] = A[best]; A[best] = tmp; for (let r = p + 1; r < n; r++) { const f = A[r][p] / A[p][p]; if (f === 0) continue; for (let j = p; j <= n; j++) A[r][j] -= f * A[p][j]; } } const out = new Array(n).fill(0); for (let p = n - 1; p >= 0; p--) { let s = A[p][n]; for (let j = p + 1; j < n; j++) s -= A[p][j] * out[j]; out[p] = s / A[p][p]; } return out; }
+function qValue(V, x, y, a, gamma) { return outcomes(x, y, a).reduce((s, [p, [nx, ny]]) => s + p * (reward(nx, ny) + (terminal(nx, ny) ? 0 : gamma * V[ny][nx])), 0); }
+function valueIteration(gamma, maxSweeps, onSweep) { let V = []; for (let y = 0; y < G; y++) V.push(new Float64Array(G)); const hist = []; for (let k = 0; k < maxSweeps; k++) { const NV = V.map(r => Float64Array.from(r)); let delta = 0; for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) { if (terminal(x, y)) continue; let best = -1e9; for (let a = 0; a < 4; a++) best = Math.max(best, qValue(V, x, y, a, gamma)); delta = Math.max(delta, Math.abs(best - V[y][x])); NV[y][x] = best; } V = NV; hist.push(delta); if (onSweep) onSweep(V, hist); if (delta < 1e-7) break; } return { V, hist }; }
+function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { pol.push([]); for (let x = 0; x < G; x++) { let b = 0, bv = -1e9; for (let a = 0; a < 4; a++) { const v = qValue(V, x, y, a, gamma); if (v > bv) { bv = v; b = a; } } pol[y].push(b); } } return pol; }
 
-/* ================= 3. VALUE ITERATION ================= */
+/* ================= 3. DESIGN THE POLICY ================= */
 (function bellman() {
-  const board = new Board(document.getElementById("viGrid"));
-  const pConv = new Plot(document.getElementById("viConv"), { xlabel: "sweep", ylabel: "largest change (log10)", title: "convergence", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(0) });
-  const sg = document.getElementById("viGamma"), out = document.getElementById("viGammaOut");
-  let V, hist;
-  function reset() { V = []; for (let y = 0; y < G; y++) { V.push(new Float64Array(G)); } hist = []; }
-  function q(x, y, a, gamma) { return outcomes(x, y, a).reduce((s, [p, [nx, ny]]) => s + p * (reward(nx, ny) + (terminal(nx, ny) ? 0 : gamma * V[ny][nx])), 0); }
-  function sweep() {
-    const gamma = +sg.value; let delta = 0; const NV = V.map(r => Float64Array.from(r));
-    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) { if (terminal(x, y)) continue; let best = -1e9; for (let a = 0; a < 4; a++) best = Math.max(best, q(x, y, a, gamma)); delta = Math.max(delta, Math.abs(best - V[y][x])); NV[y][x] = best; }
-    V = NV; hist.push(delta); return delta;
+  const board = new Board(document.getElementById("viGrid")), conv = new Board(document.getElementById("viConv"));
+  const s = Math.min((board.W - 40) / G, (board.H - 60) / G), ox = (board.W - s * G) / 2, oy = 40;
+  const sg = document.getElementById("viGamma");
+  let pol = [], Vmine = null, Vopt = null, polOpt = null, hist = [], revealed = false, anim = null;
+  function clear() { pol = []; for (let y = 0; y < G; y++) { pol.push([]); for (let x = 0; x < G; x++) pol[y].push(null); } Vmine = null; Vopt = null; polOpt = null; hist = []; revealed = false; draw(); }
+  function evaluate(gamma) {
+    // V = r + gamma P V for the student's policy; unset cells count as "stay put", which earns nothing
+    const n = G * G, M = [], rhs = new Array(n).fill(0); for (let i = 0; i < n; i++) { M.push(new Array(n).fill(0)); M[i][i] = 1; }
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) { const i = y * G + x; if (terminal(x, y)) continue; const a = pol[y][x]; if (a === null) continue; for (const [p, [nx, ny]] of outcomes(x, y, a)) { rhs[i] += p * reward(nx, ny); if (!terminal(nx, ny)) M[i][ny * G + nx] -= gamma * p; } }
+    const v = solveLinear(M, rhs); const V = []; for (let y = 0; y < G; y++) V.push(Float64Array.from(v.slice(y * G, y * G + G))); return V;
   }
-  function greedy(x, y) { if (terminal(x, y)) return null; const gamma = +sg.value; let best = 0, bv = -1e9; for (let a = 0; a < 4; a++) { const v = q(x, y, a, gamma); if (v > bv) { bv = v; best = a; } } return hist.length ? best : null; }
   function draw() {
-    out.textContent = (+sg.value).toFixed(2);
-    document.getElementById("viN").textContent = hist.length;
-    document.getElementById("viDelta").textContent = hist.length ? hist[hist.length - 1].toExponential(2) : "-";
-    document.getElementById("viV0").textContent = V[START[1]][START[0]].toFixed(3);
-    const vmax = 1, vmin = -1;
-    drawGrid(board, "state values and the greedy policy, gamma = " + (+sg.value).toFixed(2),
-      (x, y) => isHaz(x, y) ? mix(css("--panel"), css("--red"), 0.18) : isGoal(x, y) ? mix(css("--panel"), css("--blue"), 0.25) : mix(css("--panel"), css("--blue"), 0.75 * Math.max(0, (V[y][x] - vmin) / (vmax - vmin)) ** 1.6),
-      greedy, (x, y) => V[y][x].toFixed(2));
-    pConv.begin([0, Math.max(20, hist.length)], [-6, 0]);
-    pConv.line(hist.map((_, i) => i + 1), hist.map(d => Math.max(-6, Math.log10(Math.max(d, 1e-12)))), css("--ink"), 2);
-    pConv.end();
+    const ctx = board.ctx; board.clear(revealed ? "your policy (black) against the optimum (green)" : "click a cell to set the crew's move; click again to turn it");
+    const vmax = 1;
+    drawGrid(ctx, ox, oy, s, (x, y) => isHaz(x, y) ? mix(css("--panel"), css("--red"), 0.18) : isGoal(x, y) ? mix(css("--panel"), css("--blue"), 0.25) : (Vmine ? mix(css("--panel"), css("--blue"), 0.7 * Math.max(0, Vmine[y][x] / vmax) ** 1.4) : css("--panel")),
+      (x, y) => terminal(x, y) ? null : (pol[y][x] === null ? null : pol[y][x]),
+      (x, y) => Vmine ? Vmine[y][x].toFixed(2) : null,
+      (x, y, X, Y) => { if (revealed && polOpt && !terminal(x, y)) { const d = polOpt[y][x], L = s * 0.18, cx = X + s - 14, cy = Y + 14, dx = ACTS[d][0] * L, dy = ACTS[d][1] * L; ctx.strokeStyle = "#2E7D5B"; ctx.fillStyle = "#2E7D5B"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx - dx, cy - dy); ctx.lineTo(cx + dx, cy + dy); ctx.stroke(); const ang = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(cx + dx, cy + dy); ctx.lineTo(cx + dx - 6 * Math.cos(ang - 0.5), cy + dy - 6 * Math.sin(ang - 0.5)); ctx.lineTo(cx + dx - 6 * Math.cos(ang + 0.5), cy + dy - 6 * Math.sin(ang + 0.5)); ctx.closePath(); ctx.fill(); if (pol[y][x] !== null && pol[y][x] !== d) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.strokeRect(X + 2, Y + 2, s - 4, s - 4); } } });
+    conv.clear("value iteration, largest change per sweep");
+    const cx2 = conv.ctx, L = 50, R = conv.W - 16, T = 40, B = conv.H - 40;
+    cx2.strokeStyle = css("--line"); cx2.beginPath(); cx2.moveTo(L, T); cx2.lineTo(L, B); cx2.lineTo(R, B); cx2.stroke();
+    cx2.fillStyle = css("--muted"); cx2.font = "12px " + css("--mono"); cx2.textAlign = "right"; cx2.textBaseline = "middle"; for (let e = 0; e >= -6; e -= 2) { const y = B - (B - T) * (e + 6) / 6; cx2.fillText("1e" + e, L - 6, y); }
+    cx2.textAlign = "center"; cx2.textBaseline = "top"; cx2.fillText("sweep", (L + R) / 2, B + 8);
+    if (hist.length) { cx2.strokeStyle = css("--ink"); cx2.lineWidth = 2; cx2.beginPath(); hist.forEach((d, i) => { const x = L + (R - L) * i / Math.max(20, hist.length - 1), y = B - (B - T) * (Math.max(-6, Math.log10(Math.max(d, 1e-12))) + 6) / 6; if (i === 0) cx2.moveTo(x, y); else cx2.lineTo(x, y); }); cx2.stroke(); }
   }
-  sg.addEventListener("input", () => { reset(); draw(); });
-  document.getElementById("viSweep").addEventListener("click", () => { sweep(); draw(); });
-  document.getElementById("viRun").addEventListener("click", () => { for (let i = 0; i < 500; i++) { if (sweep() < 1e-6) break; } draw(); });
-  document.getElementById("viReset").addEventListener("click", () => { reset(); draw(); });
+  function update() {
+    const gamma = +sg.value; document.getElementById("viGammaOut").textContent = gamma.toFixed(2);
+    const setCount = pol.flat().filter(a => a !== null).length;
+    if (Vmine) document.getElementById("viMine").textContent = Vmine[START[1]][START[0]].toFixed(3) + (setCount < 33 ? "  (" + (33 - setCount) + " cells unset)" : "");
+    if (Vopt) { document.getElementById("viOpt").textContent = Vopt[START[1]][START[0]].toFixed(3); if (Vmine) { document.getElementById("viScore").textContent = (100 * Math.max(0, Vmine[START[1]][START[0]]) / Vopt[START[1]][START[0]]).toFixed(0) + " %"; let diff = 0; for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) if (!terminal(x, y) && pol[y][x] !== null && pol[y][x] !== polOpt[y][x]) diff++; document.getElementById("viDiff").textContent = diff; } }
+    draw();
+  }
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const x = Math.floor((mx - ox) / s), y = Math.floor((my - oy) / s); if (x < 0 || y < 0 || x >= G || y >= G || terminal(x, y)) return; pol[y][x] = pol[y][x] === null ? 0 : (pol[y][x] + 1) % 4; Vmine = null; document.getElementById("viMine").textContent = "-"; document.getElementById("viScore").textContent = "-"; update(); });
+  document.getElementById("viEval").addEventListener("click", () => { Vmine = evaluate(+sg.value); update(); });
+  document.getElementById("viReveal").addEventListener("click", () => { if (anim) clearTimeout(anim); const gamma = +sg.value; const frames = []; valueIteration(gamma, 400, (V, h) => frames.push({ V: V.map(r => Float64Array.from(r)), h: h.slice() })); let i = 0; revealed = true; (function play() { const f = frames[Math.min(i, frames.length - 1)]; Vopt = f.V; hist = f.h; polOpt = greedyFrom(Vopt, gamma); update(); i++; if (i < frames.length) anim = setTimeout(play, 120); })(); });
+  document.getElementById("viClear").addEventListener("click", clear);
+  sg.addEventListener("input", () => { Vopt = null; polOpt = null; revealed = false; hist = []; document.getElementById("viOpt").textContent = "-"; document.getElementById("viScore").textContent = "-"; document.getElementById("viDiff").textContent = "-"; if (Vmine) Vmine = evaluate(+sg.value); update(); });
+  quiz(document.getElementById("viQuiz"), { q: "Lowering the discount gamma from 0.95 to 0.6 makes the optimal policy", options: ["More willing to take a short path past the spillway", "More cautious, since the -1 cells matter more", "Unchanged: the ordering of actions does not depend on gamma"], answer: 0, why: "A small discount shrinks everything more than a few steps away, including the far-off +1, so the planner weighs the near risk and the near reward by the same short yardstick and tends to cut corners. The ordering of actions does depend on gamma." });
   window.addEventListener("themechange", draw);
-  reset(); draw();
+  clear();
 })();
 
-/* ================= 4. Q-LEARNING ================= */
+/* ================= 4. THE EXPLORATION RACE ================= */
 (function qlearn() {
-  const board = new Board(document.getElementById("qlGrid"));
-  const pCurve = new Plot(document.getElementById("qlCurve"), { xlabel: "episode", ylabel: "return", title: "return per episode, 20-episode mean", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1) });
-  const se = document.getElementById("qlEps"), out = document.getElementById("qlEpsOut");
-  const ALPHA = 0.1, GAMMA = 0.95; let Q, visits, returns, rng, seed = 1;
-  function reset() { Q = []; visits = []; for (let y = 0; y < G; y++) { Q.push([]); visits.push(new Float64Array(G)); for (let x = 0; x < G; x++) Q[y].push(new Float64Array(4)); } returns = []; rng = mulberry32(seed++); }
-  function argmax(arr) { let b = [0]; for (let i = 1; i < arr.length; i++) { if (arr[i] > arr[b[0]]) b = [i]; else if (arr[i] === arr[b[0]]) b.push(i); } return b[Math.floor(rng() * b.length)]; }
-  function stepEnv(x, y, a) { const u = rng(); const o = outcomes(x, y, a); let acc = 0; for (const [p, nxy] of o) { acc += p; if (u < acc) return nxy; } return o[0][1]; }
-  function episode(eps, learn) {
-    let [x, y] = START, ret = 0, disc = 1;
-    for (let t = 0; t < 100; t++) {
-      const a = (learn && rng() < eps) ? Math.floor(rng() * 4) : argmax(Q[y][x]);
-      const [nx, ny] = stepEnv(x, y, a), r = reward(nx, ny), done = terminal(nx, ny);
-      if (learn) { visits[y][x] += 1; const target = r + (done ? 0 : GAMMA * Math.max.apply(null, Q[ny][nx])); Q[y][x][a] += ALPHA * (target - Q[y][x][a]); }
-      ret += disc * r; disc *= GAMMA; x = nx; y = ny; if (done) break;
-    }
-    return ret;
-  }
+  const board = new Board(document.getElementById("qlRace"));
+  const s = Math.min((board.W / 2 - 60) / G, (board.H - 80) / G), oy = 60, oxL = board.W / 4 - s * G / 2, oxR = 3 * board.W / 4 - s * G / 2;
+  const ALPHA = 0.1, GAMMA = 0.95, EPIS = 150;
+  const se = document.getElementById("qlEps");
+  let seed = 1, agents = [], running = false, bet = null, timer = null, episodes = 0;
+  function mkAgent(eps, seedOff) { const Q = [], visits = []; for (let y = 0; y < G; y++) { Q.push([]); visits.push(new Float64Array(G)); for (let x = 0; x < G; x++) Q[y].push(new Float64Array(4)); } return { eps, Q, visits, rng: mulberry32(seed + seedOff), x: START[0], y: START[1], steps: 0, trail: [], greedy: null }; }
+  function argmax(arr, rng) { let b = [0]; for (let i = 1; i < 4; i++) { if (arr[i] > arr[b[0]]) b = [i]; else if (arr[i] === arr[b[0]]) b.push(i); } return b[Math.floor(rng() * b.length)]; }
+  function envStep(x, y, a, rng) { const u = rng(), o = outcomes(x, y, a); let acc = 0; for (const [p, nxy] of o) { acc += p; if (u < acc) return nxy; } return o[0][1]; }
+  function oneStep(ag) { const a = ag.rng() < ag.eps ? Math.floor(ag.rng() * 4) : argmax(ag.Q[ag.y][ag.x], ag.rng); const [nx, ny] = envStep(ag.x, ag.y, a, ag.rng), r = reward(nx, ny), done = terminal(nx, ny); ag.visits[ag.y][ag.x]++; const target = r + (done ? 0 : GAMMA * Math.max.apply(null, ag.Q[ny][nx])); ag.Q[ag.y][ag.x][a] += ALPHA * (target - ag.Q[ag.y][ag.x][a]); ag.trail.push([ag.x, ag.y]); if (ag.trail.length > 12) ag.trail.shift(); ag.x = nx; ag.y = ny; ag.steps++; if (done || ag.steps >= 100) { ag.x = START[0]; ag.y = START[1]; ag.steps = 0; ag.trail = []; return true; } return false; }
+  function greedyReturn(ag) { const rng = mulberry32(777); let tot = 0; for (let k = 0; k < 100; k++) { let x = START[0], y = START[1], ret = 0, d = 1; for (let t = 0; t < 100; t++) { const a = argmax(ag.Q[y][x], rng); const [nx, ny] = envStep(x, y, a, rng); ret += d * reward(nx, ny); d *= GAMMA; x = nx; y = ny; if (terminal(x, y)) break; } tot += ret; } return tot / 100; }
+  function reset() { if (timer) clearTimeout(timer); running = false; episodes = 0; agents = [mkAgent(0, 0), mkAgent(+se.value, 1000)]; document.getElementById("qlVerdict").hidden = true; document.getElementById("qlStart").textContent = "Start the race"; draw(); }
   function draw() {
-    out.textContent = (+se.value).toFixed(2);
-    document.getElementById("qlN").textContent = returns.length;
-    const last = returns.slice(-50);
-    document.getElementById("qlRet").textContent = last.length ? (last.reduce((s, v) => s + v, 0) / last.length).toFixed(3) : "-";
-    if (returns.length) { let g = 0; for (let i = 0; i < 100; i++) g += episode(0, false); document.getElementById("qlGreedy").textContent = (g / 100).toFixed(3); } else document.getElementById("qlGreedy").textContent = "-";
-    let seen = 0, vmax = 1; for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) { if (visits[y][x] > 0) seen++; vmax = Math.max(vmax, visits[y][x]); }
-    document.getElementById("qlVisit").textContent = seen + " / " + (G * G);
-    drawGrid(board, "visits and the greedy policy after " + returns.length + " episodes",
-      (x, y) => isHaz(x, y) ? mix(css("--panel"), css("--red"), 0.18) : isGoal(x, y) ? mix(css("--panel"), css("--blue"), 0.25) : mix(css("--panel"), css("--orange"), 0.8 * Math.log1p(visits[y][x]) / Math.log1p(vmax)),
-      (x, y) => (terminal(x, y) || visits[y][x] === 0) ? null : Q[y][x].indexOf(Math.max.apply(null, Q[y][x])),
-      (x, y) => visits[y][x] > 0 ? Math.max.apply(null, Q[y][x]).toFixed(2) : null);
-    const n = returns.length, xs = [], ys = [];
-    for (let i = 0; i < n; i++) { const lo = Math.max(0, i - 19); let s = 0; for (let j = lo; j <= i; j++) s += returns[j]; xs.push(i + 1); ys.push(s / (i - lo + 1)); }
-    pCurve.begin([0, Math.max(200, n)], [-1.5, 1]);
-    if (n) pCurve.line(xs, ys, css("--ink"), 2);
-    pCurve.end();
+    board.clear(""); const ctx = board.ctx;
+    agents.forEach((ag, i) => {
+      const ox = i === 0 ? oxL : oxR; let vmax = 1; for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) vmax = Math.max(vmax, ag.visits[y][x]);
+      ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(i === 0 ? "left crew: always greedy (epsilon 0)" : "right crew: explores (epsilon " + ag.eps.toFixed(2) + ")", ox, oy - 24);
+      drawGrid(ctx, ox, oy, s, (x, y) => isHaz(x, y) ? mix(css("--panel"), css("--red"), 0.18) : isGoal(x, y) ? mix(css("--panel"), css("--blue"), 0.25) : mix(css("--panel"), css("--orange"), 0.75 * Math.log1p(ag.visits[y][x]) / Math.log1p(vmax)),
+        (x, y) => (terminal(x, y) || ag.visits[y][x] === 0) ? null : { dir: ag.Q[y][x].indexOf(Math.max.apply(null, ag.Q[y][x])), color: css("--ink"), thin: true }, null, null);
+      ag.trail.forEach((p, k) => { ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.2 + 0.6 * k / 12); ctx.beginPath(); ctx.arc(ox + p[0] * s + s / 2, oy + p[1] * s + s / 2, 5, 0, 2 * Math.PI); ctx.fill(); });
+      ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(ox + ag.x * s + s / 2, oy + ag.y * s + s / 2, 9, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
+    });
+    document.getElementById("qlN").textContent = episodes + " / " + EPIS;
+    document.getElementById("qlL").textContent = agents[0].greedy === null ? "-" : agents[0].greedy.toFixed(3);
+    document.getElementById("qlR").textContent = agents[1].greedy === null ? "-" : agents[1].greedy.toFixed(3);
+    const cnt = ag => { let n = 0; for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) if (ag.visits[y][x] > 0) n++; return n; };
+    document.getElementById("qlV").textContent = cnt(agents[0]) + " / " + cnt(agents[1]);
   }
-  se.addEventListener("input", draw);
-  document.getElementById("qlRun").addEventListener("click", () => { const eps = +se.value; for (let i = 0; i < 200; i++) returns.push(episode(eps, true)); draw(); });
-  document.getElementById("qlReset").addEventListener("click", () => { reset(); draw(); });
+  function tick() {
+    if (!running) return;
+    let finished = 0;
+    for (let k = 0; k < 24; k++) { agents.forEach((ag, i) => { if (oneStep(ag) && i === 0) finished++; }); }
+    episodes += finished; // count the left crew's episodes as the clock; the right crew runs the same number of steps
+    if (episodes % 10 < finished || episodes >= EPIS) agents.forEach(ag => ag.greedy = greedyReturn(ag));
+    draw();
+    if (episodes >= EPIS) { running = false; verdict(); return; }
+    timer = setTimeout(tick, 30);
+  }
+  function verdict() {
+    agents.forEach(ag => ag.greedy = greedyReturn(ag)); draw();
+    const l = agents[0].greedy, r = agents[1].greedy, winner = Math.abs(l - r) < 0.05 ? "T" : (l > r ? "L" : "R");
+    const v = document.getElementById("qlVerdict"); v.hidden = false;
+    const text = winner === "T" ? "A near tie this time (" + l.toFixed(2) + " against " + r.toFixed(2) + ")." : (winner === "L" ? "The greedy crew won this run (" + l.toFixed(2) + " against " + r.toFixed(2) + ")." : "The exploring crew won (" + r.toFixed(2) + " against " + l.toFixed(2) + ").");
+    const ok = bet === null ? null : bet === winner;
+    v.className = "ask " + (ok === null ? "" : (ok ? "ok" : "no"));
+    v.innerHTML = (bet === null ? "You did not place a bet. " : (ok ? "Your bet was right. " : "Your bet was wrong. ")) + text + " Run it again with New site: the greedy crew locks onto whichever route it found first, so over many sites it loses on average and wins on the lucky ones. Exploration pays in return during learning for a better policy afterwards, which is the trade on slide 17.";
+    document.getElementById("qlStart").textContent = "Race again";
+  }
+  ["betL", "betT", "betR"].forEach((id, i) => document.getElementById(id).addEventListener("click", () => { bet = ["L", "T", "R"][i]; ["betL", "betT", "betR"].forEach(j => document.getElementById(j).setAttribute("aria-pressed", j === id ? "true" : "false")); }));
+  document.getElementById("qlStart").addEventListener("click", () => { if (running) return; if (episodes >= EPIS) { seed += 1; reset(); } running = true; agents[1].eps = +se.value; document.getElementById("qlStart").textContent = "Racing..."; tick(); });
+  document.getElementById("qlReset").addEventListener("click", () => { seed += 1; reset(); });
+  se.addEventListener("input", () => { document.getElementById("qlEpsOut").textContent = (+se.value).toFixed(2); if (!running) { agents[1].eps = +se.value; draw(); } });
+  quiz(document.getElementById("qlQuiz"), { q: "Q-learning is called off-policy because", options: ["It never explores", "Its update target uses the best next action, whatever action the crew actually took", "It needs a model of the transitions"], answer: 1, why: "The target r + gamma max Q(s', .) scores the greedy continuation, so the crew can behave with exploration and still learn the greedy policy. Convergence needs every state and action to keep being visited, which is what the exploration buys." });
   window.addEventListener("themechange", draw);
-  reset(); draw();
+  reset();
 })();
 
 /* ---------- tabs ---------- */
