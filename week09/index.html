@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week 9 Demos</title>
+<meta name="description" content="CE 7453 Week 9: interactive demonstrations of the diffusion forward process, reverse step count, classifier-free guidance, and the physics weight in a physics-informed loss.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-line course header with a tab strip, then one demo at a time:
+   a wide plot on the left, a narrow control column on the right, a caption underneath.
+   Colors follow the lecture deck (dark body text, one blue, red for the figure's "wrong" curve). */
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --ink: #2B2B2B;
+  --muted: #6B7280;
+  --line: #D9DDE3;
+  --blue: #1F5C99;
+  --blue-soft: #D6E3F2;
+  --red: #B3261E;
+  --orange: #C9731F;
+  --grey: #8A8F98;
+  --focus: #1F5C99;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+    --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+  --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  padding-block: 14px 8px; border-bottom: 1px solid var(--line);
+}
+header .course { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+nav button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+nav button[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+nav button:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+nav button .slide { font-family: var(--mono); font-size: 12px; opacity: 0.8; margin-left: 6px; }
+main { padding-block: 4px 24px; }
+section.demo { display: none; }
+section.demo.active { display: block; }
+.demo h2 { font-size: 22px; font-weight: 600; margin: 6px 0 2px; text-wrap: balance; }
+.demo .lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.plot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-width: 0; }
+.plot canvas { width: 100%; height: auto; display: block; max-width: 100%; }
+.plot.two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 860px) { .plot.two { grid-template-columns: 1fr; } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctl label output { font-family: var(--mono); font-weight: 400; color: var(--blue); }
+.ctl input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--blue); }
+.ctl .hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; background: var(--c); }
+.legend span.dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.caption { margin: 12px 0 0; max-width: 90ch; font-size: 15px; }
+.caption p { margin: 0 0 6px; }
+footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <span class="course">CE 7453 &middot; Week 9 &middot; Diffusion and physics informed learning</span>
+  <h1>Interactive demonstrations</h1>
+</header>
+
+<nav role="tablist" aria-label="Demos">
+  <button role="tab" data-tab="forward" aria-selected="true">Forward process<span class="slide">slide 4</span></button>
+  <button role="tab" data-tab="steps" aria-selected="false">Reverse step count<span class="slide">slide 8</span></button>
+  <button role="tab" data-tab="guidance" aria-selected="false">Guidance weight<span class="slide">slide 9</span></button>
+  <button role="tab" data-tab="physics" aria-selected="false">Physics weight<span class="slide">slide 16</span></button>
+</nav>
+
+<main>
+
+<!-- ============ 1. FORWARD PROCESS ============ -->
+<section class="demo active" id="forward" role="tabpanel">
+  <h2>The forward process: destroy the field on a schedule</h2>
+  <p class="lead">A real 1-D field, Gaussian noise added on a fixed schedule for T = 1000 steps. Scrub t and watch the closed form x_t = sqrt(abar_t) x_0 + sqrt(1 - abar_t) eps.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="fwdField" width="900" height="420"></canvas>
+      <canvas id="fwdSched" width="450" height="420"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="fwdT">step t <output id="fwdTOut">0</output></label>
+        <input type="range" id="fwdT" min="0" max="1000" step="1" value="0">
+        <div class="hint">drag, or press play to run the chain</div>
+      </div>
+      <div class="btns">
+        <button class="primary" id="fwdPlay">Play</button>
+        <button id="fwdReset">Reset</button>
+        <button id="fwdNoise">New noise draw</button>
+      </div>
+      <dl class="readout">
+        <dt>abar_t (signal kept)</dt><dd id="fwdAbar">1.000</dd>
+        <dt>noise fraction 1 - abar_t</dt><dd id="fwdNz">0.000</dd>
+        <dt>signal-to-noise ratio</dt><dd id="fwdSnr">inf</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--blue)">clean field x_0</span>
+        <span style="--c: var(--grey)">noised field x_t</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Nothing here is learned. The schedule beta_t rises linearly from 0.0001 to 0.02, so abar_t, the product of (1 - beta), decays as the right panel shows. By about t = 300 the field is hard to see; by t = 1000 the signal fraction is below 0.0001 and what remains is noise.</p>
+    <p>The same noise draw eps is used for every t, which is why the picture changes continuously as you scrub. Training picks a random t and jumps straight to that frame.</p>
+  </div>
+</section>
+
+<!-- ============ 2. REVERSE STEP COUNT ============ -->
+<section class="demo" id="steps" role="tabpanel">
+  <h2>Samplers: step count is the cost</h2>
+  <p class="lead">The same starting noise walked back to a field with N reverse steps of a deterministic (DDIM) sampler. Each step is one network call.</p>
+  <div class="grid">
+    <div class="plot">
+      <canvas id="stpField" width="1200" height="440"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="stpN">reverse steps N <output id="stpNOut">8</output></label>
+        <input type="range" id="stpN" min="0" max="10" step="1" value="3">
+        <div class="hint">1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1000</div>
+      </div>
+      <div class="btns">
+        <button id="stpNoise">New starting noise</button>
+      </div>
+      <dl class="readout">
+        <dt>network calls</dt><dd id="stpCalls">8</dd>
+        <dt>spread of sample vs prior</dt><dd id="stpSpread">0 %</dd>
+        <dt>distance to the 1000-step result</dt><dd id="stpErr">0.000</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--blue)">sample after N steps</span>
+        <span class="dash" style="--c: var(--grey)">same noise, 1000 steps</span>
+        <span style="--c: var(--orange)">prior mean</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>To keep this honest the prior over fields is a Gaussian process with a known kernel, so the ideal denoiser E[x_0 | x_t] has a closed form and no network is needed. Every difference between the blue and grey curves is the sampler's own error from taking too few steps.</p>
+    <p>With one step the sampler returns the posterior mean of pure noise, which is the prior mean. With a handful of steps the field is too smooth and its spread is far below the prior's. Past a few dozen steps the sample stops changing, which is the plateau on slide 8.</p>
+  </div>
+</section>
+
+<!-- ============ 3. GUIDANCE ============ -->
+<section class="demo" id="guidance" role="tabpanel">
+  <h2>Conditioning, and classifier free guidance</h2>
+  <p class="lead">An unconditional model knows three plausible values. The condition c names the right-hand one. Combine the two noise predictions with weight w and sample.</p>
+  <div class="grid">
+    <div class="plot">
+      <canvas id="gdHist" width="1200" height="440"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="gdW">guidance weight w <output id="gdWOut">1.0</output></label>
+        <input type="range" id="gdW" min="0" max="4" step="0.1" value="1">
+        <div class="hint">w = 0 unconditional, w = 1 conditional, w &gt; 1 sharpened</div>
+      </div>
+      <div class="btns">
+        <button class="primary" id="gdRun">Sample 3000 draws</button>
+      </div>
+      <dl class="readout">
+        <dt>draws landing on c</dt><dd id="gdFrac">0 %</dd>
+        <dt>spread of those draws</dt><dd id="gdStd">0.00</dd>
+        <dt>network calls per step</dt><dd id="gdCalls">2</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--grey)">p(x), unconditional</span>
+        <span style="--c: var(--blue)">p(x | c), the true conditional</span>
+        <span style="--c: var(--orange)">samples with weight w</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The combined prediction is eps_hat = eps(x, empty) + w (eps(x, c) - eps(x, empty)), exactly the line on slide 9, run through 1000 ancestral reverse steps with the exact scores of this toy model. At w = 0 the condition is ignored. At w = 1 the histogram matches the true conditional.</p>
+    <p>Push w past 1 and the draws cluster more tightly than p(x | c) allows: the guided sampler is biased toward a sharpened distribution, and the spread readout drops below the true value of 0.35. That is the variety you give up for agreement with the condition.</p>
+  </div>
+</section>
+
+<!-- ============ 4. PHYSICS WEIGHT ============ -->
+<section class="demo" id="physics" role="tabpanel">
+  <h2>Weighting the physics term is a stochastic model decision</h2>
+  <p class="lead">Steady heat in a member, three noisy gauges, the governing equation u'' + f(x) = 0 at 40 collocation points, fixed ends. Drag the physics weight and watch the fitted field.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="phField" width="900" height="440"></canvas>
+      <canvas id="phSweep" width="450" height="440"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="phLam">physics weight lambda <output id="phLamOut">1e-2</output></label>
+        <input type="range" id="phLam" min="-6" max="2" step="0.1" value="-2">
+        <div class="hint">log scale, 1e-6 to 1e2</div>
+      </div>
+      <div class="ctl">
+        <label for="phErr">error in the source term <output id="phErrOut">15 %</output></label>
+        <input type="range" id="phErr" min="0" max="40" step="1" value="15">
+        <div class="hint">the equation the model is told to obey is this much wrong</div>
+      </div>
+      <div class="btns">
+        <button id="phNoise">Re-draw gauge noise</button>
+        <button id="phReset">Reset</button>
+      </div>
+      <dl class="readout">
+        <dt>RMSE against the true field</dt><dd id="phRmse">0.000</dd>
+        <dt>data misfit at the gauges</dt><dd id="phLd">0.000</dd>
+        <dt>equation residual</dt><dd id="phLp">0.000</dd>
+      </dl>
+      <div class="legend">
+        <span class="dash" style="--c: var(--grey)">true temperature field</span>
+        <span style="--c: var(--red)">fitted field</span>
+        <span style="--c: var(--blue)">the 3 noisy gauges</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The loss is L = L_data + lambda L_pde + w_bc L_bc, as on slide 14, with w_bc fixed. The function class here is a set of 40 radial basis functions, so the loss is quadratic in the coefficients and the fit is one linear solve per slider move; a network would give the same picture more slowly.</p>
+    <p>At the left end of the slider the equation is ignored: the three gauges are hit and everything between them is invented. At the right end the data is ignored: the model obeys the equation it was given, and if that equation carries a wrong source term the field is confidently wrong. The right panel sweeps the weight and marks where you are.</p>
+  </div>
+</section>
+
+</main>
+<footer>CE 7453 Machine Learning for Civil, Environmental and Geodetic Engineering. Each demo is a small closed-form toy chosen so that the effect on the slide is visible without a trained network.</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- utilities ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function gaussPair(rng) { const u = 1 - rng(), v = rng(); const r = Math.sqrt(-2 * Math.log(u)); return [r * Math.cos(2 * Math.PI * v), r * Math.sin(2 * Math.PI * v)]; }
+function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const g = gaussPair(rng); out[i] = g[0]; if (i + 1 < n) out[i + 1] = g[1]; } return out; }
+function linspace(a, b, n) { const out = new Float64Array(n); for (let i = 0; i < n; i++) out[i] = a + (b - a) * i / (n - 1); return out; }
+function fmt(x, d) { return (Math.abs(x) >= 1e5 || (Math.abs(x) < 1e-3 && x !== 0)) ? x.toExponential(1) : x.toFixed(d); }
+
+/* ---------- plotting on canvas ---------- */
+function Plot(canvas, opts) {
+  this.c = canvas; this.ctx = canvas.getContext("2d"); this.o = opts;
+  const dpr = window.devicePixelRatio || 1;
+  this.W = canvas.width; this.H = canvas.height;
+  canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr);
+  this.m = { l: 58, r: 14, t: 28, b: 44 };
+}
+Plot.prototype.begin = function (xlim, ylim) {
+  const ctx = this.ctx, o = this.o; this.xl = xlim; this.yl = ylim;
+  ctx.clearRect(0, 0, this.W, this.H);
+  ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H);
+  const ink = css("--ink"), muted = css("--muted"), line = css("--line");
+  ctx.font = "13px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "top";
+  // grid and ticks
+  const nx = 5, ny = 5;
+  ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.fillStyle = muted;
+  for (let i = 0; i <= nx; i++) {
+    const v = xlim[0] + (xlim[1] - xlim[0]) * i / nx, px = this.x(v);
+    ctx.beginPath(); ctx.moveTo(px, this.m.t); ctx.lineTo(px, this.H - this.m.b); ctx.stroke();
+    ctx.fillText(o.xfmt ? o.xfmt(v) : fmt(v, 2), px, this.H - this.m.b + 6);
+  }
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let i = 0; i <= ny; i++) {
+    const v = ylim[0] + (ylim[1] - ylim[0]) * i / ny, py = this.y(v);
+    ctx.beginPath(); ctx.moveTo(this.m.l, py); ctx.lineTo(this.W - this.m.r, py); ctx.stroke();
+    ctx.fillText(o.yfmt ? o.yfmt(v) : fmt(v, 1), this.m.l - 8, py);
+  }
+  ctx.font = "13px " + css("--sans"); ctx.fillStyle = ink;
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  if (o.xlabel) ctx.fillText(o.xlabel, (this.m.l + this.W - this.m.r) / 2, this.H - 8);
+  if (o.ylabel) { ctx.save(); ctx.translate(14, (this.m.t + this.H - this.m.b) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(o.ylabel, 0, 0); ctx.restore(); }
+  if (o.title) { ctx.textAlign = "left"; ctx.font = "500 14px " + css("--sans"); ctx.fillText(o.title, this.m.l, 18); }
+  ctx.save(); ctx.beginPath(); ctx.rect(this.m.l, this.m.t, this.W - this.m.l - this.m.r, this.H - this.m.t - this.m.b); ctx.clip();
+};
+Plot.prototype.end = function () { this.ctx.restore(); };
+Plot.prototype.x = function (v) { return this.m.l + (v - this.xl[0]) / (this.xl[1] - this.xl[0]) * (this.W - this.m.l - this.m.r); };
+Plot.prototype.y = function (v) { return this.H - this.m.b - (v - this.yl[0]) / (this.yl[1] - this.yl[0]) * (this.H - this.m.t - this.m.b); };
+Plot.prototype.line = function (xs, ys, color, width, dash) {
+  const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 2; ctx.setLineDash(dash || []);
+  ctx.beginPath(); for (let i = 0; i < xs.length; i++) { const px = this.x(xs[i]), py = this.y(ys[i]); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+  ctx.stroke(); ctx.setLineDash([]);
+};
+Plot.prototype.dots = function (xs, ys, color, r) {
+  const ctx = this.ctx; ctx.fillStyle = color;
+  for (let i = 0; i < xs.length; i++) { ctx.beginPath(); ctx.arc(this.x(xs[i]), this.y(ys[i]), r || 5, 0, 2 * Math.PI); ctx.fill(); }
+};
+Plot.prototype.bars = function (edges, counts, color) {
+  const ctx = this.ctx; ctx.fillStyle = color;
+  for (let i = 0; i < counts.length; i++) { const x0 = this.x(edges[i]), x1 = this.x(edges[i + 1]); ctx.fillRect(x0, this.y(counts[i]), Math.max(1, x1 - x0 - 1), this.y(0) - this.y(counts[i])); }
+};
+Plot.prototype.vline = function (v, color) { const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(this.x(v), this.m.t); ctx.lineTo(this.x(v), this.H - this.m.b); ctx.stroke(); ctx.setLineDash([]); };
+Plot.prototype.text = function (s, vx, vy, color, align) { const ctx = this.ctx; ctx.fillStyle = color; ctx.font = "13px " + css("--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "middle"; ctx.fillText(s, this.x(vx), this.y(vy)); };
+
+/* ---------- shared diffusion schedule ---------- */
+const T = 1000;
+const beta = new Float64Array(T + 1), alpha = new Float64Array(T + 1), abar = new Float64Array(T + 1);
+abar[0] = 1; alpha[0] = 1; beta[0] = 0;
+for (let t = 1; t <= T; t++) { beta[t] = 1e-4 + (0.02 - 1e-4) * (t - 1) / (T - 1); alpha[t] = 1 - beta[t]; abar[t] = abar[t - 1] * alpha[t]; }
+
+/* ---------- a 1-D field used by demos 1 and 2 ---------- */
+const NX = 200, XS = linspace(0, 1, NX);
+function bump(x, c, w) { return Math.exp(-0.5 * ((x - c) / w) ** 2); }
+const FIELD = new Float64Array(NX);
+for (let i = 0; i < NX; i++) FIELD[i] = 1.2 * bump(XS[i], 0.28, 0.06) + 0.8 * bump(XS[i], 0.55, 0.045) + 1.0 * bump(XS[i], 0.78, 0.07) - 0.4;
+
+/* ================= 1. FORWARD PROCESS ================= */
+(function forward() {
+  const pField = new Plot(document.getElementById("fwdField"), { xlabel: "position", ylabel: "field value", title: "the field at step t" });
+  const pSched = new Plot(document.getElementById("fwdSched"), { xlabel: "step t", ylabel: "abar_t", title: "the schedule", xfmt: v => v.toFixed(0) });
+  const slider = document.getElementById("fwdT"), out = document.getElementById("fwdTOut");
+  let seed = 7, eps = randn(mulberry32(seed), NX), playing = false, raf = null;
+  const tAxis = linspace(0, T, 101), abarCurve = tAxis.map(t => abar[Math.round(t)]);
+  function draw() {
+    const t = +slider.value, a = abar[t], s = Math.sqrt(a), n = Math.sqrt(1 - a);
+    out.textContent = t;
+    document.getElementById("fwdAbar").textContent = a.toFixed(4);
+    document.getElementById("fwdNz").textContent = (1 - a).toFixed(4);
+    document.getElementById("fwdSnr").textContent = a >= 0.99995 ? "inf" : fmt(a / (1 - a), 2);
+    const xt = new Float64Array(NX); for (let i = 0; i < NX; i++) xt[i] = s * FIELD[i] + n * eps[i];
+    pField.begin([0, 1], [-3.5, 3.5]);
+    pField.line(XS, xt, css("--grey"), 1.6);
+    pField.line(XS, FIELD, css("--blue"), 2.2);
+    pField.end();
+    pSched.begin([0, T], [0, 1]);
+    pSched.line(tAxis, abarCurve, css("--ink"), 2);
+    pSched.vline(t, css("--red"));
+    pSched.dots([t], [a], css("--red"), 6);
+    pSched.end();
+  }
+  function step() { if (!playing) return; let t = +slider.value + 4; if (t > T) { t = T; playing = false; document.getElementById("fwdPlay").textContent = "Play"; } slider.value = t; draw(); if (playing) raf = requestAnimationFrame(step); }
+  slider.addEventListener("input", draw);
+  document.getElementById("fwdPlay").addEventListener("click", function () {
+    playing = !playing; this.textContent = playing ? "Pause" : "Play";
+    if (playing) { if (+slider.value >= T) slider.value = 0; raf = requestAnimationFrame(step); } else if (raf) cancelAnimationFrame(raf);
+  });
+  document.getElementById("fwdReset").addEventListener("click", function () { playing = false; document.getElementById("fwdPlay").textContent = "Play"; slider.value = 0; draw(); });
+  document.getElementById("fwdNoise").addEventListener("click", function () { seed += 1; eps = randn(mulberry32(seed), NX); draw(); });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 2. REVERSE STEP COUNT ================= */
+(function steps() {
+  // Gaussian-process prior over fields in a cosine basis: c_k ~ N(mu_k, lam_k), field = sum_k c_k phi_k(x)
+  const K = 40, ell = 0.07;
+  const PHI = []; for (let k = 0; k < K; k++) { const row = new Float64Array(NX); for (let i = 0; i < NX; i++) row[i] = (k === 0 ? 1 : Math.SQRT2 * Math.cos(Math.PI * k * XS[i])); PHI.push(row); }
+  const lam = new Float64Array(K); for (let k = 0; k < K; k++) lam[k] = 0.9 * Math.exp(-0.5 * (Math.PI * k * ell) ** 2);
+  const mu = new Float64Array(K); for (let k = 0; k < K; k++) { let s = 0; for (let i = 0; i < NX; i++) s += FIELD[i] * PHI[k][i]; mu[k] = s / NX; }
+  const priorStd = Math.sqrt(lam.reduce((a, b) => a + b, 0));
+  function synth(c) { const f = new Float64Array(NX); for (let k = 0; k < K; k++) for (let i = 0; i < NX; i++) f[i] += c[k] * PHI[k][i]; return f; }
+  const MEAN = synth(mu);
+  function ddim(z, N) {
+    // deterministic sampler with the exact posterior-mean denoiser of this Gaussian prior
+    const ts = []; for (let j = 0; j <= N; j++) ts.push(Math.round(T - T * j / N));
+    const c = Float64Array.from(z); let calls = 0;
+    for (let j = 0; j < N; j++) {
+      const t = ts[j], tn = ts[j + 1], a = abar[t], an = abar[tn]; calls++;
+      for (let k = 0; k < K; k++) {
+        const c0 = mu[k] + Math.sqrt(a) * lam[k] * (c[k] - Math.sqrt(a) * mu[k]) / (a * lam[k] + 1 - a);
+        const e = (c[k] - Math.sqrt(a) * c0) / Math.sqrt(1 - a);
+        c[k] = Math.sqrt(an) * c0 + Math.sqrt(1 - an) * e;
+      }
+    }
+    return { field: synth(c), c: c, calls: calls };
+  }
+  const Ns = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1000];
+  const plot = new Plot(document.getElementById("stpField"), { xlabel: "position", ylabel: "field value", title: "one field, sampled from the same noise with N steps" });
+  const slider = document.getElementById("stpN"), out = document.getElementById("stpNOut");
+  let seed = 11, z = randn(mulberry32(seed), K), ref = null;
+  function draw() {
+    const N = Ns[+slider.value]; out.textContent = N;
+    if (!ref) ref = ddim(z, 1000);
+    const r = ddim(z, N);
+    let v = 0, d = 0; for (let k = 0; k < K; k++) { v += (r.c[k] - mu[k]) ** 2; } for (let i = 0; i < NX; i++) d += (r.field[i] - ref.field[i]) ** 2;
+    document.getElementById("stpCalls").textContent = r.calls;
+    document.getElementById("stpSpread").textContent = (100 * Math.sqrt(v) / priorStd).toFixed(0) + " %";
+    document.getElementById("stpErr").textContent = Math.sqrt(d / NX).toFixed(3);
+    plot.begin([0, 1], [-3, 3]);
+    plot.line(XS, MEAN, css("--orange"), 1.5);
+    plot.line(XS, ref.field, css("--grey"), 2, [6, 5]);
+    plot.line(XS, r.field, css("--blue"), 2.4);
+    plot.end();
+  }
+  slider.addEventListener("input", draw);
+  document.getElementById("stpNoise").addEventListener("click", function () { seed += 1; z = randn(mulberry32(seed), K); ref = null; draw(); });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 3. GUIDANCE ================= */
+(function guidance() {
+  const comps = [{ m: -2.0, w: 0.3, s: 0.35 }, { m: 0.5, w: 0.4, s: 0.35 }, { m: 2.5, w: 0.3, s: 0.5 }];
+  const condIdx = 2;
+  function epsPred(x, a, mix) {
+    // exact noise prediction for a Gaussian mixture diffused to signal level a
+    let num = 0, den = 0;
+    for (const c of mix) { const v = a * c.s * c.s + 1 - a, d = x - Math.sqrt(a) * c.m; const p = c.w * Math.exp(-0.5 * d * d / v) / Math.sqrt(v); num += p * (-d / v); den += p; }
+    const score = num / den; return -Math.sqrt(1 - a) * score;
+  }
+  const condMix = [{ m: 2.6, w: 1, s: 0.35 }];
+  function sample(w, n, seed) {
+    const rng = mulberry32(seed), x = randn(rng, n);
+    for (let t = T; t >= 1; t--) {
+      const a = abar[t], at = alpha[t], bt = beta[t], noise = t > 1 ? randn(rng, n) : null;
+      const sb = Math.sqrt(bt), c1 = 1 / Math.sqrt(at), c2 = bt / Math.sqrt(1 - a);
+      for (let i = 0; i < n; i++) {
+        const eu = epsPred(x[i], a, comps), ec = epsPred(x[i], a, condMix), e = eu + w * (ec - eu);
+        x[i] = c1 * (x[i] - c2 * e) + (noise ? sb * noise[i] : 0);
+      }
+    }
+    return x;
+  }
+  function pdf(x, mix) { let p = 0; for (const c of mix) p += c.w * Math.exp(-0.5 * (x - c.m) ** 2 / (c.s * c.s)) / Math.sqrt(2 * Math.PI * c.s * c.s); return p; }
+  const plot = new Plot(document.getElementById("gdHist"), { xlabel: "field value", ylabel: "density", title: "where the samples land" });
+  const slider = document.getElementById("gdW"), out = document.getElementById("gdWOut");
+  const grid = linspace(-4, 4.5, 300), pu = grid.map(v => pdf(v, comps)), pc = grid.map(v => pdf(v, condMix));
+  let draws = null, drawnW = null;
+  function draw() {
+    const w = +slider.value; out.textContent = w.toFixed(1);
+    plot.begin([-4, 4.5], [0, 1.6]);
+    if (draws) {
+      const nb = 90, edges = linspace(-4, 4.5, nb + 1), counts = new Float64Array(nb), bw = edges[1] - edges[0];
+      let onC = 0, m = 0, m2 = 0, nC = 0;
+      for (const v of draws) { const b = Math.floor((v - edges[0]) / bw); if (b >= 0 && b < nb) counts[b] += 1 / (draws.length * bw); if (v > 1.5) { onC++; m += v; m2 += v * v; nC++; } }
+      plot.bars(edges, counts, css("--orange") + "99");
+      const mean = m / Math.max(1, nC), sd = Math.sqrt(Math.max(0, m2 / Math.max(1, nC) - mean * mean));
+      document.getElementById("gdFrac").textContent = (100 * onC / draws.length).toFixed(0) + " %";
+      document.getElementById("gdStd").textContent = sd.toFixed(2) + (nC > 10 ? "  (true 0.35)" : "");
+      plot.text("sampled at w = " + drawnW.toFixed(1), -3.9, 1.5, css("--orange"), "left");
+    }
+    plot.line(grid, pu, css("--grey"), 2);
+    plot.line(grid, pc, css("--blue"), 2.2);
+    plot.end();
+    document.getElementById("gdCalls").textContent = w === 0 ? "1" : "2";
+  }
+  function run() { const w = +slider.value; draws = sample(w, 3000, 23); drawnW = w; draw(); }
+  slider.addEventListener("input", draw);
+  slider.addEventListener("change", run);
+  document.getElementById("gdRun").addEventListener("click", run);
+  window.addEventListener("themechange", draw);
+  run();
+})();
+
+/* ================= 4. PHYSICS WEIGHT ================= */
+(function physics() {
+  const PI = Math.PI;
+  function uTrue(x) { return 1.2 * Math.sin(PI * x) + 0.5 * Math.sin(4 * PI * x); }
+  function fTrue(x) { return 1.2 * PI * PI * Math.sin(PI * x) + 0.5 * 16 * PI * PI * Math.sin(4 * PI * x); }
+  const M = 40, centers = linspace(-0.04, 1.04, M), wid = 0.035;
+  function phi(x, j) { return Math.exp(-0.5 * ((x - centers[j]) / wid) ** 2); }
+  function phi2(x, j) { const d = (x - centers[j]) / wid; return (d * d - 1) / (wid * wid) * Math.exp(-0.5 * d * d); }
+  const xg = [0.15, 0.5, 0.85], xc = linspace(0.02, 0.98, 40), xb = [0, 1], wbc = 50, ridge = 1e-3;
+  const fscale = Math.sqrt(Array.from(xc, fTrue).reduce((a, v) => a + v * v, 0) / xc.length);
+  const xs = linspace(0, 1, 201), uT = xs.map(uTrue);
+  let seed = 3, yg = null;
+  function drawNoise() { const g = randn(mulberry32(seed), 4); yg = xg.map((x, i) => uTrue(x) + 0.08 * g[i]); }
+  function solve(lam, err) {
+    const A = []; for (let i = 0; i < M; i++) A.push(new Float64Array(M + 1));
+    function add(rows, rhs, wgt) {
+      for (let r = 0; r < rows.length; r++) { const row = rows[r]; for (let i = 0; i < M; i++) { if (row[i] === 0) continue; for (let j = 0; j < M; j++) A[i][j] += wgt * row[i] * row[j]; A[i][M] += wgt * row[i] * rhs[r]; } }
+    }
+    add(xg.map(x => Array.from(centers, (c, j) => phi(x, j))), yg, 1);
+    add(Array.from(xc, x => Array.from(centers, (c, j) => phi2(x, j) / fscale)), Array.from(xc, x => -(1 + err) * fTrue(x) / fscale), lam / xc.length);
+    add(xb.map(x => Array.from(centers, (c, j) => phi(x, j))), [0, 0], wbc);
+    for (let i = 0; i < M; i++) A[i][i] += ridge;
+    // gaussian elimination with partial pivoting
+    for (let p = 0; p < M; p++) {
+      let best = p; for (let r = p + 1; r < M; r++) if (Math.abs(A[r][p]) > Math.abs(A[best][p])) best = r;
+      const tmp = A[p]; A[p] = A[best]; A[best] = tmp;
+      for (let r = p + 1; r < M; r++) { const f = A[r][p] / A[p][p]; if (f === 0) continue; for (let j = p; j <= M; j++) A[r][j] -= f * A[p][j]; }
+    }
+    const a = new Float64Array(M);
+    for (let p = M - 1; p >= 0; p--) { let s = A[p][M]; for (let j = p + 1; j < M; j++) s -= A[p][j] * a[j]; a[p] = s / A[p][p]; }
+    const u = xs.map(x => { let s = 0; for (let j = 0; j < M; j++) s += a[j] * phi(x, j); return s; });
+    let rm = 0; for (let i = 0; i < xs.length; i++) rm += (u[i] - uT[i]) ** 2; rm = Math.sqrt(rm / xs.length);
+    let ld = 0; xg.forEach((x, i) => { let s = 0; for (let j = 0; j < M; j++) s += a[j] * phi(x, j); ld += (s - yg[i]) ** 2; });
+    let lp = 0; xc.forEach(x => { let s = 0; for (let j = 0; j < M; j++) s += a[j] * phi2(x, j); lp += ((s + (1 + err) * fTrue(x)) / fscale) ** 2; }); lp /= xc.length;
+    return { u: u, rmse: rm, ld: ld, lp: lp };
+  }
+  const pF = new Plot(document.getElementById("phField"), { xlabel: "position along the member x", ylabel: "temperature u(x)", title: "three gauges and one equation" });
+  const pS = new Plot(document.getElementById("phSweep"), { xlabel: "log10 lambda", ylabel: "RMSE against the true field", title: "the sweep", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(2) });
+  const sl = document.getElementById("phLam"), se = document.getElementById("phErr");
+  function draw() {
+    const lg = +sl.value, lam = Math.pow(10, lg), err = +se.value / 100;
+    document.getElementById("phLamOut").textContent = "1e" + lg.toFixed(1).replace(/\.0$/, "");
+    document.getElementById("phErrOut").textContent = se.value + " %";
+    const r = solve(lam, err);
+    document.getElementById("phRmse").textContent = r.rmse.toFixed(3);
+    document.getElementById("phLd").textContent = r.ld.toFixed(4);
+    document.getElementById("phLp").textContent = fmt(r.lp, 2);
+    pF.begin([0, 1], [-1, 2]);
+    pF.line(xs, uT, css("--grey"), 2, [6, 5]);
+    pF.line(xs, r.u, css("--red"), 2.4);
+    pF.dots(xg, yg, css("--blue"), 6);
+    pF.end();
+    const lgs = linspace(-6, 2, 41), rs = lgs.map(v => solve(Math.pow(10, v), err).rmse);
+    const ymax = Math.max(0.5, Math.ceil(Math.max.apply(null, rs) * 10) / 10);
+    pS.begin([-6, 2], [0, ymax]);
+    pS.line(lgs, rs, css("--ink"), 2);
+    pS.dots([lg], [r.rmse], css("--red"), 6);
+    pS.text("physics ignored", -3.7, ymax * 0.93, css("--muted"), "left");
+    pS.text("data ignored", 1.8, ymax * 0.93, css("--muted"), "right");
+    pS.end();
+  }
+  drawNoise();
+  sl.addEventListener("input", draw); se.addEventListener("input", draw);
+  document.getElementById("phNoise").addEventListener("click", function () { seed += 1; drawNoise(); draw(); });
+  document.getElementById("phReset").addEventListener("click", function () { sl.value = -2; se.value = 15; seed = 3; drawNoise(); draw(); });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ---------- tabs ---------- */
+const tabs = Array.from(document.querySelectorAll("nav [role=tab]"));
+function show(name, push) {
+  if (!document.getElementById(name)) name = "forward";
+  tabs.forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll("section.demo").forEach(s => s.classList.toggle("active", s.id === name));
+  if (push) { try { history.replaceState(null, "", "#" + name); } catch (e) {} }
+}
+tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
+show(location.hash.slice(1) || "forward", false);
+
+/* redraw plots when the theme flips */
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
