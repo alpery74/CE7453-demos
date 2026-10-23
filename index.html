@@ -144,7 +144,13 @@ const WEEKS = [
     { slide: "8, 9", name: "Emergence: the claim, and the metric that manufactures it", tab: "emergence" },
     { slide: "11, 12", name: "In-context learning: the prompt conditions a fixed model", tab: "incontext" },
     { slide: "16", name: "Low rank adapters: how much of the update does rank r keep", tab: "lora" },
-    { slide: "19, 20", name: "Score it on your task: accuracy, interval, and the refusal rate", tab: "abstain" } ] }
+    { slide: "19, 20", name: "Score it on your task: accuracy, interval, and the refusal rate", tab: "abstain" } ] },
+  { n: 12, title: "Vision, action, and the road ahead", dir: "week12/", demos: [
+    { slide: "5, 6", name: "Contrastive alignment: two towers pulled into one space", tab: "contrastive" },
+    { slide: "7", name: "Retrieval: type a phrase, rank the archive, and see what wording does", tab: "retrieval" },
+    { slide: "10", name: "Triage: recall at the review budget you actually used", tab: "triage" },
+    { slide: "17, 18", name: "Planning in a learned model: imagine, act, observe, replan", tab: "worldmodel" },
+    { slide: "20", name: "Deployment: the inputs move first", tab: "drift" } ] }
 ];
 const nav = document.getElementById("weeks"), list = document.getElementById("slides");
 function render(n) {
