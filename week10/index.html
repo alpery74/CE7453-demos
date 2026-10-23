@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week 10 Demos</title>
+<meta name="description" content="CE 7453 Week 10: interactive demonstrations of message passing on a graph, permutation invariance, value iteration, and Q-learning with exploration.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-line course header with a tab strip, then one demo at a time:
+   a wide plot on the left, a narrow control column on the right, a caption underneath.
+   Colors follow the lecture deck (dark body text, one blue, red for the figure's "wrong" curve). */
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --ink: #2B2B2B;
+  --muted: #6B7280;
+  --line: #D9DDE3;
+  --blue: #1F5C99;
+  --blue-soft: #D6E3F2;
+  --red: #B3261E;
+  --orange: #C9731F;
+  --grey: #8A8F98;
+  --focus: #1F5C99;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+    --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+  --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  padding-block: 14px 8px; border-bottom: 1px solid var(--line);
+}
+header .weeks { font-size: 13px; color: var(--blue); text-decoration: none; border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px; }
+header .weeks:hover { background: var(--blue-soft); }
+header .course { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+nav button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+nav button[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+nav button:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+nav button .slide { font-family: var(--mono); font-size: 12px; opacity: 0.8; margin-left: 6px; }
+main { padding-block: 4px 24px; }
+section.demo { display: none; }
+section.demo.active { display: block; }
+.demo h2 { font-size: 22px; font-weight: 600; margin: 6px 0 2px; text-wrap: balance; }
+.demo .lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.plot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-width: 0; }
+.plot canvas { width: 100%; height: auto; display: block; max-width: 100%; }
+.plot.two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 860px) { .plot.two { grid-template-columns: 1fr; } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctl label output { font-family: var(--mono); font-weight: 400; color: var(--blue); }
+.ctl input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--blue); }
+.ctl .hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; background: var(--c); }
+.legend span.dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.caption { margin: 12px 0 0; max-width: 90ch; font-size: 15px; }
+.caption p { margin: 0 0 6px; }
+footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <a class="weeks" href="../">All weeks</a>
+  <span class="course">CE 7453 &middot; Week 10 &middot; Geometry and reinforcement learning</span>
+  <h1>Interactive demonstrations</h1>
+</header>
+
+<nav role="tablist" aria-label="Demos">
+  <button role="tab" data-tab="passing" aria-selected="true">Message passing<span class="slide">slides 7, 8</span></button>
+  <button role="tab" data-tab="permute" aria-selected="false">Permutation invariance<span class="slide">slides 6, 10</span></button>
+  <button role="tab" data-tab="bellman" aria-selected="false">Value iteration<span class="slide">slides 15, 16</span></button>
+  <button role="tab" data-tab="qlearn" aria-selected="false">Q-learning and exploration<span class="slide">slide 17</span></button>
+</nav>
+
+<main>
+
+<!-- ============ 1. MESSAGE PASSING ============ -->
+<section class="demo active" id="passing" role="tabpanel">
+  <h2>Message passing: depth on a graph is measured in hops</h2>
+  <p class="lead">A small water network. One junction starts with a signal of 1, every other junction with 0. Each layer replaces every node's value by the normalized average of itself and its neighbours.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="mpGraph" width="900" height="460"></canvas>
+      <canvas id="mpSpread" width="450" height="460"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="mpK">layers K (hops) <output id="mpKOut">0</output></label>
+        <input type="range" id="mpK" min="0" max="12" step="1" value="0">
+        <div class="hint">0 is the input, each step is one message passing layer</div>
+      </div>
+      <div class="btns">
+        <button class="primary" id="mpStep">One more hop</button>
+        <button id="mpSource">Move the source</button>
+        <button id="mpReset">Reset</button>
+      </div>
+      <dl class="readout">
+        <dt>nodes reached so far</dt><dd id="mpReach">1 / 12</dd>
+        <dt>spread across nodes (std)</dt><dd id="mpStd">0.000</dd>
+        <dt>largest node value</dt><dd id="mpMax">1.000</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--blue)">node value (darker is larger)</span>
+        <span style="--c: var(--red)">source junction</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The layer is X_{k+1} = D^{-1/2} (A + I) D^{-1/2} X_k with the weight matrix set to the identity and no nonlinearity, which is the Kipf and Welling propagation rule on slide 7 with the learnable part removed. One hop reaches the neighbours and two hops reach their neighbours in turn. The receptive field is a graph distance.</p>
+    <p>Keep adding hops and every node drifts toward the same value: the right panel shows the spread across nodes falling toward zero. That is oversmoothing, slide 8. Two or three layers is usually what a utility network needs, and the number of layers is a statement about how far a cause is allowed to travel.</p>
+  </div>
+</section>
+
+<!-- ============ 2. PERMUTATION INVARIANCE ============ -->
+<section class="demo" id="permute" role="tabpanel">
+  <h2>Permutation invariance: renumber the points and nothing may change</h2>
+  <p class="lead">Eight scanned points. Two models read them: a plain network on the concatenated coordinates, and a shared encoder on each point followed by a max pool. Shuffle the file order and compare.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="pmPoints" width="900" height="460"></canvas>
+      <canvas id="pmBars" width="450" height="460"></canvas>
+    </div>
+    <div class="controls">
+      <div class="btns">
+        <button class="primary" id="pmShuffle">Shuffle the file order</button>
+        <button id="pmJitter">Move one point</button>
+        <button id="pmReset">Reset</button>
+      </div>
+      <dl class="readout">
+        <dt>shuffles so far</dt><dd id="pmCount">0</dd>
+        <dt>change in concatenated model</dt><dd id="pmDeltaC">0.000</dd>
+        <dt>change in pooled model</dt><dd id="pmDeltaP">0.000</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--red)">concatenate in file order, then a linear map</span>
+        <span style="--c: var(--blue)">shared encoder per point, then max over points</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The numbers next to the points are their positions in the file. The red model multiplies the 16 concatenated coordinates by a fixed matrix, so it memorizes the order you typed the points in: shuffle and its output jumps. The blue model applies the same small encoder to every point and takes the maximum over points, and order cannot survive a max, so its output is identical after every shuffle.</p>
+    <p>Move one point and both outputs change, as they should. Order is bookkeeping and geometry is data. The model must answer to the second and ignore the first. That is the design constraint on slides 6 and 10, for point clouds and for graphs alike.</p>
+  </div>
+</section>
+
+<!-- ============ 3. VALUE ITERATION ============ -->
+<section class="demo" id="bellman" role="tabpanel">
+  <h2>Value functions and the Bellman equation</h2>
+  <p class="lead">A 6 by 6 grid where the goal pays +1 and the spillway cells pay -1. A move slips sideways with probability 0.1. Sweep the Bellman update and watch the values and the greedy arrows settle.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="viGrid" width="900" height="460"></canvas>
+      <canvas id="viConv" width="450" height="460"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="viGamma">discount gamma <output id="viGammaOut">0.90</output></label>
+        <input type="range" id="viGamma" min="0.50" max="0.99" step="0.01" value="0.90">
+        <div class="hint">near 1 plans for the long run, small is myopic</div>
+      </div>
+      <div class="btns">
+        <button class="primary" id="viSweep">One Bellman sweep</button>
+        <button id="viRun">Sweep to convergence</button>
+        <button id="viReset">Reset values to 0</button>
+      </div>
+      <dl class="readout">
+        <dt>sweeps done</dt><dd id="viN">0</dd>
+        <dt>largest change in the last sweep</dt><dd id="viDelta">-</dd>
+        <dt>value at the start cell</dt><dd id="viV0">0.000</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--blue)">value V(s), darker is higher</span>
+        <span style="--c: var(--ink)">greedy action</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Each sweep applies V(s) = max over actions of the expected reward now plus gamma times V at the next state, averaged over the slip. The right panel plots the largest change per sweep. It shrinks geometrically at rate gamma, so a discount near one takes many more sweeps, and slide 15 calls the discount a policy decision for that reason.</p>
+    <p>Once the values stop moving, read the policy off them: each arrow points to the neighbour with the highest expected value. Lower the discount and the arrows near the spillway stop caring about the far-away goal.</p>
+  </div>
+</section>
+
+<!-- ============ 4. Q-LEARNING ============ -->
+<section class="demo" id="qlearn" role="tabpanel">
+  <h2>Q-learning, and the price of exploring</h2>
+  <p class="lead">Same grid, but now the agent does not know the transition rule. It acts, sees a reward and a next state, and nudges its Q estimate toward the Bellman target. The exploration rate decides how often it acts against its own best guess.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="qlGrid" width="900" height="460"></canvas>
+      <canvas id="qlCurve" width="450" height="460"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="qlEps">exploration rate epsilon <output id="qlEpsOut">0.10</output></label>
+        <input type="range" id="qlEps" min="0" max="0.5" step="0.01" value="0.10">
+        <div class="hint">0 is always greedy</div>
+      </div>
+      <div class="btns">
+        <button class="primary" id="qlRun">Run 200 episodes</button>
+        <button id="qlReset">Start over</button>
+      </div>
+      <dl class="readout">
+        <dt>episodes so far</dt><dd id="qlN">0</dd>
+        <dt>return, mean of last 50 episodes</dt><dd id="qlRet">-</dd>
+        <dt>return of the greedy policy now</dt><dd id="qlGreedy">-</dd>
+        <dt>cells ever visited</dt><dd id="qlVisit">0 / 36</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--orange)">visit count, darker is more</span>
+        <span style="--c: var(--ink)">greedy action from Q</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The update is Q(s, a) += alpha (r + gamma max_a' Q(s', a') - Q(s, a)), the one line on slide 17. Its target uses the best next action, which is why the agent learns the greedy policy while behaving with exploration. The learning rate is 0.1 and the discount 0.95. Each episode starts at the bottom left and ends at a terminal cell or after 100 steps.</p>
+    <p>Run with epsilon at 0 a few times from a fresh start. The first route that happened to work gets locked in, and the greedy return stays below what the grid allows because cells off that route are never visited. Raise epsilon and the agent pays in return during training, visible in the curve, and buys a better greedy policy, visible in the readout. That is the trade on slide 17, and it is a design choice.</p>
+  </div>
+</section>
+
+</main>
+<footer>CE 7453 Machine Learning for Civil, Environmental and Geodetic Engineering. Each demo is a small closed-form toy chosen so that the effect on the slide is visible without a trained network.</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- utilities ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hexToRgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
+
+/* ---------- plotting on canvas (same helper as Week 9) ---------- */
+function Plot(canvas, opts) {
+  this.c = canvas; this.ctx = canvas.getContext("2d"); this.o = opts || {};
+  const dpr = window.devicePixelRatio || 1;
+  this.W = canvas.width; this.H = canvas.height;
+  canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr);
+  this.m = { l: 58, r: 14, t: 28, b: 44 };
+}
+Plot.prototype.fmt = function (v, d) { return (Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0)) ? v.toExponential(1) : v.toFixed(d); };
+Plot.prototype.begin = function (xlim, ylim) {
+  const ctx = this.ctx, o = this.o; this.xl = xlim; this.yl = ylim;
+  ctx.clearRect(0, 0, this.W, this.H);
+  ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H);
+  const ink = css("--ink"), muted = css("--muted"), line = css("--line");
+  ctx.font = "13px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "top";
+  const nx = 5, ny = 5;
+  ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.fillStyle = muted;
+  for (let i = 0; i <= nx; i++) {
+    const v = xlim[0] + (xlim[1] - xlim[0]) * i / nx, px = this.x(v);
+    ctx.beginPath(); ctx.moveTo(px, this.m.t); ctx.lineTo(px, this.H - this.m.b); ctx.stroke();
+    ctx.fillText(o.xfmt ? o.xfmt(v) : this.fmt(v, 2), px, this.H - this.m.b + 6);
+  }
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let i = 0; i <= ny; i++) {
+    const v = ylim[0] + (ylim[1] - ylim[0]) * i / ny, py = this.y(v);
+    ctx.beginPath(); ctx.moveTo(this.m.l, py); ctx.lineTo(this.W - this.m.r, py); ctx.stroke();
+    ctx.fillText(o.yfmt ? o.yfmt(v) : this.fmt(v, 1), this.m.l - 8, py);
+  }
+  ctx.font = "13px " + css("--sans"); ctx.fillStyle = ink;
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  if (o.xlabel) ctx.fillText(o.xlabel, (this.m.l + this.W - this.m.r) / 2, this.H - 8);
+  if (o.ylabel) { ctx.save(); ctx.translate(14, (this.m.t + this.H - this.m.b) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(o.ylabel, 0, 0); ctx.restore(); }
+  if (o.title) { ctx.textAlign = "left"; ctx.font = "500 14px " + css("--sans"); ctx.fillText(o.title, this.m.l, 18); }
+  ctx.save(); ctx.beginPath(); ctx.rect(this.m.l, this.m.t, this.W - this.m.l - this.m.r, this.H - this.m.t - this.m.b); ctx.clip();
+};
+Plot.prototype.end = function () { this.ctx.restore(); };
+Plot.prototype.x = function (v) { return this.m.l + (v - this.xl[0]) / (this.xl[1] - this.xl[0]) * (this.W - this.m.l - this.m.r); };
+Plot.prototype.y = function (v) { return this.H - this.m.b - (v - this.yl[0]) / (this.yl[1] - this.yl[0]) * (this.H - this.m.t - this.m.b); };
+Plot.prototype.line = function (xs, ys, color, width, dash) {
+  const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 2; ctx.setLineDash(dash || []);
+  ctx.beginPath(); for (let i = 0; i < xs.length; i++) { const px = this.x(xs[i]), py = this.y(ys[i]); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+  ctx.stroke(); ctx.setLineDash([]);
+};
+Plot.prototype.dots = function (xs, ys, color, r) {
+  const ctx = this.ctx; ctx.fillStyle = color;
+  for (let i = 0; i < xs.length; i++) { ctx.beginPath(); ctx.arc(this.x(xs[i]), this.y(ys[i]), r || 5, 0, 2 * Math.PI); ctx.fill(); }
+};
+Plot.prototype.text = function (s, vx, vy, color, align) { const ctx = this.ctx; ctx.fillStyle = color; ctx.font = "13px " + css("--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "middle"; ctx.fillText(s, this.x(vx), this.y(vy)); };
+
+/* a plain canvas (no axes) for the graph and the grids */
+function Board(canvas) {
+  this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1;
+  this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr);
+}
+Board.prototype.clear = function (title) {
+  const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H);
+  if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); }
+};
+
+/* ================= 1. MESSAGE PASSING ================= */
+(function passing() {
+  // a small looped water network: 12 junctions, 15 pipes
+  const P = [[80, 120], [230, 80], [400, 110], [560, 90], [720, 130], [150, 250], [320, 240], [480, 260], [650, 250], [220, 390], [420, 400], [600, 380]];
+  const E = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [1, 6], [2, 6], [3, 7], [4, 8], [5, 6], [6, 7], [7, 8], [5, 9], [6, 10], [7, 10], [8, 11], [9, 10], [10, 11]];
+  const N = P.length;
+  const A = []; for (let i = 0; i < N; i++) { A.push(new Float64Array(N)); A[i][i] = 1; }
+  for (const [a, b] of E) { A[a][b] = 1; A[b][a] = 1; }
+  const deg = A.map(r => r.reduce((s, v) => s + v, 0));
+  const Ah = A.map((r, i) => r.map((v, j) => v / Math.sqrt(deg[i] * deg[j])));
+  function hop(x) { return Ah.map(r => r.reduce((s, v, j) => s + v * x[j], 0)); }
+  const board = new Board(document.getElementById("mpGraph"));
+  const pSpread = new Plot(document.getElementById("mpSpread"), { xlabel: "layers K", ylabel: "spread across nodes", title: "oversmoothing", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(2) });
+  const slider = document.getElementById("mpK"), out = document.getElementById("mpKOut");
+  let source = 0;
+  function series() { let x = new Float64Array(N); x[source] = 1; const xs = [x]; for (let k = 1; k <= 12; k++) { x = hop(x); xs.push(x); } return xs; }
+  function std(x) { const m = x.reduce((s, v) => s + v, 0) / N; return Math.sqrt(x.reduce((s, v) => s + (v - m) ** 2, 0) / N); }
+  function draw() {
+    const K = +slider.value; out.textContent = K;
+    const xs = series(), x = xs[K];
+    const stds = xs.map(std), vmax = Math.max.apply(null, x);
+    document.getElementById("mpReach").textContent = x.filter(v => v > 1e-9).length + " / " + N;
+    document.getElementById("mpStd").textContent = stds[K].toFixed(3);
+    document.getElementById("mpMax").textContent = vmax.toFixed(3);
+    board.clear("the network after " + K + (K === 1 ? " hop" : " hops"));
+    const ctx = board.ctx, sx = (board.W - 60) / 700, sy = (board.H - 110) / 320;
+    const X = i => 30 + (P[i][0] - 60) * sx, Y = i => 62 + (P[i][1] - 70) * sy;
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 3;
+    for (const [a, b] of E) { ctx.beginPath(); ctx.moveTo(X(a), Y(a)); ctx.lineTo(X(b), Y(b)); ctx.stroke(); }
+    for (let i = 0; i < N; i++) {
+      const t = vmax > 0 ? x[i] / vmax : 0;
+      ctx.beginPath(); ctx.arc(X(i), Y(i), 20, 0, 2 * Math.PI);
+      ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.08 + 0.92 * t); ctx.fill();
+      ctx.lineWidth = i === source ? 3.5 : 1.5; ctx.strokeStyle = i === source ? css("--red") : css("--grey"); ctx.stroke();
+      ctx.fillStyle = t > 0.55 ? "#fff" : css("--ink"); ctx.font = "12px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(x[i].toFixed(2), X(i), Y(i));
+      ctx.fillStyle = css("--muted"); ctx.font = "11px " + css("--sans"); ctx.fillText("J" + (i + 1), X(i), Y(i) - 28);
+    }
+    pSpread.begin([0, 12], [0, 0.3]);
+    pSpread.line(xs.map((_, k) => k), stds, css("--ink"), 2);
+    pSpread.dots([K], [stds[K]], css("--red"), 6);
+    pSpread.end();
+  }
+  slider.addEventListener("input", draw);
+  document.getElementById("mpStep").addEventListener("click", () => { slider.value = Math.min(12, +slider.value + 1); draw(); });
+  document.getElementById("mpSource").addEventListener("click", () => { source = (source + 5) % N; draw(); });
+  document.getElementById("mpReset").addEventListener("click", () => { slider.value = 0; source = 0; draw(); });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 2. PERMUTATION INVARIANCE ================= */
+(function permute() {
+  const base = [[0.15, 0.2], [0.35, 0.65], [0.5, 0.3], [0.7, 0.8], [0.85, 0.45], [0.25, 0.85], [0.6, 0.55], [0.9, 0.15]];
+  let pts = base.map(p => p.slice()), order = [0, 1, 2, 3, 4, 5, 6, 7], count = 0, rng = mulberry32(5);
+  // fixed "weights": a 3 x 16 matrix for the concatenated model, a shared 3-feature encoder for the pooled one
+  const wr = mulberry32(99), Wc = []; for (let i = 0; i < 3; i++) { const row = []; for (let j = 0; j < 16; j++) row.push(wr() * 2 - 1); Wc.push(row); }
+  function concatModel() { const v = []; for (const i of order) v.push(pts[i][0], pts[i][1]); return Wc.map(r => r.reduce((s, w, j) => s + w * v[j], 0)); }
+  function enc(p) { return [p[0] - 0.5, p[1] - 0.5, (p[0] - 0.5) ** 2 + (p[1] - 0.5) ** 2]; }
+  function pooledModel() { const out = [-1e9, -1e9, -1e9]; for (const i of order) { const h = enc(pts[i]); for (let k = 0; k < 3; k++) out[k] = Math.max(out[k], h[k]); } return out; }
+  let refC = concatModel(), refP = pooledModel();
+  const board = new Board(document.getElementById("pmPoints"));
+  const pBars = new Plot(document.getElementById("pmBars"), { title: "the two outputs", ylabel: "output value", xfmt: v => "", yfmt: v => v.toFixed(1) });
+  function draw() {
+    const c = concatModel(), p = pooledModel();
+    const dC = Math.sqrt(c.reduce((s, v, k) => s + (v - refC[k]) ** 2, 0)), dP = Math.sqrt(p.reduce((s, v, k) => s + (v - refP[k]) ** 2, 0));
+    document.getElementById("pmCount").textContent = count;
+    document.getElementById("pmDeltaC").textContent = dC.toFixed(3);
+    document.getElementById("pmDeltaP").textContent = dP.toFixed(3);
+    board.clear("the scan, numbered in file order");
+    const ctx = board.ctx, X = v => 40 + v * (board.W - 80), Y = v => board.H - 30 - v * (board.H - 70);
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(X(0), Y(1), X(1) - X(0), Y(0) - Y(1));
+    order.forEach((i, rank) => {
+      ctx.beginPath(); ctx.arc(X(pts[i][0]), Y(pts[i][1]), 9, 0, 2 * Math.PI); ctx.fillStyle = css("--blue"); ctx.fill();
+      ctx.fillStyle = css("--ink"); ctx.font = "13px " + css("--mono"); ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText("#" + (rank + 1), X(pts[i][0]) + 14, Y(pts[i][1]) - 2);
+    });
+    pBars.begin([0, 7], [-1.5, 1.5]);
+    const ctx2 = pBars.ctx;
+    for (let k = 0; k < 3; k++) {
+      ctx2.fillStyle = css("--red"); ctx2.fillRect(pBars.x(0.6 + k), pBars.y(Math.max(0, c[k])), pBars.x(1) - pBars.x(0.6), Math.abs(pBars.y(c[k]) - pBars.y(0)));
+      ctx2.fillStyle = css("--blue"); ctx2.fillRect(pBars.x(4.1 + k), pBars.y(Math.max(0, p[k])), pBars.x(1) - pBars.x(0.6), Math.abs(pBars.y(p[k]) - pBars.y(0)));
+    }
+    pBars.line([0, 7], [0, 0], css("--grey"), 1);
+    pBars.text("concatenated", 0.6, 1.35, css("--red"), "left");
+    pBars.text("pooled", 4.1, 1.35, css("--blue"), "left");
+    pBars.end();
+  }
+  document.getElementById("pmShuffle").addEventListener("click", () => { for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } count++; draw(); });
+  document.getElementById("pmJitter").addEventListener("click", () => { const i = Math.floor(rng() * 8); pts[i] = [Math.min(0.95, Math.max(0.05, pts[i][0] + (rng() - 0.5) * 0.3)), Math.min(0.95, Math.max(0.05, pts[i][1] + (rng() - 0.5) * 0.3))]; draw(); });
+  document.getElementById("pmReset").addEventListener("click", () => { pts = base.map(p => p.slice()); order = [0, 1, 2, 3, 4, 5, 6, 7]; count = 0; refC = concatModel(); refP = pooledModel(); draw(); });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= shared grid world ================= */
+const G = 6, GOAL = [5, 0], START = [0, 5], HAZ = [[3, 1], [3, 2], [3, 3]], SLIP = 0.1, STEP = 0;
+const ACTS = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // up, right, down, left (screen coordinates)
+function isHaz(x, y) { return HAZ.some(h => h[0] === x && h[1] === y); }
+function isGoal(x, y) { return x === GOAL[0] && y === GOAL[1]; }
+function terminal(x, y) { return isGoal(x, y) || isHaz(x, y); }
+function move(x, y, a) { const nx = Math.min(G - 1, Math.max(0, x + ACTS[a][0])), ny = Math.min(G - 1, Math.max(0, y + ACTS[a][1])); return [nx, ny]; }
+function reward(x, y) { return isGoal(x, y) ? 1 : isHaz(x, y) ? -1 : STEP; }
+// transition distribution: intended with 1 - SLIP, each perpendicular with SLIP / 2
+function outcomes(x, y, a) { return [[1 - SLIP, move(x, y, a)], [SLIP / 2, move(x, y, (a + 1) % 4)], [SLIP / 2, move(x, y, (a + 3) % 4)]]; }
+function drawGrid(board, title, cellFill, arrows, labels) {
+  board.clear(title);
+  const ctx = board.ctx, s = Math.min((board.W - 40) / G, (board.H - 50) / G), ox = (board.W - s * G) / 2, oy = 36;
+  for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+    const X = ox + x * s, Y = oy + y * s;
+    ctx.fillStyle = cellFill(x, y); ctx.fillRect(X, Y, s, s);
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(X, Y, s, s);
+    if (isGoal(x, y)) { ctx.fillStyle = css("--blue"); ctx.font = "600 13px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("goal +1", X + s / 2, Y + s / 2); }
+    else if (isHaz(x, y)) { ctx.fillStyle = css("--red"); ctx.font = "600 13px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("-1", X + s / 2, Y + s / 2); }
+    else {
+      const lab = labels(x, y); if (lab !== null) { ctx.fillStyle = css("--muted"); ctx.font = "11px " + css("--mono"); ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText(lab, X + 4, Y + 3); }
+      const a = arrows(x, y);
+      if (a !== null) {
+        const cx = X + s / 2, cy = Y + s / 2, L = s * 0.28, dx = ACTS[a][0] * L, dy = ACTS[a][1] * L;
+        ctx.strokeStyle = css("--ink"); ctx.fillStyle = css("--ink"); ctx.lineWidth = 2.2;
+        ctx.beginPath(); ctx.moveTo(cx - dx, cy - dy); ctx.lineTo(cx + dx, cy + dy); ctx.stroke();
+        const ang = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(cx + dx, cy + dy); ctx.lineTo(cx + dx - 8 * Math.cos(ang - 0.5), cy + dy - 8 * Math.sin(ang - 0.5)); ctx.lineTo(cx + dx - 8 * Math.cos(ang + 0.5), cy + dy - 8 * Math.sin(ang + 0.5)); ctx.closePath(); ctx.fill();
+      }
+      if (x === START[0] && y === START[1]) { ctx.fillStyle = css("--muted"); ctx.font = "11px " + css("--sans"); ctx.textAlign = "right"; ctx.textBaseline = "bottom"; ctx.fillText("start", X + s - 4, Y + s - 3); }
+    }
+  }
+}
+
+/* ================= 3. VALUE ITERATION ================= */
+(function bellman() {
+  const board = new Board(document.getElementById("viGrid"));
+  const pConv = new Plot(document.getElementById("viConv"), { xlabel: "sweep", ylabel: "largest change (log10)", title: "convergence", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(0) });
+  const sg = document.getElementById("viGamma"), out = document.getElementById("viGammaOut");
+  let V, hist;
+  function reset() { V = []; for (let y = 0; y < G; y++) { V.push(new Float64Array(G)); } hist = []; }
+  function q(x, y, a, gamma) { return outcomes(x, y, a).reduce((s, [p, [nx, ny]]) => s + p * (reward(nx, ny) + (terminal(nx, ny) ? 0 : gamma * V[ny][nx])), 0); }
+  function sweep() {
+    const gamma = +sg.value; let delta = 0; const NV = V.map(r => Float64Array.from(r));
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) { if (terminal(x, y)) continue; let best = -1e9; for (let a = 0; a < 4; a++) best = Math.max(best, q(x, y, a, gamma)); delta = Math.max(delta, Math.abs(best - V[y][x])); NV[y][x] = best; }
+    V = NV; hist.push(delta); return delta;
+  }
+  function greedy(x, y) { if (terminal(x, y)) return null; const gamma = +sg.value; let best = 0, bv = -1e9; for (let a = 0; a < 4; a++) { const v = q(x, y, a, gamma); if (v > bv) { bv = v; best = a; } } return hist.length ? best : null; }
+  function draw() {
+    out.textContent = (+sg.value).toFixed(2);
+    document.getElementById("viN").textContent = hist.length;
+    document.getElementById("viDelta").textContent = hist.length ? hist[hist.length - 1].toExponential(2) : "-";
+    document.getElementById("viV0").textContent = V[START[1]][START[0]].toFixed(3);
+    const vmax = 1, vmin = -1;
+    drawGrid(board, "state values and the greedy policy, gamma = " + (+sg.value).toFixed(2),
+      (x, y) => isHaz(x, y) ? mix(css("--panel"), css("--red"), 0.18) : isGoal(x, y) ? mix(css("--panel"), css("--blue"), 0.25) : mix(css("--panel"), css("--blue"), 0.75 * Math.max(0, (V[y][x] - vmin) / (vmax - vmin)) ** 1.6),
+      greedy, (x, y) => V[y][x].toFixed(2));
+    pConv.begin([0, Math.max(20, hist.length)], [-6, 0]);
+    pConv.line(hist.map((_, i) => i + 1), hist.map(d => Math.max(-6, Math.log10(Math.max(d, 1e-12)))), css("--ink"), 2);
+    pConv.end();
+  }
+  sg.addEventListener("input", () => { reset(); draw(); });
+  document.getElementById("viSweep").addEventListener("click", () => { sweep(); draw(); });
+  document.getElementById("viRun").addEventListener("click", () => { for (let i = 0; i < 500; i++) { if (sweep() < 1e-6) break; } draw(); });
+  document.getElementById("viReset").addEventListener("click", () => { reset(); draw(); });
+  window.addEventListener("themechange", draw);
+  reset(); draw();
+})();
+
+/* ================= 4. Q-LEARNING ================= */
+(function qlearn() {
+  const board = new Board(document.getElementById("qlGrid"));
+  const pCurve = new Plot(document.getElementById("qlCurve"), { xlabel: "episode", ylabel: "return", title: "return per episode, 20-episode mean", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1) });
+  const se = document.getElementById("qlEps"), out = document.getElementById("qlEpsOut");
+  const ALPHA = 0.1, GAMMA = 0.95; let Q, visits, returns, rng, seed = 1;
+  function reset() { Q = []; visits = []; for (let y = 0; y < G; y++) { Q.push([]); visits.push(new Float64Array(G)); for (let x = 0; x < G; x++) Q[y].push(new Float64Array(4)); } returns = []; rng = mulberry32(seed++); }
+  function argmax(arr) { let b = [0]; for (let i = 1; i < arr.length; i++) { if (arr[i] > arr[b[0]]) b = [i]; else if (arr[i] === arr[b[0]]) b.push(i); } return b[Math.floor(rng() * b.length)]; }
+  function stepEnv(x, y, a) { const u = rng(); const o = outcomes(x, y, a); let acc = 0; for (const [p, nxy] of o) { acc += p; if (u < acc) return nxy; } return o[0][1]; }
+  function episode(eps, learn) {
+    let [x, y] = START, ret = 0, disc = 1;
+    for (let t = 0; t < 100; t++) {
+      const a = (learn && rng() < eps) ? Math.floor(rng() * 4) : argmax(Q[y][x]);
+      const [nx, ny] = stepEnv(x, y, a), r = reward(nx, ny), done = terminal(nx, ny);
+      if (learn) { visits[y][x] += 1; const target = r + (done ? 0 : GAMMA * Math.max.apply(null, Q[ny][nx])); Q[y][x][a] += ALPHA * (target - Q[y][x][a]); }
+      ret += disc * r; disc *= GAMMA; x = nx; y = ny; if (done) break;
+    }
+    return ret;
+  }
+  function draw() {
+    out.textContent = (+se.value).toFixed(2);
+    document.getElementById("qlN").textContent = returns.length;
+    const last = returns.slice(-50);
+    document.getElementById("qlRet").textContent = last.length ? (last.reduce((s, v) => s + v, 0) / last.length).toFixed(3) : "-";
+    if (returns.length) { let g = 0; for (let i = 0; i < 100; i++) g += episode(0, false); document.getElementById("qlGreedy").textContent = (g / 100).toFixed(3); } else document.getElementById("qlGreedy").textContent = "-";
+    let seen = 0, vmax = 1; for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) { if (visits[y][x] > 0) seen++; vmax = Math.max(vmax, visits[y][x]); }
+    document.getElementById("qlVisit").textContent = seen + " / " + (G * G);
+    drawGrid(board, "visits and the greedy policy after " + returns.length + " episodes",
+      (x, y) => isHaz(x, y) ? mix(css("--panel"), css("--red"), 0.18) : isGoal(x, y) ? mix(css("--panel"), css("--blue"), 0.25) : mix(css("--panel"), css("--orange"), 0.8 * Math.log1p(visits[y][x]) / Math.log1p(vmax)),
+      (x, y) => (terminal(x, y) || visits[y][x] === 0) ? null : Q[y][x].indexOf(Math.max.apply(null, Q[y][x])),
+      (x, y) => visits[y][x] > 0 ? Math.max.apply(null, Q[y][x]).toFixed(2) : null);
+    const n = returns.length, xs = [], ys = [];
+    for (let i = 0; i < n; i++) { const lo = Math.max(0, i - 19); let s = 0; for (let j = lo; j <= i; j++) s += returns[j]; xs.push(i + 1); ys.push(s / (i - lo + 1)); }
+    pCurve.begin([0, Math.max(200, n)], [-1.5, 1]);
+    if (n) pCurve.line(xs, ys, css("--ink"), 2);
+    pCurve.end();
+  }
+  se.addEventListener("input", draw);
+  document.getElementById("qlRun").addEventListener("click", () => { const eps = +se.value; for (let i = 0; i < 200; i++) returns.push(episode(eps, true)); draw(); });
+  document.getElementById("qlReset").addEventListener("click", () => { reset(); draw(); });
+  window.addEventListener("themechange", draw);
+  reset(); draw();
+})();
+
+/* ---------- tabs ---------- */
+const tabs = Array.from(document.querySelectorAll("nav [role=tab]"));
+function show(name, push) {
+  if (!document.getElementById(name)) name = "passing";
+  tabs.forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll("section.demo").forEach(s => s.classList.toggle("active", s.id === name));
+  if (push) { try { history.replaceState(null, "", "#" + name); } catch (e) {} }
+}
+tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
+show(location.hash.slice(1) || "passing", false);
+
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
