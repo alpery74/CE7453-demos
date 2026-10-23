@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week 11 Demos</title>
+<meta name="description" content="CE 7453 Week 11: interactive demonstrations of compute-optimal scaling, the emergence metric artifact, in-context learning as conditioning, low rank adapters, and abstaining by confidence.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-line course header with a tab strip, then one demo at a time:
+   a wide plot on the left, a narrow control column on the right, a caption underneath.
+   Colors follow the lecture deck (dark body text, one blue, red for the figure's "wrong" curve). */
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --ink: #2B2B2B;
+  --muted: #6B7280;
+  --line: #D9DDE3;
+  --blue: #1F5C99;
+  --blue-soft: #D6E3F2;
+  --red: #B3261E;
+  --orange: #C9731F;
+  --grey: #8A8F98;
+  --focus: #1F5C99;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+    --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+  --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  padding-block: 14px 8px; border-bottom: 1px solid var(--line);
+}
+header .weeks { font-size: 13px; color: var(--blue); text-decoration: none; border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px; }
+header .weeks:hover { background: var(--blue-soft); }
+header .course { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+nav button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+nav button[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+nav button:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+nav button .slide { font-family: var(--mono); font-size: 12px; opacity: 0.8; margin-left: 6px; }
+main { padding-block: 4px 24px; }
+section.demo { display: none; }
+section.demo.active { display: block; }
+.demo h2 { font-size: 22px; font-weight: 600; margin: 6px 0 2px; text-wrap: balance; }
+.demo .lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.plot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-width: 0; }
+.plot canvas { width: 100%; height: auto; display: block; max-width: 100%; }
+.plot.two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 860px) { .plot.two { grid-template-columns: 1fr; } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctl label output { font-family: var(--mono); font-weight: 400; color: var(--blue); }
+.ctl input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--blue); }
+.ctl .hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; background: var(--c); }
+.legend span.dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.caption { margin: 12px 0 0; max-width: 90ch; font-size: 15px; }
+.caption p { margin: 0 0 6px; }
+footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <a class="weeks" href="../">All weeks</a>
+  <span class="course">CE 7453 &middot; Week 11 &middot; Foundation models</span>
+  <h1>Interactive demonstrations</h1>
+</header>
+
+<nav role="tablist" aria-label="Demos">
+  <button role="tab" data-tab="scaling" aria-selected="true">Compute-optimal split<span class="slide">slide 7</span></button>
+  <button role="tab" data-tab="emergence" aria-selected="false">Emergence and the metric<span class="slide">slides 8, 9</span></button>
+  <button role="tab" data-tab="incontext" aria-selected="false">In-context learning<span class="slide">slides 11, 12</span></button>
+  <button role="tab" data-tab="lora" aria-selected="false">Low rank adapters<span class="slide">slide 16</span></button>
+  <button role="tab" data-tab="abstain" aria-selected="false">Confidence and abstaining<span class="slide">slides 19, 20</span></button>
+</nav>
+
+<main>
+
+<!-- ============ 1. SCALING ============ -->
+<section class="demo active" id="scaling" role="tabpanel">
+  <h2>Scaling laws: where a fixed compute budget should go</h2>
+  <p class="lead">The fitted loss law L(N, D) = E + A / N^alpha + B / D^beta of Hoffmann et al. (2022), with compute C = 6 N D. Fix the budget and move along it: a large model trained briefly on the left, a small model trained for a long time on the right.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="scCurve" width="900" height="440"></canvas>
+      <canvas id="scFront" width="450" height="440"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="scC">compute budget, log10 of FLOPs <output id="scCOut">21</output></label>
+        <input type="range" id="scC" min="17" max="25" step="0.1" value="21">
+        <div class="hint">1e17 is a laptop week, 1e24 is a frontier run</div>
+      </div>
+      <div class="btns">
+        <button id="scReset">Reset</button>
+      </div>
+      <dl class="readout">
+        <dt>best model size N*</dt><dd id="scN">-</dd>
+        <dt>best token count D*</dt><dd id="scD">-</dd>
+        <dt>tokens per parameter</dt><dd id="scRatio">-</dd>
+        <dt>loss at the optimum</dt><dd id="scL">-</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--ink)">loss along the budget</span>
+        <span style="--c: var(--red)">the optimum</span>
+        <span style="--c: var(--grey)">the irreducible floor E</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Constants are the corrected fit of the Chinchilla data by Besiroglu et al. (2024): E = 1.82, A = 482, B = 2085, alpha = 0.348, beta = 0.366. Along one budget the curve has an interior minimum, and the readout shows that the minimum sits near twenty tokens per parameter at every budget on the slider. That is the rule of thumb on slide 7, and the first published rule placed it far to the left.</p>
+    <p>On the right is the frontier, the best loss reachable at each budget, a straight line on log axes. Everything in it concerns loss on the pretraining corpus, which is the proxy, and none of it says what the model does on your task.</p>
+  </div>
+</section>
+
+<!-- ============ 2. EMERGENCE ============ -->
+<section class="demo" id="emergence" role="tabpanel">
+  <h2>Emergence: the claim, and the metric that manufactures it</h2>
+  <p class="lead">A skill that improves smoothly with model size, scored two ways: per token, and by exact match over a whole answer of L tokens. Change L and watch the knee appear.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="emCurve" width="900" height="440"></canvas>
+      <canvas id="emSpan" width="450" height="440"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="emL">answer length L, tokens <output id="emLOut">20</output></label>
+        <input type="range" id="emL" min="1" max="40" step="1" value="20">
+        <div class="hint">exact match needs every one of the L tokens right</div>
+      </div>
+      <div class="ctl">
+        <label for="emK">how fast the skill improves <output id="emKOut">1.5</output></label>
+        <input type="range" id="emK" min="0.5" max="3" step="0.1" value="1.5">
+        <div class="hint">slope of the per-token curve against log size</div>
+      </div>
+      <div class="btns">
+        <button id="emReset">Reset</button>
+      </div>
+      <dl class="readout">
+        <dt>per token leaves chance (10 %) at N =</dt><dd id="emLeaveTok">-</dd>
+        <dt>exact match leaves chance at N =</dt><dd id="emLeaveEx">-</dd>
+        <dt>per token, 10 % to 90 % spans</dt><dd id="emSpanTok">-</dd>
+        <dt>exact match, 10 % to 90 % spans</dt><dd id="emSpanEx">-</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--blue)">per-token accuracy p(N)</span>
+        <span style="--c: var(--red)">exact match, p(N)^L</span>
+        <span style="--c: var(--grey)">chance</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Blue is the model: a logistic in log size, with no jump anywhere. Red is the same model scored with exact string match over L tokens, which is p raised to the power L. Raising a smooth quantity to a high power holds the score at chance for several decades of size and then compresses the rise into a narrow band, and the readouts show both effects growing with L.</p>
+    <p>Slide 9 makes this argument after Schaeffer, Miranda and Koyejo (2023), and the homework asks for the same plot. Whether every reported emergent ability is of this kind is still argued. Any threshold metric does this, so measure on your task with a metric that moves continuously.</p>
+  </div>
+</section>
+
+<!-- ============ 3. IN-CONTEXT LEARNING ============ -->
+<section class="demo" id="incontext" role="tabpanel">
+  <h2>In-context learning: the prompt conditions a fixed model</h2>
+  <p class="lead">A model that has memorized a family of rules y = a x + b from pretraining. Paste k worked examples of a new rule into the prompt. Its weights, which here are the prior over (a, b), stay fixed while the prediction moves.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="icFit" width="900" height="440"></canvas>
+      <canvas id="icPost" width="450" height="440"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="icK">worked examples in the prompt k <output id="icKOut">0</output></label>
+        <input type="range" id="icK" min="0" max="12" step="1" value="0">
+        <div class="hint">0 is the zero-shot case</div>
+      </div>
+      <div class="btns">
+        <button id="icNoise">New examples</button>
+        <button id="icReset">Reset</button>
+      </div>
+      <dl class="readout">
+        <dt>prediction at x = 1.5</dt><dd id="icPred">-</dd>
+        <dt>true value at x = 1.5</dt><dd id="icTrue">-</dd>
+        <dt>uncertainty, one sigma</dt><dd id="icSd">-</dd>
+        <dt>weights changed</dt><dd id="icW">none</dd>
+      </dl>
+      <div class="legend">
+        <span class="dash" style="--c: var(--grey)">what pretraining memorized (prior mean)</span>
+        <span style="--c: var(--blue)">prediction given the prompt</span>
+        <span class="dash" style="--c: var(--red)">the true rule of the new task</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Mechanically this is Bayesian regression. Pretrained weights encode a prior over rules, a ~ N(1.0, 0.3^2) and b ~ N(0, 0.5^2), and the examples in the prompt condition that prior. On the right the belief over (a, b) tightens around the true rule as k grows, with no gradient step anywhere.</p>
+    <p>At k = 0 the model answers from the prior, which is where confident wrong answers come from. By four examples the rule is unambiguous on the page and the prediction sits on it. What you paste in is the tool; that is the point of slide 12.</p>
+  </div>
+</section>
+
+<!-- ============ 4. LORA ============ -->
+<section class="demo" id="lora" role="tabpanel">
+  <h2>Low rank adapters: how much of the update does rank r keep</h2>
+  <p class="lead">A frozen 64 by 64 weight matrix needs an update Delta W for the new task. LoRA trains it as the product of two thin matrices of rank r. Choose r and see what is kept and what is paid.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="loSv" width="900" height="440"></canvas>
+      <canvas id="loErr" width="450" height="440"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="loR">rank r <output id="loROut">8</output></label>
+        <input type="range" id="loR" min="1" max="64" step="1" value="8">
+      </div>
+      <div class="ctl">
+        <label for="loDecay">how concentrated the needed update is <output id="loDecayOut">0.80</output></label>
+        <input type="range" id="loDecay" min="0.50" max="0.98" step="0.01" value="0.80">
+        <div class="hint">singular values of Delta W fall by this factor per index</div>
+      </div>
+      <div class="btns">
+        <button id="loReset">Reset</button>
+      </div>
+      <dl class="readout">
+        <dt>trained parameters, adapter</dt><dd id="loP">-</dd>
+        <dt>trained parameters, full fine tune</dt><dd id="loFull">4096</dd>
+        <dt>share of the update kept</dt><dd id="loKeep">-</dd>
+        <dt>relative error of the adapter</dt><dd id="loRel">-</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--blue)">singular values kept by rank r</span>
+        <span style="--c: var(--grey)">singular values discarded</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>A rank-r adapter can at best keep the r largest singular values of Delta W and drop the rest, so its error is the energy in the tail. It trains 2 d r parameters where the full matrix has d^2: at d = 64 and r = 8 that is 1024 against 4096, and at the widths of a real model the ratio is hundreds to one.</p>
+    <p>Drag the concentration slider toward 0.98 and the update needed by the task spreads across many directions. Rank 8 then keeps a small share, and the adapter learns less than a full fine tune would. That is the restriction on slide 16, and it is the same restriction that protects what the base already knew.</p>
+  </div>
+</section>
+
+<!-- ============ 5. ABSTAIN ============ -->
+<section class="demo" id="abstain" role="tabpanel">
+  <h2>Score it on your task: accuracy, interval, and the refusal rate</h2>
+  <p class="lead">Two hundred held-out items, each with the model's stated confidence and whether it was right. Set the confidence below which the model abstains, and read accuracy on what it answered, with its interval, next to how often it refused.</p>
+  <div class="grid">
+    <div class="plot two">
+      <canvas id="abCurve" width="900" height="440"></canvas>
+      <canvas id="abRel" width="450" height="440"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label for="abTau">abstain below confidence <output id="abTauOut">0.00</output></label>
+        <input type="range" id="abTau" min="0" max="0.95" step="0.01" value="0">
+        <div class="hint">0 answers everything</div>
+      </div>
+      <div class="ctl">
+        <label for="abCal">model <output id="abCalOut">calibrated</output></label>
+        <input type="range" id="abCal" min="0" max="1" step="1" value="0">
+        <div class="hint">0 calibrated, 1 fluent and overconfident</div>
+      </div>
+      <div class="btns">
+        <button id="abNew">New held-out set</button>
+        <button id="abReset">Reset</button>
+      </div>
+      <dl class="readout">
+        <dt>accuracy on answered items</dt><dd id="abAcc">-</dd>
+        <dt>95 % interval</dt><dd id="abCI">-</dd>
+        <dt>refusal rate</dt><dd id="abRef">-</dd>
+        <dt>items answered</dt><dd id="abN">-</dd>
+      </dl>
+      <div class="legend">
+        <span style="--c: var(--ink)">accuracy against refusal rate</span>
+        <span style="--c: var(--red)">this threshold</span>
+        <span style="--c: var(--blue)">observed accuracy per confidence bin</span>
+        <span class="dash" style="--c: var(--grey)">perfect calibration</span>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>On the left the whole trade sits in one curve, with every threshold a point on it, and the readouts are the two numbers slide 19 asks you to report together. A Wilson interval on the answered items widens as the model refuses more, because fewer items remain to score it on.</p>
+    <p>Switch to the overconfident model and the right panel shows the gap slide 20 describes: stated confidence sits above observed accuracy in every bin. Abstaining still helps, because the ranking of items by confidence is still informative, but the threshold you set from the stated numbers no longer means what it says. Calibrate first, then set the threshold in advance.</p>
+  </div>
+</section>
+
+</main>
+<footer>CE 7453 Machine Learning for Civil, Environmental and Geodetic Engineering. Each demo is a small closed-form toy chosen so that the effect on the slide is visible without a trained network.</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- utilities ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function gaussPair(rng) { const u = 1 - rng(), v = rng(); const r = Math.sqrt(-2 * Math.log(u)); return [r * Math.cos(2 * Math.PI * v), r * Math.sin(2 * Math.PI * v)]; }
+function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const g = gaussPair(rng); out[i] = g[0]; if (i + 1 < n) out[i + 1] = g[1]; } return out; }
+function linspace(a, b, n) { const out = new Float64Array(n); for (let i = 0; i < n; i++) out[i] = a + (b - a) * i / (n - 1); return out; }
+function sci(x) { const e = Math.floor(Math.log10(x)), m = x / Math.pow(10, e); return m.toFixed(1) + "e" + e; }
+function hexToRgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
+
+/* ---------- plotting on canvas (same helper as Weeks 9 and 10) ---------- */
+function Plot(canvas, opts) {
+  this.c = canvas; this.ctx = canvas.getContext("2d"); this.o = opts || {};
+  const dpr = window.devicePixelRatio || 1;
+  this.W = canvas.width; this.H = canvas.height;
+  canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr);
+  this.m = { l: 58, r: 14, t: 28, b: 44 };
+}
+Plot.prototype.fmt = function (v, d) { return (Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0)) ? v.toExponential(1) : v.toFixed(d); };
+Plot.prototype.begin = function (xlim, ylim) {
+  const ctx = this.ctx, o = this.o; this.xl = xlim; this.yl = ylim;
+  ctx.clearRect(0, 0, this.W, this.H);
+  ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H);
+  const ink = css("--ink"), muted = css("--muted"), line = css("--line");
+  ctx.font = "13px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "top";
+  const nx = o.nx || 5, ny = o.ny || 5;
+  ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.fillStyle = muted;
+  for (let i = 0; i <= nx; i++) {
+    const v = xlim[0] + (xlim[1] - xlim[0]) * i / nx, px = this.x(v);
+    ctx.beginPath(); ctx.moveTo(px, this.m.t); ctx.lineTo(px, this.H - this.m.b); ctx.stroke();
+    ctx.fillText(o.xfmt ? o.xfmt(v) : this.fmt(v, 2), px, this.H - this.m.b + 6);
+  }
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let i = 0; i <= ny; i++) {
+    const v = ylim[0] + (ylim[1] - ylim[0]) * i / ny, py = this.y(v);
+    ctx.beginPath(); ctx.moveTo(this.m.l, py); ctx.lineTo(this.W - this.m.r, py); ctx.stroke();
+    ctx.fillText(o.yfmt ? o.yfmt(v) : this.fmt(v, 1), this.m.l - 8, py);
+  }
+  ctx.font = "13px " + css("--sans"); ctx.fillStyle = ink;
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  if (o.xlabel) ctx.fillText(o.xlabel, (this.m.l + this.W - this.m.r) / 2, this.H - 8);
+  if (o.ylabel) { ctx.save(); ctx.translate(14, (this.m.t + this.H - this.m.b) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(o.ylabel, 0, 0); ctx.restore(); }
+  if (o.title) { ctx.textAlign = "left"; ctx.font = "500 14px " + css("--sans"); ctx.fillText(o.title, this.m.l, 18); }
+  ctx.save(); ctx.beginPath(); ctx.rect(this.m.l, this.m.t, this.W - this.m.l - this.m.r, this.H - this.m.t - this.m.b); ctx.clip();
+};
+Plot.prototype.end = function () { this.ctx.restore(); };
+Plot.prototype.x = function (v) { return this.m.l + (v - this.xl[0]) / (this.xl[1] - this.xl[0]) * (this.W - this.m.l - this.m.r); };
+Plot.prototype.y = function (v) { return this.H - this.m.b - (v - this.yl[0]) / (this.yl[1] - this.yl[0]) * (this.H - this.m.t - this.m.b); };
+Plot.prototype.line = function (xs, ys, color, width, dash) {
+  const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 2; ctx.setLineDash(dash || []);
+  ctx.beginPath(); for (let i = 0; i < xs.length; i++) { const px = this.x(xs[i]), py = this.y(ys[i]); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+  ctx.stroke(); ctx.setLineDash([]);
+};
+Plot.prototype.band = function (xs, lo, hi, color) {
+  const ctx = this.ctx; ctx.fillStyle = color; ctx.beginPath();
+  for (let i = 0; i < xs.length; i++) { const px = this.x(xs[i]), py = this.y(hi[i]); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+  for (let i = xs.length - 1; i >= 0; i--) ctx.lineTo(this.x(xs[i]), this.y(lo[i]));
+  ctx.closePath(); ctx.fill();
+};
+Plot.prototype.dots = function (xs, ys, color, r) {
+  const ctx = this.ctx; ctx.fillStyle = color;
+  for (let i = 0; i < xs.length; i++) { ctx.beginPath(); ctx.arc(this.x(xs[i]), this.y(ys[i]), r || 5, 0, 2 * Math.PI); ctx.fill(); }
+};
+Plot.prototype.bars = function (xs, ys, color, w) {
+  const ctx = this.ctx; ctx.fillStyle = color;
+  for (let i = 0; i < xs.length; i++) { const x0 = this.x(xs[i] - w / 2), x1 = this.x(xs[i] + w / 2); ctx.fillRect(x0, this.y(ys[i]), Math.max(1, x1 - x0 - 1), this.y(0) - this.y(ys[i])); }
+};
+Plot.prototype.vline = function (v, color) { const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(this.x(v), this.m.t); ctx.lineTo(this.x(v), this.H - this.m.b); ctx.stroke(); ctx.setLineDash([]); };
+Plot.prototype.text = function (s, vx, vy, color, align) { const ctx = this.ctx; ctx.fillStyle = color; ctx.font = "13px " + css("--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "middle"; ctx.fillText(s, this.x(vx), this.y(vy)); };
+
+/* ================= 1. SCALING ================= */
+(function scaling() {
+  const E = 1.8172, A = 482.01, B = 2085.43, al = 0.3478, be = 0.3658;
+  const L = (N, D) => E + A / Math.pow(N, al) + B / Math.pow(D, be);
+  const pC = new Plot(document.getElementById("scCurve"), { xlabel: "model size N, log10 parameters", ylabel: "pretraining loss", title: "loss along one compute budget", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1) });
+  const pF = new Plot(document.getElementById("scFront"), { xlabel: "compute, log10 FLOPs", ylabel: "best loss", title: "the frontier", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1), nx: 4 });
+  const sl = document.getElementById("scC"), out = document.getElementById("scCOut");
+  function best(logC) { const C = Math.pow(10, logC); let bn = 0, bl = 1e9; for (let lg = 5; lg <= 13; lg += 0.01) { const N = Math.pow(10, lg), D = C / (6 * N); if (D < 1) continue; const l = L(N, D); if (l < bl) { bl = l; bn = N; } } return { N: bn, D: C / (6 * bn), L: bl }; }
+  function draw() {
+    const logC = +sl.value; out.textContent = logC.toFixed(1); const C = Math.pow(10, logC);
+    const lgs = linspace(5, 13, 161), xs = [], ys = [];
+    for (const lg of lgs) { const N = Math.pow(10, lg), D = C / (6 * N); if (D < 1) continue; xs.push(lg); ys.push(L(N, D)); }
+    const b = best(logC);
+    document.getElementById("scN").textContent = sci(b.N);
+    document.getElementById("scD").textContent = sci(b.D);
+    document.getElementById("scRatio").textContent = (b.D / b.N).toFixed(1);
+    document.getElementById("scL").textContent = b.L.toFixed(3);
+    pC.begin([5, 13], [1.5, 4.5]);
+    pC.line([5, 13], [E, E], css("--grey"), 1.5, [6, 5]);
+    pC.line(xs, ys, css("--ink"), 2.2);
+    pC.vline(Math.log10(b.N), css("--red"));
+    pC.dots([Math.log10(b.N)], [b.L], css("--red"), 6);
+    pC.text("large model, few tokens", 5.2, 4.3, css("--muted"), "left");
+    pC.text("small model, many tokens", 12.8, 4.3, css("--muted"), "right");
+    pC.end();
+    const cs = linspace(17, 25, 33), fl = cs.map(c => best(c).L);
+    pF.begin([17, 25], [1.5, 4.5]);
+    pF.line(cs, fl, css("--ink"), 2);
+    pF.dots([logC], [b.L], css("--red"), 6);
+    pF.end();
+  }
+  sl.addEventListener("input", draw);
+  document.getElementById("scReset").addEventListener("click", () => { sl.value = 21; draw(); });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 2. EMERGENCE ================= */
+(function emergence() {
+  const pmin = 0.05, c = 9;
+  const pC = new Plot(document.getElementById("emCurve"), { xlabel: "model size N, log10 parameters", ylabel: "score", title: "one skill, two metrics", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1) });
+  const pS = new Plot(document.getElementById("emSpan"), { xlabel: "answer length L", ylabel: "orders of magnitude, 10 % to 90 %", title: "how wide the rise looks", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1), nx: 4 });
+  const sL = document.getElementById("emL"), sK = document.getElementById("emK");
+  const ptok = (lg, k) => pmin + (1 - pmin) / (1 + Math.exp(-k * (lg - c)));
+  function cross(k, Lp) { // sizes where the metric crosses 10 % and 90 %, in log10
+    let lo = null, hi = null; for (let lg = 6; lg <= 14; lg += 0.005) { const s = Math.pow(ptok(lg, k), Lp); if (lo === null && s >= 0.1) lo = lg; if (hi === null && s >= 0.9) hi = lg; } return { lo, hi, span: (lo === null || hi === null) ? null : hi - lo };
+  }
+  function span(k, Lp) { return cross(k, Lp).span; }
+  function draw() {
+    const Lp = +sL.value, k = +sK.value; document.getElementById("emLOut").textContent = Lp; document.getElementById("emKOut").textContent = k.toFixed(1);
+    const lgs = linspace(6, 14, 321), pt = lgs.map(lg => ptok(lg, k)), ex = pt.map(p => Math.pow(p, Lp));
+    const ct = cross(k, 1), ce = cross(k, Lp), st = ct.span, se = ce.span;
+    const atN = v => v === null ? "beyond 1e14" : "1e" + v.toFixed(1);
+    document.getElementById("emLeaveTok").textContent = atN(ct.lo);
+    document.getElementById("emLeaveEx").textContent = atN(ce.lo);
+    document.getElementById("emSpanTok").textContent = st === null ? "-" : st.toFixed(1) + " decades";
+    document.getElementById("emSpanEx").textContent = se === null ? "-" : se.toFixed(1) + " decades";
+    pC.begin([6, 14], [0, 1]);
+    pC.line([6, 14], [pmin, pmin], css("--grey"), 1.5, [6, 5]);
+    pC.line(lgs, pt, css("--blue"), 2.2);
+    pC.line(lgs, ex, css("--red"), 2.4);
+    pC.text("per token", 13.8, 0.95, css("--blue"), "right");
+    pC.text("exact match over " + Lp + " tokens", 6.2, 0.95, css("--red"), "left");
+    pC.end();
+    const Ls = []; const sp = []; for (let l = 1; l <= 40; l++) { const s = span(k, l); if (s !== null) { Ls.push(l); sp.push(s); } }
+    pS.begin([0, 40], [0, 6]);
+    pS.line(Ls, sp, css("--ink"), 2);
+    if (se !== null) pS.dots([Lp], [se], css("--red"), 6);
+    pS.end();
+  }
+  sL.addEventListener("input", draw); sK.addEventListener("input", draw);
+  document.getElementById("emReset").addEventListener("click", () => { sL.value = 20; sK.value = 1.5; draw(); });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 3. IN-CONTEXT LEARNING ================= */
+(function incontext() {
+  const prior = { ma: 1.0, sa: 0.3, mb: 0.0, sb: 0.5 }, truth = { a: -0.8, b: 2.0 }, sig = 0.1, xq = 1.5;
+  const pF = new Plot(document.getElementById("icFit"), { xlabel: "x", ylabel: "y", title: "the prediction, given what is in the prompt", xfmt: v => v.toFixed(1), yfmt: v => v.toFixed(1) });
+  const pP = new Plot(document.getElementById("icPost"), { xlabel: "slope a", ylabel: "intercept b", title: "belief over the rule", xfmt: v => v.toFixed(1), yfmt: v => v.toFixed(1), nx: 4 });
+  const sk = document.getElementById("icK"), out = document.getElementById("icKOut");
+  let seed = 4, ex = null;
+  function makeExamples() { const rng = mulberry32(seed), g = randn(rng, 12), slots = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]; for (let i = 11; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [slots[i], slots[j]] = [slots[j], slots[i]]; } ex = []; for (let i = 0; i < 12; i++) { const x = -2 + 4 * (slots[i] + rng()) / 12; ex.push([x, truth.a * x + truth.b + sig * g[i]]); } }
+  function posterior(k) {
+    // Gaussian prior on (a, b), Gaussian noise: closed-form posterior
+    let P = [[1 / prior.sa ** 2, 0], [0, 1 / prior.sb ** 2]], h = [prior.ma / prior.sa ** 2, prior.mb / prior.sb ** 2];
+    for (let i = 0; i < k; i++) { const [x, y] = ex[i], w = 1 / sig ** 2; P[0][0] += w * x * x; P[0][1] += w * x; P[1][0] += w * x; P[1][1] += w; h[0] += w * x * y; h[1] += w * y; }
+    const det = P[0][0] * P[1][1] - P[0][1] * P[1][0], S = [[P[1][1] / det, -P[0][1] / det], [-P[1][0] / det, P[0][0] / det]];
+    return { m: [S[0][0] * h[0] + S[0][1] * h[1], S[1][0] * h[0] + S[1][1] * h[1]], S: S };
+  }
+  function draw() {
+    const k = +sk.value; out.textContent = k;
+    const po = posterior(k), xs = linspace(-2.2, 2.2, 89);
+    const mean = xs.map(x => po.m[0] * x + po.m[1]);
+    const sd = xs.map(x => Math.sqrt(x * x * po.S[0][0] + 2 * x * po.S[0][1] + po.S[1][1] + sig * sig));
+    const pq = po.m[0] * xq + po.m[1], sq = Math.sqrt(xq * xq * po.S[0][0] + 2 * xq * po.S[0][1] + po.S[1][1] + sig * sig);
+    document.getElementById("icPred").textContent = pq.toFixed(2);
+    document.getElementById("icTrue").textContent = (truth.a * xq + truth.b).toFixed(2);
+    document.getElementById("icSd").textContent = sq.toFixed(2);
+    pF.begin([-2.2, 2.2], [-3, 5]);
+    pF.band(xs, mean.map((m, i) => m - sd[i]), mean.map((m, i) => m + sd[i]), css("--blue-soft"));
+    pF.line(xs, xs.map(x => prior.ma * x + prior.mb), css("--grey"), 2, [6, 5]);
+    pF.line(xs, xs.map(x => truth.a * x + truth.b), css("--red"), 2, [6, 5]);
+    pF.line(xs, mean, css("--blue"), 2.4);
+    pF.dots(ex.slice(0, k).map(e => e[0]), ex.slice(0, k).map(e => e[1]), css("--ink"), 5);
+    pF.vline(xq, css("--muted"));
+    pF.dots([xq], [pq], css("--blue"), 7);
+    pF.end();
+    // belief over (a, b): one- and two-sigma ellipses of the posterior
+    pP.begin([-1.8, 2.2], [-1.5, 3.5]);
+    pP.dots([prior.ma], [prior.mb], css("--grey"), 5);
+    pP.dots([truth.a], [truth.b], css("--red"), 6);
+    const ev = eig2(po.S);
+    for (const s of [2, 1]) {
+      const ax = [], ay = []; for (let t = 0; t <= 64; t++) { const th = 2 * Math.PI * t / 64, u = Math.cos(th) * s * Math.sqrt(ev.l1), v = Math.sin(th) * s * Math.sqrt(ev.l2); ax.push(po.m[0] + ev.v1[0] * u + ev.v2[0] * v); ay.push(po.m[1] + ev.v1[1] * u + ev.v2[1] * v); }
+      pP.band(ax, ay, ay, "transparent"); pP.line(ax, ay, css("--blue"), s === 1 ? 2.2 : 1.2);
+    }
+    pP.dots([po.m[0]], [po.m[1]], css("--blue"), 5);
+    pP.text("pretraining prior", prior.ma + 0.08, prior.mb - 0.25, css("--muted"), "left");
+    pP.text("true rule", truth.a + 0.08, truth.b + 0.25, css("--red"), "left");
+    pP.end();
+  }
+  function eig2(S) { const a = S[0][0], b = S[0][1], d = S[1][1], tr = a + d, det = a * d - b * b, disc = Math.sqrt(Math.max(0, tr * tr / 4 - det)); const l1 = tr / 2 + disc, l2 = tr / 2 - disc; let v1 = [b, l1 - a]; if (Math.abs(b) < 1e-12) v1 = a >= d ? [1, 0] : [0, 1]; const n = Math.hypot(v1[0], v1[1]); v1 = [v1[0] / n, v1[1] / n]; return { l1, l2: Math.max(l2, 1e-12), v1, v2: [-v1[1], v1[0]] }; }
+  sk.addEventListener("input", draw);
+  document.getElementById("icNoise").addEventListener("click", () => { seed += 1; makeExamples(); draw(); });
+  document.getElementById("icReset").addEventListener("click", () => { sk.value = 0; seed = 4; makeExamples(); draw(); });
+  window.addEventListener("themechange", draw);
+  makeExamples(); draw();
+})();
+
+/* ================= 4. LORA ================= */
+(function lora() {
+  const d = 64;
+  const pS = new Plot(document.getElementById("loSv"), { xlabel: "index i", ylabel: "singular value of Delta W", title: "what the update is made of", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1) });
+  const pE = new Plot(document.getElementById("loErr"), { xlabel: "rank r", ylabel: "relative error", title: "error against rank", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1), nx: 4 });
+  const sr = document.getElementById("loR"), sdc = document.getElementById("loDecay");
+  function draw() {
+    const r = +sr.value, q = +sdc.value; document.getElementById("loROut").textContent = r; document.getElementById("loDecayOut").textContent = q.toFixed(2);
+    const sv = []; for (let i = 0; i < d; i++) sv.push(Math.pow(q, i));
+    const tot = sv.reduce((s, v) => s + v * v, 0);
+    const errs = []; let tail = tot; for (let k = 0; k <= d; k++) { errs.push(Math.sqrt(tail / tot)); if (k < d) tail -= sv[k] * sv[k]; }
+    document.getElementById("loP").textContent = (2 * d * r) + "  (" + (100 * 2 * r / d).toFixed(0) + " %)";
+    document.getElementById("loKeep").textContent = (100 * (1 - errs[r] * errs[r])).toFixed(1) + " % of the energy";
+    document.getElementById("loRel").textContent = errs[r].toFixed(3);
+    pS.begin([0, d + 1], [0, 1.05]);
+    pS.bars(sv.slice(0, r).map((_, i) => i + 1), sv.slice(0, r), css("--blue"), 0.8);
+    pS.bars(sv.slice(r).map((_, i) => i + r + 1), sv.slice(r), css("--grey"), 0.8);
+    pS.end();
+    pE.begin([0, d], [0, 1]);
+    pE.line(errs.map((_, k) => k), errs, css("--ink"), 2);
+    pE.dots([r], [errs[r]], css("--red"), 6);
+    pE.end();
+  }
+  sr.addEventListener("input", draw); sdc.addEventListener("input", draw);
+  document.getElementById("loReset").addEventListener("click", () => { sr.value = 8; sdc.value = 0.80; draw(); });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 5. ABSTAIN ================= */
+(function abstain() {
+  const n = 200;
+  const pC = new Plot(document.getElementById("abCurve"), { xlabel: "refusal rate", ylabel: "accuracy on answered items", title: "the selective trade", xfmt: v => v.toFixed(1), yfmt: v => v.toFixed(1) });
+  const pR = new Plot(document.getElementById("abRel"), { xlabel: "stated confidence", ylabel: "observed accuracy", title: "reliability", xfmt: v => v.toFixed(1), yfmt: v => v.toFixed(1), nx: 4 });
+  const st = document.getElementById("abTau"), sc = document.getElementById("abCal");
+  let seed = 9, items = null;
+  function make() {
+    const rng = mulberry32(seed); items = [];
+    for (let i = 0; i < n; i++) {
+      const p = Math.min(0.99, Math.max(0.05, 0.75 - 0.35 * Math.pow(rng(), 0.7) + 0.4 * rng())); // true probability of being right
+      const correct = rng() < p;
+      items.push({ p: p, c: p, correct: correct });
+    }
+  }
+  function conf(it, over) { return over ? Math.min(0.99, 0.55 + 0.45 * Math.pow(it.p, 0.6)) : it.p; }
+  function wilson(k, m) { if (m === 0) return null; const z = 1.96, ph = k / m, den = 1 + z * z / m, cen = (ph + z * z / (2 * m)) / den, half = z * Math.sqrt(ph * (1 - ph) / m + z * z / (4 * m * m)) / den; return [cen - half, cen + half]; }
+  function stats(tau, over) { let k = 0, m = 0; for (const it of items) { if (conf(it, over) >= tau) { m++; if (it.correct) k++; } } return { k, m, acc: m ? k / m : null, ref: 1 - m / n }; }
+  function draw() {
+    const tau = +st.value, over = +sc.value === 1;
+    document.getElementById("abTauOut").textContent = tau.toFixed(2); document.getElementById("abCalOut").textContent = over ? "overconfident" : "calibrated";
+    const s = stats(tau, over), ci = wilson(s.k, s.m);
+    document.getElementById("abAcc").textContent = s.acc === null ? "-" : (100 * s.acc).toFixed(1) + " %";
+    document.getElementById("abCI").textContent = ci ? (100 * ci[0]).toFixed(0) + " to " + (100 * ci[1]).toFixed(0) + " %" : "-";
+    document.getElementById("abRef").textContent = (100 * s.ref).toFixed(0) + " %";
+    document.getElementById("abN").textContent = s.m + " / " + n;
+    const rs = [], as = []; for (let t = 0; t <= 0.98; t += 0.01) { const q = stats(t, over); if (q.m >= 5) { rs.push(q.ref); as.push(q.acc); } }
+    pC.begin([0, 1], [0.4, 1]);
+    pC.line(rs, as, css("--ink"), 2);
+    if (s.m >= 5) { pC.dots([s.ref], [s.acc], css("--red"), 6); if (ci) pC.line([s.ref, s.ref], [ci[0], ci[1]], css("--red"), 2); }
+    pC.end();
+    const bins = 8, bk = new Float64Array(bins), bm = new Float64Array(bins), bc = new Float64Array(bins);
+    for (const it of items) { const c = conf(it, over), b = Math.min(bins - 1, Math.floor(c * bins)); bm[b]++; bc[b] += c; if (it.correct) bk[b]++; }
+    const bx = [], by = []; for (let b = 0; b < bins; b++) if (bm[b] >= 4) { bx.push(bc[b] / bm[b]); by.push(bk[b] / bm[b]); }
+    pR.begin([0, 1], [0, 1]);
+    pR.line([0, 1], [0, 1], css("--grey"), 1.5, [6, 5]);
+    pR.line(bx, by, css("--blue"), 2); pR.dots(bx, by, css("--blue"), 5);
+    pR.vline(tau, css("--red"));
+    pR.end();
+  }
+  st.addEventListener("input", draw); sc.addEventListener("input", draw);
+  document.getElementById("abNew").addEventListener("click", () => { seed += 1; make(); draw(); });
+  document.getElementById("abReset").addEventListener("click", () => { st.value = 0; sc.value = 0; seed = 9; make(); draw(); });
+  window.addEventListener("themechange", draw);
+  make(); draw();
+})();
+
+/* ---------- tabs ---------- */
+const tabs = Array.from(document.querySelectorAll("nav [role=tab]"));
+function show(name, push) {
+  if (!document.getElementById(name)) name = "scaling";
+  tabs.forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll("section.demo").forEach(s => s.classList.toggle("active", s.id === name));
+  if (push) { try { history.replaceState(null, "", "#" + name); } catch (e) {} }
+}
+tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
+show(location.hash.slice(1) || "scaling", false);
+
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
