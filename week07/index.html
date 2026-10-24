@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week 7 Demos</title>
+<meta name="description" content="CE 7453 Week 7: extrapolate a scaling law with a ruler, stack a training step onto a GPU, cut an image into tokens, compose a sparse attention pattern, tap inputs into a state space layer, and test a fixed layer against a selective one.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-line course header with a tab strip, then one demo at a time:
+   a wide plot on the left, a narrow control column on the right, a caption underneath.
+   Colors follow the lecture deck (dark body text, one blue, red for the figure's "wrong" curve). */
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --ink: #2B2B2B;
+  --muted: #6B7280;
+  --line: #D9DDE3;
+  --blue: #1F5C99;
+  --blue-soft: #D6E3F2;
+  --red: #B3261E;
+  --orange: #C9731F;
+  --grey: #8A8F98;
+  --focus: #1F5C99;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+    --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+  --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  padding-block: 14px 8px; border-bottom: 1px solid var(--line);
+}
+header .weeks { font-size: 13px; color: var(--blue); text-decoration: none; border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px; }
+header .weeks:hover { background: var(--blue-soft); }
+header .course { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+nav button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+nav button[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+nav button:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+nav button .slide { font-family: var(--mono); font-size: 12px; opacity: 0.8; margin-left: 6px; }
+main { padding-block: 4px 24px; }
+section.demo { display: none; }
+section.demo.active { display: block; }
+.demo h2 { font-size: 22px; font-weight: 600; margin: 6px 0 2px; text-wrap: balance; }
+.demo .lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.plot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-width: 0; }
+.plot canvas { width: 100%; height: auto; display: block; max-width: 100%; }
+.plot.two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 860px) { .plot.two { grid-template-columns: 1fr; } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctl label output { font-family: var(--mono); font-weight: 400; color: var(--blue); }
+.ctl input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--blue); }
+.ctl .hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; background: var(--c); }
+.legend span.dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.caption { margin: 12px 0 0; max-width: 90ch; font-size: 15px; }
+.caption p { margin: 0 0 6px; }
+footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<style>
+/* components for the instructional formats */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.step { font-size: 15px; line-height: 1.5; }
+.step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
+.step p { margin: 6px 0; }
+.ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
+.ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
+.ask.no { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ask.ok { background: #1E3A2C; } :root:not([data-theme="light"]) .ask.no { background: #432426; } }
+:root[data-theme="dark"] .ask.ok { background: #1E3A2C; } :root[data-theme="dark"] .ask.no { background: #432426; }
+.quiz { font-size: 15px; }
+.quiz .q { margin: 0 0 8px; font-weight: 500; }
+.quiz .opts { display: grid; gap: 6px; }
+.quiz button { text-align: left; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.quiz button.right { border-color: #2E7D5B; background: #E3F2EA; }
+.quiz button.wrong { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quiz button.right { background: #1E3A2C; } :root:not([data-theme="light"]) .quiz button.wrong { background: #432426; } }
+:root[data-theme="dark"] .quiz button.right { background: #1E3A2C; } :root[data-theme="dark"] .quiz button.wrong { background: #432426; }
+.quiz .why { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { color: #2E7D5B; border-color: #2E7D5B; }
+.badge.fail { color: var(--red); border-color: var(--red); }
+.bet { display: flex; flex-wrap: wrap; gap: 6px; }
+.bet button { font: inherit; font-size: 14px; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.bet button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+canvas.hit { cursor: pointer; }
+canvas.grab { cursor: grab; }
+.knob { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; font-size: 14px; }
+.knob .lab { color: var(--muted); }
+.knob .bet button { padding: 5px 9px; font-size: 13px; font-family: var(--mono); }
+.sw { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); cursor: pointer; }
+.sw[aria-pressed="true"] { border-color: var(--blue); background: var(--blue-soft); }
+.sw b { font-family: var(--mono); font-weight: 500; font-size: 12.5px; color: var(--muted); }
+.sws { display: grid; gap: 6px; }
+</style>
+
+<header>
+  <a class="weeks" href="../">All weeks</a>
+  <span class="course">CE 7453 &middot; Week 7 &middot; Scale and state space models</span>
+  <h1>Interactive demonstrations</h1>
+</header>
+
+<nav role="tablist" aria-label="Demos">
+  <button role="tab" data-tab="scaling" aria-selected="true">Extend the line<span class="slide">slide 5</span></button>
+  <button role="tab" data-tab="stack" aria-selected="false">Fit the run<span class="slide">slide 7</span></button>
+  <button role="tab" data-tab="patches" aria-selected="false">Cut the image<span class="slide">slide 8</span></button>
+  <button role="tab" data-tab="sparse" aria-selected="false">The reach test<span class="slide">slide 10</span></button>
+  <button role="tab" data-tab="ssm" aria-selected="false">The step sequencer<span class="slide">slides 15, 19</span></button>
+  <button role="tab" data-tab="selective" aria-selected="false">The distractor test<span class="slide">slide 18</span></button>
+</nav>
+
+<main>
+
+<!-- ============ 1. EXTEND THE LINE ============ -->
+<section class="demo active" id="scaling" role="tabpanel">
+  <h2>Extend the line: predict the big run from four small ones</h2>
+  <p class="lead">Four models have been trained, from one million to one hundred million parameters, and their losses are plotted on log axes. Lay the ruler through them by dragging its two handles, read off your prediction for a ten billion parameter run, then pay for the run and see where it lands.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="slPlot" class="grab" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="slStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="slRun">Pay for the big run</button><button id="slNext">Next exercise</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>ruler slope (exponent)</dt><dd id="slSlope">-</dd>
+          <dt>your prediction at the big size</dt><dd id="slPred">-</dd>
+          <dt>the big run</dt><dd id="slTrue">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="slQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The runs follow L = E + A / N^alpha with E = 1.8, the entropy floor of the data. In the first exercise the vertical axis is the reducible loss L - E, so the law is a straight line on log axes and the ruler extrapolates two decades without error. In the second the raw loss is plotted, the floor bends the points, and a ruler laid through the measured range predicts a loss below the floor. That is slide 5's narrow reading: the straight line is a statement about the range you measured, and about the quantity you plotted.</p>
+  </div>
+</section>
+
+<!-- ============ 2. FIT THE RUN ============ -->
+<section class="demo" id="stack" role="tabpanel">
+  <h2>Fit the run: stack the memory of one training step onto the card</h2>
+  <p class="lead">A training step holds the weights, their gradients, the optimizer's two moments, and the activations of the batch in flight. Each column is one device. Switch the three habits on and off, set the micro-batch, the accumulation steps and the device count, and make the run fit with the batch size the job needs.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="stCols" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="stStep"></div>
+      <div class="panel">
+        <h3>the job</h3>
+        <div class="bet" id="stModel"><button data-m="0">125 M params</button><button data-m="1" aria-pressed="true">1.3 B params</button><button data-m="2">7 B params</button></div>
+        <h3 style="margin-top:12px">the habits</h3>
+        <div class="sws">
+          <button class="sw" id="stMixed" aria-pressed="false"><span>mixed precision</span><b>half-width arithmetic, full-width master copy</b></button>
+          <button class="sw" id="stZero" aria-pressed="false"><span>shard the states (ZeRO / FSDP)</span><b>optimizer, gradients and weights split over devices</b></button>
+        </div>
+        <div class="knob" style="margin-top:12px">
+          <span class="lab">micro-batch per device</span><div class="bet" id="stMicro"><button data-v="1">1</button><button data-v="2">2</button><button data-v="4" aria-pressed="true">4</button><button data-v="8">8</button><button data-v="16">16</button></div>
+          <span class="lab">accumulation steps</span><div class="bet" id="stAcc"><button data-v="1" aria-pressed="true">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button><button data-v="16">16</button></div>
+          <span class="lab">devices (data parallel)</span><div class="bet" id="stDev"><button data-v="1" aria-pressed="true">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button></div>
+          <span class="lab">card</span><div class="bet" id="stCard"><button data-v="24" aria-pressed="true">24 GB</button><button data-v="80">80 GB</button></div>
+        </div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>effective batch (micro x devices x steps)</dt><dd id="stBatch">-</dd>
+          <dt>memory per device</dt><dd id="stMem">-</dd>
+          <dt>step time, relative</dt><dd id="stTime">-</dd>
+        </dl>
+        <div class="ask" id="stVerdict" hidden></div>
+      </div>
+      <div class="panel quiz" id="stQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Per parameter, a plain fp32 step keeps 4 bytes of weight, 4 of gradient and 8 of Adam moments: 16 bytes, so a 1.3 B model is 21 GB before a single activation. Mixed precision moves the arithmetic to 2 bytes but keeps the 4-byte master copy and the 8-byte moments, so it saves activation memory and time, little else, slide 7. Gradient accumulation buys batch size with wall-clock time and no memory. Data parallel multiplies the batch, and only sharding the states (ZeRO, FSDP) divides the per-device memory. The target here is an effective batch of 256 on the card you have.</p>
+  </div>
+</section>
+
+<!-- ============ 3. CUT THE IMAGE ============ -->
+<section class="demo" id="patches" role="tabpanel">
+  <h2>Cut the image into tokens, then take the positions away</h2>
+  <p class="lead">A 64 by 64 aerial scene becomes a sequence by cutting it into patches. Choose the patch size, click a patch to see the vector that becomes its token and the position tag that goes with it, then shuffle the sequence and look at what a model without position tags would be reasoning about.</p>
+  <div class="stage">
+    <div class="plot two">
+      <canvas id="ptImg" class="hit" width="760" height="560"></canvas>
+      <canvas id="ptTok" width="440" height="560"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="ptStep"></div>
+      <div class="panel">
+        <h3>patch size</h3>
+        <div class="bet" id="ptSize"><button data-p="8">8 px</button><button data-p="16" aria-pressed="true">16 px</button><button data-p="32">32 px</button></div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="ptShuffle">Shuffle the tokens</button><button id="ptRestore">Restore</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>tokens T</dt><dd id="ptT">-</dd>
+          <dt>numbers per token (p x p x 3)</dt><dd id="ptD">-</dd>
+          <dt>score matrix entries per head</dt><dd id="ptM">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="ptQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>A patch of p by p pixels in three bands is flattened to 3 p squared numbers and projected to the model width; that vector plus a position tag is the token, slide 8. Nothing in the attention block knows the patches came from a grid: the shuffled image is the model's view without the tags. Smaller patches give a longer sequence and a finer grid, at quadratic cost in the score matrix; larger patches are cheap and coarse. The convolution of Week 4 had the grid built in, which is why it still wins on small labelled sets.</p>
+  </div>
+</section>
+
+<!-- ============ 4. THE REACH TEST ============ -->
+<section class="demo" id="sparse" role="tabpanel">
+  <h2>The reach test: compose a sparse pattern that still reaches everything</h2>
+  <p class="lead">Forty-eight positions in a record. Full attention lets each one read all 48 at once. Compose a cheaper pattern from a local window, a stride and a few global tokens, click a source position, and watch how many hops its information needs to reach every other position. The challenge: everything within two hops, at most twelve entries per row.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="spStrip" class="hit" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="spStep"></div>
+      <div class="panel">
+        <div class="knob">
+          <span class="lab">local window, each side</span><div class="bet" id="spWin"><button data-v="0">0</button><button data-v="1">1</button><button data-v="2" aria-pressed="true">2</button><button data-v="4">4</button></div>
+          <span class="lab">stride</span><div class="bet" id="spStride"><button data-v="0" aria-pressed="true">off</button><button data-v="6">6</button><button data-v="8">8</button><button data-v="12">12</button></div>
+          <span class="lab">global tokens</span><div class="bet" id="spGlob"><button data-v="0" aria-pressed="true">0</button><button data-v="1">1</button><button data-v="2">2</button></div>
+        </div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="spFull">Compare with full attention</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>entries per row (cost)</dt><dd id="spCost">-</dd>
+          <dt>positions reached in 1 / 2 / 3 hops</dt><dd id="spReach">-</dd>
+          <dt>hops to reach everything</dt><dd id="spMax">-</dd>
+        </dl>
+        <div class="ask" id="spVerdict" hidden></div>
+      </div>
+      <div class="panel quiz" id="spQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>A pattern is a fixed set of pairs that will be scored, chosen before training, slide 10. A window alone needs T / w hops to cross the record, which is the long reach attention was built for, thrown away. A stride adds a coarse grid, so distant positions meet in two hops. A global token is a shared summary that everyone reads and writes, and it collapses the diameter to two hops at a cost of one entry per row. The pattern is a prior about which pairs matter; the record's physics, not a paper about text, should pick it.</p>
+  </div>
+</section>
+
+<!-- ============ 5. THE STEP SEQUENCER ============ -->
+<section class="demo" id="ssm" role="tabpanel">
+  <h2>The step sequencer: tap an input into a state space layer and watch what it keeps</h2>
+  <p class="lead">A two-state linear system, a damped oscillator, discretized with a zero order hold. Click steps on the input row to place impulses. The state evolves one step at a time and the output traces below; the kernel row shows the same layer as a convolution, the weight it gives to each past step. Choose the step size and the decay, and set the layer to remember a cue 24 steps back.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="ssSeq" class="hit" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="ssStep"></div>
+      <div class="panel">
+        <div class="knob">
+          <span class="lab">step size Delta</span><div class="bet" id="ssDt"><button data-v="0.1">0.1</button><button data-v="0.3" aria-pressed="true">0.3</button><button data-v="1">1.0</button></div>
+          <span class="lab">decay lambda</span><div class="bet" id="ssLam"><button data-v="0.05">0.05</button><button data-v="0.2" aria-pressed="true">0.2</button><button data-v="0.6">0.6</button></div>
+        </div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="ssPlay">Run the recurrence</button><button id="ssClear">Clear inputs</button><button id="ssCue">Place the cue at step 8</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>half-life of the state, in steps</dt><dd id="ssHalf">-</dd>
+          <dt>oscillation period, in steps</dt><dd id="ssPer">-</dd>
+          <dt>kernel weight at lag 24, relative to its peak</dt><dd id="ssK24">-</dd>
+        </dl>
+        <div class="ask" id="ssVerdict" hidden></div>
+      </div>
+      <div class="panel quiz" id="ssQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The continuous system is x' = A x + B u with A = [[-lambda, omega], [-omega, -lambda]], omega = 0.3, and y = C x. Holding u constant over a step of length Delta gives the recurrence x_k = A_bar x_(k-1) + B_bar u_k with A_bar = exp(A Delta), slide 15, the Kalman prediction step with learned matrices, slide 16. Unrolled, y is the convolution of u with the kernel K_k = C A_bar^k B_bar, slide 19. The half-life in steps is ln 2 / (lambda Delta): the step size and the decay set the timescale together, and a learned layer sets both from the data.</p>
+  </div>
+</section>
+
+<!-- ============ 6. THE DISTRACTOR TEST ============ -->
+<section class="demo" id="selective" role="tabpanel">
+  <h2>The distractor test: a fixed layer against a selective one</h2>
+  <p class="lead">A record holds one cue early on and a burst of distractors somewhere after it. Two state space layers read the record: one with fixed matrices, one whose step size depends on the input. Drag the burst along the record and change its length, then read how much of the cue each layer still holds at the end.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="seRec" class="grab" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="seStep"></div>
+      <div class="panel">
+        <div class="knob">
+          <span class="lab">burst length</span><div class="bet" id="seLen"><button data-v="0">none</button><button data-v="4">4</button><button data-v="8" aria-pressed="true">8</button><button data-v="16">16</button></div>
+          <span class="lab">fixed layer's step size</span><div class="bet" id="seDt"><button data-v="0.05">0.05</button><button data-v="0.2" aria-pressed="true">0.2</button><button data-v="0.6">0.6</button></div>
+        </div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>share of the final state that is cue, fixed layer</dt><dd id="seFix">-</dd>
+          <dt>share of the final state that is cue, selective layer</dt><dd id="seSel">-</dd>
+          <dt>cue retained, end over written, fixed / selective</dt><dd id="seDis">-</dd>
+        </dl>
+        <div class="ask" id="seVerdict" hidden></div>
+      </div>
+      <div class="panel quiz" id="seQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Both layers run h_k = a_k h_(k-1) + (1 - a_k) u_k with a_k = exp(-Delta_k). The fixed layer uses one Delta for every step, so every distractor both decays the cue and writes itself in. The selective layer, slide 18, computes Delta from the input: large for a step it recognizes as a cue, near zero for a step it treats as noise, so the state holds through the burst. That is the gate of Week 5 in a cleaner form, and the reason the layer no longer has a single convolutional kernel: the kernel now depends on the record.</p>
+  </div>
+</section>
+
+</main>
+<footer>CE 7453 Machine Learning for Civil, Environmental and Geodetic Engineering. Each demo is a small closed-form toy chosen so that the effect on the slide is visible without a trained network.</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- utilities ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hexToRgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
+function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
+Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
+Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+Board.prototype.label = function (s, x, y, color, align, size, mono) { const ctx = this.ctx; ctx.fillStyle = color || css("--muted"); ctx.font = (size || 13) + "px " + css(mono ? "--mono" : "--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(s, x, y); };
+function quiz(el, spec) {
+  el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
+  const opts = el.querySelector(".opts"), why = el.querySelector(".why");
+  spec.options.forEach((o, i) => { const b = document.createElement("button"); b.textContent = o; b.addEventListener("click", () => { Array.from(opts.children).forEach(c => c.classList.remove("right", "wrong")); b.classList.add(i === spec.answer ? "right" : "wrong"); if (i !== spec.answer) opts.children[spec.answer].classList.add("right"); why.textContent = (i === spec.answer ? "Right. " : "No. ") + spec.why; }); opts.appendChild(b); });
+}
+function pressGroup(id, cb) { document.querySelectorAll("#" + id + " button").forEach(b => b.addEventListener("click", () => { document.querySelectorAll("#" + id + " button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); cb(+b.dataset.v); })); }
+
+/* ================= 1. EXTEND THE LINE ================= */
+(function scaling() {
+  const E = 1.8, A = 400, al = 0.35, L = N => E + A / Math.pow(N, al);
+  const SMALL = [6, 6.67, 7.33, 8], BIG = [10, 11];
+  const board = new Board(document.getElementById("slPlot"));
+  const XL = 5.5, XR = 11.5, L0 = 90, R0 = board.W - 40, T0 = 50, B0 = board.H - 60;
+  let ex = 0, h = [[6.2, null], [8.5, null]], drag = null, paid = false;
+  function yval(lg) { const v = L(Math.pow(10, lg)); return ex === 0 ? Math.log10(v - E) : Math.log10(v); }
+  function ylim() { return ex === 0 ? [-1.6, 0.8] : [0.2, 0.75]; }
+  const px = lg => L0 + (R0 - L0) * (lg - XL) / (XR - XL), py = v => { const [a, b] = ylim(); return B0 - (B0 - T0) * (v - a) / (b - a); };
+  const pyinv = y => { const [a, b] = ylim(); return a + (b - a) * (B0 - y) / (B0 - T0); };
+  function initHandles() { const o = ex === 0 ? 0.08 : 0.02; h = [[6.2, yval(6.2) + o], [8.3, yval(8.3) - o * 0.75]]; }
+  const stepEl = document.getElementById("slStep");
+  function text() { stepEl.innerHTML = '<span class="k">exercise ' + (ex + 1) + ' of 2</span><p>' + (ex === 0 ? 'The vertical axis is the reducible loss, L minus the floor E = 1.8 that the data\'s entropy sets. Drag the two handles so the ruler runs through the four runs.' : 'This time the vertical axis is the raw loss, as it comes out of the run. Lay the ruler through the four points as before.') + '</p><p>Read your prediction at 10^' + BIG[ex] + ', then pay for the run.</p>'; }
+  function line(lg) { const [x1, y1] = h[0], [x2, y2] = h[1]; return y1 + (y2 - y1) * (lg - x1) / (x2 - x1); }
+  function draw() {
+    board.clear(ex === 0 ? "reducible loss L - E against model size, log axes" : "raw loss L against model size, log axes"); const ctx = board.ctx;
+    ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(L0, T0); ctx.lineTo(L0, B0); ctx.lineTo(R0, B0); ctx.stroke();
+    for (let lg = 6; lg <= 11; lg++) { board.label("10^" + lg, px(lg), B0 + 20, css("--muted"), "center", 11, true); ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(px(lg), B0); ctx.lineTo(px(lg), B0 + 5); ctx.stroke(); }
+    board.label("parameters N", (L0 + R0) / 2, board.H - 14, css("--muted"), "center", 12);
+    const ticks = ex === 0 ? [-1.5, -1, -0.5, 0, 0.5] : [0.25, 0.35, 0.45, 0.55, 0.65];
+    ticks.forEach(v => { board.label((ex === 0 ? "L-E = " : "L = ") + Math.pow(10, v).toFixed(2), L0 - 8, py(v) + 4, css("--muted"), "right", 11, true); ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(L0 - 4, py(v)); ctx.lineTo(L0, py(v)); ctx.stroke(); });
+    if (ex === 1) { ctx.strokeStyle = css("--grey"); ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(L0, py(Math.log10(E))); ctx.lineTo(R0, py(Math.log10(E))); ctx.stroke(); ctx.setLineDash([]); board.label("floor E = 1.8", R0 - 4, py(Math.log10(E)) - 6, css("--muted"), "right", 12); }
+    // ruler
+    ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(px(XL), py(line(XL))); ctx.lineTo(px(XR), py(line(XR))); ctx.stroke();
+    h.forEach(p => { ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(px(p[0]), py(p[1]), 10, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke(); });
+    board.label("ruler: drag the two handles", px(XL) + 8, py(line(XL)) - 12, css("--orange"), "left", 12);
+    SMALL.forEach(lg => { ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(px(lg), py(yval(lg)), 7, 0, 2 * Math.PI); ctx.fill(); });
+    board.label("the four small runs", px(SMALL[0]), py(yval(SMALL[0])) - 16, css("--blue"), "left", 12);
+    const big = BIG[ex], pred = line(big);
+    ctx.strokeStyle = css("--grey"); ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(px(big), T0); ctx.lineTo(px(big), B0); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(px(big), py(pred), 7, 0, 2 * Math.PI); ctx.fill(); board.label("your prediction", px(big) - 12, py(pred) + 4, css("--orange"), "right", 12);
+    const predV = ex === 0 ? E + Math.pow(10, pred) : Math.pow(10, pred);
+    document.getElementById("slSlope").textContent = ((h[1][1] - h[0][1]) / (h[1][0] - h[0][0])).toFixed(3); document.getElementById("slPred").textContent = "L = " + predV.toFixed(3);
+    if (paid) { const tv = yval(big), trueL = L(Math.pow(10, big)); ctx.fillStyle = css("--red"); ctx.beginPath(); ctx.arc(px(big), py(tv), 9, 0, 2 * Math.PI); ctx.fill(); board.label("the run: L = " + trueL.toFixed(3), px(big) - 12, py(tv) + (tv > pred ? -8 : 18), css("--red"), "right", 13); document.getElementById("slTrue").textContent = "L = " + trueL.toFixed(3); } else document.getElementById("slTrue").textContent = "-";
+  }
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); let bd = 1e9; drag = null; h.forEach((p, i) => { const d = Math.hypot(mx - px(p[0]), my - py(p[1])); if (d < bd) { bd = d; drag = i; } }); if (bd > 24) drag = null; });
+  window.addEventListener("mousemove", ev => { if (drag === null) return; const [mx, my] = board.pos(ev); h[drag] = [Math.max(XL, Math.min(XR, XL + (mx - L0) / (R0 - L0) * (XR - XL))), pyinv(my)]; if (Math.abs(h[0][0] - h[1][0]) < 0.3) h[drag][0] = h[1 - drag][0] + (drag === 0 ? -0.3 : 0.3); draw(); });
+  window.addEventListener("mouseup", () => { drag = null; });
+  document.getElementById("slRun").addEventListener("click", () => {
+    paid = true; draw(); const big = BIG[ex], predV = ex === 0 ? E + Math.pow(10, line(big)) : Math.pow(10, line(big)), trueL = L(Math.pow(10, big)), err = predV - trueL;
+    stepEl.innerHTML = '<span class="k">exercise ' + (ex + 1) + ': the run came back</span><div class="ask ' + (Math.abs(err) < 0.05 ? 'ok' : 'no') + '">You predicted ' + predV.toFixed(3) + '; the run reached ' + trueL.toFixed(3) + ' (' + (err > 0 ? '+' : '') + err.toFixed(3) + ').</div><p>' + (ex === 0 ? 'With the floor subtracted the law is exactly a line on these axes, and a ruler through four cheap runs predicts a run a hundred times larger. This is what scaling laws are for: the small runs price the large one before you pay for it.' : 'The raw points bend because the floor E = 1.8 is in them; a ruler through the measured range runs below the floor and predicts a loss no model can reach. The law is a power law in the reducible loss, over the measured range, and it says nothing about what the model can do.') + '</p>';
+  });
+  document.getElementById("slNext").addEventListener("click", () => { ex = (ex + 1) % 2; paid = false; initHandles(); text(); draw(); });
+  quiz(document.getElementById("slQuiz"), { q: "A scaling-law paper reports loss falling as a straight line on log axes from 10^7 to 10^9 parameters. What does it license you to say about a 10^12 model?", options: ["Its loss, to within a few percent", "Its capabilities on downstream tasks", "A prediction of its loss that assumes the same data and the same regime, to be checked rather than trusted", "Nothing at all"], answer: 2, why: "The line is an empirical fit over three decades. Extrapolating three more assumes the regime continues, that the data mix is the same, and that the floor was handled. It is a useful estimate and a poor guarantee, and it is silent on capability." });
+  initHandles(); text(); draw();
+})();
+
+/* ================= 2. FIT THE RUN ================= */
+(function stack() {
+  const MODELS = [{ name: "125 M", P: 0.125e9, act: 0.35 }, { name: "1.3 B", P: 1.3e9, act: 1.2 }, { name: "7 B", P: 7e9, act: 3.0 }];
+  let m = 1, mixed = false, zero = false, micro = 4, acc = 1, dev = 1, card = 24;
+  const board = new Board(document.getElementById("stCols")), stepEl = document.getElementById("stStep");
+  function parts() {
+    const P = MODELS[m].P, G = 2 ** 30, shard = zero ? dev : 1;
+    const w = (mixed ? 2 : 4) * P / G, master = mixed ? 4 * P / G : 0, grad = (mixed ? 2 : 4) * P / G, adam = 8 * P / G, act = MODELS[m].act * micro * (mixed ? 0.5 : 1);
+    return [{ name: "weights" + (mixed ? " (bf16)" : " (fp32)"), gb: w / shard, color: css("--blue") }, { name: "master copy (fp32)", gb: master / shard, color: mix(css("--panel"), css("--blue"), 0.45) }, { name: "gradients", gb: grad / shard, color: css("--orange") }, { name: "Adam moments (fp32)", gb: adam / shard, color: mix(css("--panel"), css("--orange"), 0.5) }, { name: "activations, micro-batch " + micro, gb: act, color: "#2E7D5B" }];
+  }
+  function draw() {
+    const ps = parts(), total = ps.reduce((a, p) => a + p.gb, 0), batch = micro * dev * acc, time = acc * (mixed ? 0.6 : 1) * (zero ? 1.15 : 1);
+    document.getElementById("stBatch").textContent = batch; document.getElementById("stMem").textContent = total.toFixed(1) + " GB of " + card; document.getElementById("stTime").textContent = time.toFixed(2) + " x";
+    board.clear(MODELS[m].name + " parameters, one training step, per device"); const ctx = board.ctx;
+    const n = Math.min(dev, 8), colW = Math.min(150, (board.W - 420) / n), x0 = 60, top = 60, bottom = board.H - 60, scale = (bottom - top) / Math.max(card * 1.6, total * 1.05);
+    for (let d = 0; d < n; d++) {
+      const x = x0 + d * (colW + 14); let y = bottom;
+      ctx.strokeStyle = css("--line"); ctx.strokeRect(x, bottom - card * scale, colW, card * scale);
+      ps.forEach(p => { if (p.gb <= 0) return; const hgt = p.gb * scale; ctx.fillStyle = p.color; ctx.fillRect(x + 2, y - hgt, colW - 4, hgt); y -= hgt; });
+      ctx.strokeStyle = total > card ? css("--red") : "#2E7D5B"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x - 6, bottom - card * scale); ctx.lineTo(x + colW + 6, bottom - card * scale); ctx.stroke(); ctx.lineWidth = 1;
+      board.label("device " + (d + 1), x + colW / 2, bottom + 18, css("--muted"), "center", 11, true);
+    }
+    board.label(card + " GB card", x0 - 4, bottom - card * scale - 6, total > card ? css("--red") : "#2E7D5B", "left", 12);
+    // legend with sizes
+    const lx = x0 + n * (colW + 14) + 40; let ly = 80; board.label("what the step holds, per device", lx, ly - 20, css("--ink"), "left", 13);
+    ps.forEach(p => { ctx.fillStyle = p.color; ctx.fillRect(lx, ly - 12, 16, 16); board.label(p.name, lx + 24, ly, css("--ink"), "left", 13); board.label(p.gb.toFixed(2) + " GB", lx + 300, ly, css("--ink"), "right", 13, true); ly += 28; });
+    board.label("total " + total.toFixed(1) + " GB", lx + 300, ly + 6, total > card ? css("--red") : css("--ink"), "right", 14, true);
+    board.label("effective batch " + batch + "   step time " + time.toFixed(2) + " x", lx, ly + 40, css("--muted"), "left", 12);
+    board.label(zero ? "sharded: states divided over " + dev + (dev === 1 ? " device" : " devices") : "not sharded: every device holds every state", lx, ly + 62, css("--muted"), "left", 12);
+    const v = document.getElementById("stVerdict"); v.hidden = false; const fits = total <= card, ok = fits && batch >= 256;
+    v.className = "ask " + (ok ? "ok" : (fits ? "" : "no")); v.textContent = ok ? "Fits, with an effective batch of " + batch + " at " + time.toFixed(2) + " x the step time. " + (time > 4 ? "Most of that batch is bought with accumulation; more devices would buy it with hardware." : "") : (fits ? "Fits, but the batch is " + batch + "; the job needs 256." : "Over the card by " + (total - card).toFixed(1) + " GB. " + (!mixed ? "Mixed precision halves the activations. " : "") + (!zero && dev > 1 ? "Sharding divides the states over the devices. " : "") + (micro > 1 ? "A smaller micro-batch with more accumulation steps trades time for memory." : ""));
+  }
+  function text() { stepEl.innerHTML = '<span class="k">the task</span><p>Fit a training step for the chosen model on the card, with an effective batch of at least 256. Every block is a memory cost you can read off the column; the step time tells you what the fit costs in wall-clock.</p><p>Try the 1.3 B model first with everything off, then switch the habits on one at a time and watch which block each one touches.</p>'; }
+  pressGroup("stModel", v => { m = +document.querySelector("#stModel button[aria-pressed=true]").dataset.m; draw(); });
+  document.querySelectorAll("#stModel button").forEach(b => b.addEventListener("click", () => { m = +b.dataset.m; draw(); }));
+  pressGroup("stMicro", v => { micro = v; draw(); }); pressGroup("stAcc", v => { acc = v; draw(); }); pressGroup("stDev", v => { dev = v; draw(); }); pressGroup("stCard", v => { card = v; draw(); });
+  document.getElementById("stMixed").addEventListener("click", () => { mixed = !mixed; document.getElementById("stMixed").setAttribute("aria-pressed", mixed ? "true" : "false"); draw(); });
+  document.getElementById("stZero").addEventListener("click", () => { zero = !zero; document.getElementById("stZero").setAttribute("aria-pressed", zero ? "true" : "false"); draw(); });
+  quiz(document.getElementById("stQuiz"), { q: "Mixed precision is often described as halving memory. Which block does it actually halve on this bench?", options: ["The optimizer moments", "The master copy of the weights", "The activations and the working copy of the weights and gradients; the fp32 master copy and the Adam moments stay full width"], answer: 2, why: "The optimizer keeps a full-width master copy so that small updates are not rounded away, and its two moments are full width too. Those 12 bytes per parameter dominate the static memory of a step; what mixed precision buys is activation memory and arithmetic speed." });
+  text(); draw();
+})();
+
+/* ================= 3. CUT THE IMAGE ================= */
+(function patches() {
+  const S = 64, img = new Uint8ClampedArray(S * S * 3), rng = mulberry32(5);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const u = x / S, v = y / S; let r = 110, g = 130, b = 70; const fieldA = Math.floor(u * 4 + v * 2) % 3; if (fieldA === 1) { r = 150; g = 120; b = 70; } if (fieldA === 2) { r = 90; g = 140; b = 60; } if (Math.abs(v - (0.15 + 0.5 * u)) < 0.035) { r = 70; g = 70; b = 72; } const rv = 0.75 - 0.25 * Math.sin(u * 5); if (Math.abs(v - rv) < 0.05) { r = 50; g = 90; b = 160; } if (u > 0.62 && u < 0.9 && v > 0.1 && v < 0.35 && ((Math.floor(u * 40) + Math.floor(v * 40)) % 2 === 0)) { r = 190; g = 185; b = 175; } const n = (rng() - 0.5) * 18; const i = (y * S + x) * 3; img[i] = r + n; img[i + 1] = g + n; img[i + 2] = b + n; }
+  const board = new Board(document.getElementById("ptImg")), tok = new Board(document.getElementById("ptTok"));
+  let p = 16, order = null, sel = null;
+  const G = () => S / p, T = () => G() * G();
+  function ident() { order = []; for (let i = 0; i < T(); i++) order.push(i); }
+  function patchAt(k) { return [k % G(), Math.floor(k / G())]; }
+  function drawPatch(ctx, k, x0, y0, size) { const [gx, gy] = patchAt(k), q = size / p; for (let yy = 0; yy < p; yy++) for (let xx = 0; xx < p; xx++) { const i = ((gy * p + yy) * S + gx * p + xx) * 3; ctx.fillStyle = "rgb(" + img[i] + "," + img[i + 1] + "," + img[i + 2] + ")"; ctx.fillRect(x0 + xx * q, y0 + yy * q, q + 0.5, q + 0.5); } }
+  const stepEl = document.getElementById("ptStep");
+  function draw() {
+    const n = T(), shuffled = order.some((v, i) => v !== i);
+    document.getElementById("ptT").textContent = n; document.getElementById("ptD").textContent = 3 * p * p; document.getElementById("ptM").textContent = (n * n).toLocaleString();
+    board.clear(shuffled ? "the sequence rebuilt in its shuffled order: the model's view without position tags" : "the scene, cut into " + n + " patches of " + p + " px (click one)"); const ctx = board.ctx;
+    const size = 480, ox = 40, oy = 50, cell = size / G();
+    for (let slot = 0; slot < n; slot++) { const k = order[slot], [sx, sy] = patchAt(slot); drawPatch(ctx, k, ox + sx * cell, oy + sy * cell, cell); ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.strokeRect(ox + sx * cell, oy + sy * cell, cell, cell); if (sel === k) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.strokeRect(ox + sx * cell + 1, oy + sy * cell + 1, cell - 2, cell - 2); ctx.lineWidth = 1; } }
+    board.label(shuffled ? "every token is still here; only the order changed" : "a field, a road, a river, a few buildings", ox, oy + size + 24, css("--muted"), "left", 12);
+    // token column: the sequence as thumbnails with position tags
+    tok.clear("the sequence, " + n + " tokens"); const tc = tok.ctx; const cols = Math.min(8, G()), tw = Math.min(44, (tok.W - 60) / cols - 6), rows = Math.ceil(n / cols);
+    for (let slot = 0; slot < n; slot++) { const k = order[slot], cx = 30 + (slot % cols) * (tw + 6), cy = 40 + Math.floor(slot / cols) * (tw + 18); drawPatch(tc, k, cx, cy, tw); if (sel === k) { tc.strokeStyle = css("--orange"); tc.lineWidth = 3; tc.strokeRect(cx, cy, tw, tw); tc.lineWidth = 1; } if (n <= 64) tok.label("pos " + (slot + 1), cx + tw / 2, cy + tw + 11, css("--muted"), "center", 9, true); }
+    const by = 40 + rows * (tw + 18) + 20;
+    if (sel !== null) { tok.label("token " + (sel + 1) + ": its " + (3 * p * p) + " numbers, flattened (first 96)", 30, by, css("--ink"), "left", 12); const [gx, gy] = patchAt(sel); for (let j = 0; j < 96 && j < 3 * p * p; j++) { const pix = Math.floor(j / 3), xx = pix % p, yy = Math.floor(pix / p), i = ((gy * p + yy) * S + gx * p + xx) * 3 + (j % 3); tc.fillStyle = mix(css("--panel"), css("--ink"), img[i] / 255); tc.fillRect(30 + j * 4, by + 10, 3.5, 30); } tok.label("+ position tag " + (order.indexOf(sel) + 1) + " of " + n + (order.some((v, i) => v !== i) ? "  (changed by the shuffle)" : ""), 30, by + 60, css("--blue"), "left", 12); }
+    else tok.label("click a patch on the scene", 30, by, css("--muted"), "left", 12);
+    stepEl.innerHTML = '<span class="k">' + p + ' px patches, T = ' + n + '</span><p>' + (p === 8 ? 'Sixty-four tokens: a fine grid, and a score matrix sixteen times the size of the 16 px one.' : (p === 16 ? 'Sixteen tokens, the usual choice at this scale: a 224 px image at 16 px gives 196.' : 'Four tokens: cheap, and each one has to summarize a quarter of the scene.')) + '</p><p>' + (shuffled ? 'The shuffled scene is what the attention block sees without position tags: the same bag of tokens. The tags are the only thing that puts the road back together.' : 'Shuffle the tokens to see the scene as a model without position tags would.') + '</p>';
+  }
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev), cell = 480 / G(), sx = Math.floor((mx - 40) / cell), sy = Math.floor((my - 50) / cell); if (sx < 0 || sy < 0 || sx >= G() || sy >= G()) return; sel = order[sy * G() + sx]; draw(); });
+  pressGroup("ptSize", v => { p = +document.querySelector("#ptSize button[aria-pressed=true]").dataset.p; sel = null; ident(); draw(); });
+  document.querySelectorAll("#ptSize button").forEach(b => b.addEventListener("click", () => { p = +b.dataset.p; sel = null; ident(); draw(); }));
+  document.getElementById("ptShuffle").addEventListener("click", () => { const r = mulberry32(Date.now() % 100000); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } draw(); });
+  document.getElementById("ptRestore").addEventListener("click", () => { ident(); draw(); });
+  quiz(document.getElementById("ptQuiz"), { q: "A vision transformer and a convolutional network are trained on 2 000 labelled aerial tiles. Which usually wins, and why?", options: ["The transformer, since attention is more expressive", "The convolution, since its grid assumption is a prior the transformer must learn from data it does not have", "They tie; the architecture does not matter at this size"], answer: 1, why: "Locality and translation equivariance are built into convolution. A transformer has to discover from the data that neighbouring patches are related, which takes far more than 2 000 tiles. With pretraining on a large corpus the picture reverses, which is why Week 4's backbones are pretrained patch models." });
+  ident(); draw();
+})();
+
+/* ================= 4. THE REACH TEST ================= */
+(function sparse() {
+  const T = 48; let win = 2, stride = 0, glob = 0, src = 20, full = false, anim = null, shown = 0;
+  const board = new Board(document.getElementById("spStrip")), stepEl = document.getElementById("spStep");
+  function adj(i) { const s = new Set(); if (full) { for (let j = 0; j < T; j++) s.add(j); return s; } for (let d = -win; d <= win; d++) { const j = i + d; if (j >= 0 && j < T) s.add(j); } if (stride) { for (let j = i % stride; j < T; j += stride) s.add(j); } for (let g = 0; g < glob; g++) s.add(g); if (i < glob) for (let j = 0; j < T; j++) s.add(j); return s; }
+  function hops() { const h = new Array(T).fill(-1); h[src] = 0; let frontier = [src], k = 0; while (frontier.length) { k++; const next = []; for (const i of frontier) for (const j of adj(i)) if (h[j] < 0) { h[j] = k; next.push(j); } frontier = next; } return h; }
+  function cost() { let tot = 0; for (let i = 0; i < T; i++) tot += adj(i).size; return tot / T; }
+  function draw() {
+    const h = hops(), c = cost(), maxh = Math.max.apply(null, h), r1 = h.filter(v => v >= 0 && v <= 1).length, r2 = h.filter(v => v >= 0 && v <= 2).length, r3 = h.filter(v => v >= 0 && v <= 3).length;
+    document.getElementById("spCost").textContent = c.toFixed(1) + " of " + T; document.getElementById("spReach").textContent = r1 + " / " + r2 + " / " + r3 + " of " + T; document.getElementById("spMax").textContent = h.some(v => v < 0) ? "never (disconnected)" : String(maxh);
+    board.clear((full ? "full attention" : "pattern: window " + win + (stride ? ", stride " + stride : "") + (glob ? ", " + glob + " global" : "")) + "; click a position to make it the source"); const ctx = board.ctx;
+    const x0 = 40, w = (board.W - 80) / T, y0 = 60, hgt = 70;
+    const col = v => v < 0 ? css("--bg") : (v === 0 ? css("--orange") : [css("--blue"), mix(css("--panel"), css("--blue"), 0.55), mix(css("--panel"), css("--blue"), 0.3), mix(css("--panel"), css("--blue"), 0.15)][Math.min(3, v - 1)]);
+    for (let i = 0; i < T; i++) { const v = h[i] <= shown ? h[i] : -1; ctx.fillStyle = col(v); ctx.fillRect(x0 + i * w + 2, y0, w - 4, hgt); ctx.strokeStyle = css("--line"); ctx.strokeRect(x0 + i * w + 2, y0, w - 4, hgt); if (v >= 0) board.label(String(v), x0 + i * w + w / 2, y0 + hgt / 2 + 5, v <= 1 ? "#fff" : css("--ink"), "center", 12, true); if (i % 8 === 0) board.label(String(i + 1), x0 + i * w + w / 2, y0 + hgt + 16, css("--muted"), "center", 10, true); if (i < glob) { ctx.fillStyle = css("--red"); ctx.beginPath(); ctx.arc(x0 + i * w + w / 2, y0 - 10, 4, 0, 2 * Math.PI); ctx.fill(); } }
+    board.label("hops from the source (orange) to each position; blank = not yet reached" + (glob ? "; red dots mark global tokens" : ""), x0, y0 + hgt + 40, css("--muted"), "left", 12);
+    // pattern matrix thumbnail: which pairs are scored
+    const mx = 40, my = 200, ms = 300 / T; board.label("the pattern: pairs that will be scored (rows read columns)", mx, my - 8, css("--ink"), "left", 13);
+    for (let i = 0; i < T; i++) { const a = adj(i); for (let j = 0; j < T; j++) { ctx.fillStyle = a.has(j) ? (i === src ? css("--orange") : css("--blue")) : css("--bg"); ctx.fillRect(mx + j * ms, my + i * ms, ms - 0.5, ms - 0.5); } }
+    ctx.strokeStyle = css("--line"); ctx.strokeRect(mx, my, T * ms, T * ms);
+    board.label("entries per row: " + c.toFixed(1) + " of " + T + " (full attention scores all " + T + ")", mx + 320, my + 30, css("--ink"), "left", 14);
+    board.label("reach from the source: " + r1 + " positions in one hop, " + r2 + " within two, " + r3 + " within three", mx + 320, my + 58, css("--ink"), "left", 14);
+    board.label(h.some(v => v < 0) ? "some positions are never reached" : "the whole record is reached in " + maxh + (maxh === 1 ? " hop" : " hops"), mx + 320, my + 86, css("--ink"), "left", 14);
+    const v = document.getElementById("spVerdict"); v.hidden = full; if (!full) { const ok = maxh <= 2 && !h.some(x => x < 0) && c <= 12; v.className = "ask " + (ok ? "ok" : ""); v.textContent = ok ? "Challenge met: everything within two hops at " + c.toFixed(1) + " entries per row, a quarter of full attention." : (c > 12 ? "Too expensive: " + c.toFixed(1) + " entries per row. Shrink the window or the stride." : (h.some(x => x < 0) ? "Disconnected: some positions can never hear the source." : maxh > 2 ? "Reach is " + maxh + " hops. Add a stride or a global token to shorten the path." : "")); }
+  }
+  function animate() { if (anim) clearTimeout(anim); shown = 0; (function f() { draw(); shown++; if (shown <= 4) anim = setTimeout(f, 350); })(); }
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const w = (board.W - 80) / T; if (my >= 60 && my <= 130) { const i = Math.floor((mx - 40) / w); if (i >= 0 && i < T) { src = i; animate(); } } });
+  pressGroup("spWin", v => { win = v; full = false; animate(); }); pressGroup("spStride", v => { stride = v; full = false; animate(); }); pressGroup("spGlob", v => { glob = v; full = false; animate(); });
+  document.getElementById("spFull").addEventListener("click", () => { full = !full; document.getElementById("spFull").textContent = full ? "Back to my pattern" : "Compare with full attention"; animate(); });
+  stepEl.innerHTML = '<span class="k">the challenge</span><p>Reach all 48 positions from any source within two hops, scoring at most 12 pairs per row. Full attention does it in one hop for 48 per row.</p><p>Watch the wave: each pulse is one layer of attention passing information one hop further.</p>';
+  quiz(document.getElementById("spQuiz"), { q: "A sparse pattern that reaches everything in two hops needs two attention layers to do what one dense layer does. Why is that still a win for long records?", options: ["Two layers are always better than one", "Each layer costs T times the entries per row instead of T squared, so the pair of layers is far cheaper than one dense layer once T is large", "It is not a win; sparse attention is only for text"], answer: 1, why: "Cost per layer is T times the row count. With 12 entries per row at T = 864 000 that is 10 million scores per layer; the dense layer needs 750 billion. Two cheap hops are a bargain, provided the pattern matches which pairs the physics of the record actually couples." });
+  animate();
+})();
+
+/* ================= 5. THE STEP SEQUENCER ================= */
+(function ssm() {
+  const N = 48, OM = 0.3; let dt = 0.3, lam = 0.2, u = new Array(N).fill(0), anim = null, shown = N;
+  const board = new Board(document.getElementById("ssSeq")), stepEl = document.getElementById("ssStep");
+  function disc() { const e = Math.exp(-lam * dt), c = Math.cos(OM * dt), s = Math.sin(OM * dt), Ab = [[e * c, e * s], [-e * s, e * c]], det = lam * lam + OM * OM, Ai = [[-lam / det, -OM / det], [OM / det, -lam / det]], M = [[Ab[0][0] - 1, Ab[0][1]], [Ab[1][0], Ab[1][1] - 1]]; const Bb = [Ai[0][0] * M[0][0] + Ai[0][1] * M[1][0], Ai[1][0] * M[0][0] + Ai[1][1] * M[1][0]]; return { Ab, Bb }; }
+  function kernel(n) { const { Ab, Bb } = disc(); let x = Bb.slice(); const K = []; for (let k = 0; k < n; k++) { K.push(x[0]); x = [Ab[0][0] * x[0] + Ab[0][1] * x[1], Ab[1][0] * x[0] + Ab[1][1] * x[1]]; } return K; }
+  function run() { const { Ab, Bb } = disc(); let x = [0, 0]; const xs = [], ys = []; for (let k = 0; k < N; k++) { x = [Ab[0][0] * x[0] + Ab[0][1] * x[1] + Bb[0] * u[k], Ab[1][0] * x[0] + Ab[1][1] * x[1] + Bb[1] * u[k]]; xs.push(x.slice()); ys.push(x[0]); } return { xs, ys }; }
+  function draw() {
+    const K = kernel(N), peak = Math.max.apply(null, K.map(Math.abs)) || 1, { xs, ys } = run(), half = Math.log(2) / (lam * dt), per = 2 * Math.PI / (OM * dt), k24 = K[24] / peak;
+    document.getElementById("ssHalf").textContent = half.toFixed(1); document.getElementById("ssPer").textContent = per.toFixed(1); document.getElementById("ssK24").textContent = (100 * k24).toFixed(0) + " %";
+    board.clear("Delta = " + dt + ", lambda = " + lam + ": input row (click to place impulses), state, output, and the kernel"); const ctx = board.ctx, x0 = 60, w = (board.W - 100) / N;
+    // input row
+    board.label("input u_k (click a step to place an impulse)", x0, 40, css("--muted"), "left", 12); for (let k = 0; k < N; k++) { ctx.fillStyle = u[k] ? css("--orange") : css("--bg"); ctx.fillRect(x0 + k * w + 2, 48, w - 4, 34); ctx.strokeStyle = css("--line"); ctx.strokeRect(x0 + k * w + 2, 48, w - 4, 34); if (k % 8 === 0) board.label(String(k), x0 + k * w + w / 2, 98, css("--muted"), "center", 10, true); }
+    // state as two bars per step, output as a trace
+    const sy0 = 200, sh = 70, xmax = Math.max(0.05, Math.max.apply(null, xs.map(v => Math.max(Math.abs(v[0]), Math.abs(v[1]))))); board.label("state x_k, two components (dark and light), scaled to the largest value " + xmax.toFixed(2), x0, sy0 - 82, css("--muted"), "left", 12);
+    for (let k = 0; k < Math.min(shown, N); k++) { const s1 = xs[k][0] / xmax, s2 = xs[k][1] / xmax; ctx.fillStyle = css("--blue"); ctx.fillRect(x0 + k * w + 2, sy0 - Math.max(0, s1) * sh, w / 2 - 2, Math.abs(s1) * sh); ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.45); ctx.fillRect(x0 + k * w + w / 2, sy0 - Math.max(0, s2) * sh, w / 2 - 2, Math.abs(s2) * sh); }
+    ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(x0, sy0); ctx.lineTo(x0 + N * w, sy0); ctx.stroke();
+    const oy0 = 340, ymax = Math.max(0.05, Math.max.apply(null, ys.map(Math.abs))); board.label("output y_k = C x_k, scaled to its largest value " + ymax.toFixed(2), x0, oy0 - 72, css("--muted"), "left", 12); ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(x0, oy0); ctx.lineTo(x0 + N * w, oy0); ctx.stroke();
+    ctx.strokeStyle = css("--red"); ctx.lineWidth = 2.4; ctx.beginPath(); for (let k = 0; k < Math.min(shown, N); k++) { const y = oy0 - ys[k] / ymax * 60; if (k === 0) ctx.moveTo(x0 + k * w + w / 2, y); else ctx.lineTo(x0 + k * w + w / 2, y); } ctx.stroke(); ctx.lineWidth = 1;
+    // kernel row
+    const ky0 = 480; board.label("kernel K_lag, the weight the output gives to an input that many steps back", x0, ky0 - 62, css("--muted"), "left", 12);
+    for (let k = 0; k < N; k++) { const v = K[k] / peak; ctx.fillStyle = k === 24 ? css("--orange") : "#2E7D5B"; ctx.fillRect(x0 + k * w + 2, ky0 - Math.max(0, v) * 50, w - 4, Math.abs(v) * 50); } ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(x0, ky0); ctx.lineTo(x0 + N * w, ky0); ctx.stroke(); board.label("lag 24 (orange): " + (100 * k24).toFixed(0) + " % of the peak", x0 + 24 * w + w, ky0 + 18, css("--orange"), "left", 12);
+    for (let k = 0; k < N; k += 8) board.label("lag " + k, x0 + k * w + w / 2, ky0 + 18 + (k === 24 ? 14 : 0), css("--muted"), "center", 10, true);
+    const v = document.getElementById("ssVerdict"); v.hidden = false; const ok = half >= 15 && half <= 40; v.className = "ask " + (ok ? "ok" : ""); v.textContent = ok ? "Half-life " + half.toFixed(0) + " steps: a cue 24 steps back still weighs " + (100 * Math.abs(k24)).toFixed(0) + " % of the peak, and the layer forgets before the record repeats. Place the cue at step 8 and run it." : (half > 40 ? "Half-life " + half.toFixed(0) + " steps: the layer remembers everything, including what it should have dropped. Raise lambda or Delta." : "Half-life " + half.toFixed(0) + " steps: a cue 24 steps back is gone. Lower lambda or Delta.");
+  }
+  function animate() { if (anim) clearTimeout(anim); shown = 0; (function f() { shown += 2; draw(); if (shown < N) anim = setTimeout(f, 40); })(); }
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const w = (board.W - 100) / N; if (my >= 48 && my <= 82) { const k = Math.floor((mx - 60) / w); if (k >= 0 && k < N) { u[k] = u[k] ? 0 : 1; shown = N; draw(); } } });
+  pressGroup("ssDt", v => { dt = v; shown = N; draw(); }); pressGroup("ssLam", v => { lam = v; shown = N; draw(); });
+  document.getElementById("ssPlay").addEventListener("click", animate);
+  document.getElementById("ssClear").addEventListener("click", () => { u = new Array(N).fill(0); shown = N; draw(); });
+  document.getElementById("ssCue").addEventListener("click", () => { u = new Array(N).fill(0); u[8] = 1; animate(); });
+  stepEl.innerHTML = '<span class="k">how to read it</span><p>The input row is a sequencer: click a step to drop an impulse. The state is two numbers that rotate and decay; the output reads the first. The kernel row is the same layer written as a convolution, so a single impulse traces the kernel.</p><p>Task: choose Delta and lambda so the half-life sits between 15 and 40 steps, then place the cue at step 8 and watch it carried to step 32.</p>';
+  quiz(document.getElementById("ssQuiz"), { q: "A state space layer and a Kalman filter prediction step share the equation x_k = A x_(k-1) + B u_k. What does the layer not have?", options: ["A transition matrix", "The covariance, the innovation and the gain: it returns a point estimate with no band", "An input"], answer: 1, why: "The layer learns A, B and C by gradient descent and keeps the prediction step only. The filter's update step, which weighs the prediction against a measurement by their covariances, is gone, so uncertainty has to be put back by other means, which is Week 8." });
+  u[8] = 1; draw();
+})();
+
+/* ================= 6. THE DISTRACTOR TEST ================= */
+(function selective() {
+  const N = 48, CUE = 4; let start = 20, len = 8, dtFix = 0.2, drag = false;
+  const board = new Board(document.getElementById("seRec")), stepEl = document.getElementById("seStep");
+  function record() { const u = new Array(N).fill(0), kind = new Array(N).fill(0); u[CUE] = 1; kind[CUE] = 1; const rng = mulberry32(3); for (let k = start; k < Math.min(N, start + len); k++) { u[k] = 0.6 + 0.8 * rng(); kind[k] = 2; } return { u, kind }; }
+  function simulate(selective) { const { u, kind } = record(); let hc = 0, hd = 0, written = 0; const H = [], gates = []; for (let k = 0; k < N; k++) { const d = selective ? (kind[k] === 1 ? 1.5 : (kind[k] === 2 ? 0.01 : 0.0)) : dtFix, a = Math.exp(-d); gates.push(d); hc = a * hc + (kind[k] === 1 ? (1 - a) * u[k] : 0); hd = a * hd + (kind[k] === 2 ? (1 - a) * u[k] : 0); if (kind[k] === 1) written = hc; H.push([hc, hd]); } return { H, gates, u, kind, written }; }
+  function draw() {
+    const F = simulate(false), S = simulate(true), fcAbs = F.H[N - 1][0], scAbs = S.H[N - 1][0], fdAbs = F.H[N - 1][1], sdAbs = S.H[N - 1][1], fc = fcAbs / (fcAbs + fdAbs + 1e-12), sc = scAbs / (scAbs + sdAbs + 1e-12), fr = fcAbs / F.written, sr = scAbs / S.written;
+    document.getElementById("seFix").textContent = (100 * fc).toFixed(0) + " %"; document.getElementById("seSel").textContent = (100 * sc).toFixed(0) + " %"; document.getElementById("seDis").textContent = (100 * fr).toFixed(1) + " % / " + (100 * sr).toFixed(0) + " %";
+    board.clear("the record (drag the burst), then each layer's state split into what came from the cue and what came from the burst"); const ctx = board.ctx, x0 = 60, w = (board.W - 100) / N;
+    board.label("input", x0 - 8, 70, css("--muted"), "right", 12);
+    for (let k = 0; k < N; k++) { const kd = F.kind[k]; ctx.fillStyle = kd === 1 ? css("--blue") : (kd === 2 ? css("--red") : css("--bg")); ctx.fillRect(x0 + k * w + 2, 80 - (kd ? F.u[k] * 34 : 0), w - 4, kd ? F.u[k] * 34 : 34); ctx.strokeStyle = css("--line"); ctx.strokeRect(x0 + k * w + 2, 46, w - 4, 34); if (k % 8 === 0) board.label(String(k), x0 + k * w + w / 2, 96, css("--muted"), "center", 10, true); }
+    board.label("cue", x0 + CUE * w + w / 2, 40, css("--blue"), "center", 11); board.label("distractor burst (drag)", x0 + (start + len / 2) * w, 40, css("--red"), "center", 11);
+    const rows = [{ name: "fixed layer, Delta = " + dtFix, R: F, y: 190 }, { name: "selective layer, Delta from the input", R: S, y: 330 }];
+    rows.forEach(r => {
+      board.label(r.name, x0, r.y - 62, css("--ink"), "left", 13);
+      const scl = 50 / Math.max(r.R.written, 0.05); for (let k = 0; k < N; k++) { const [c, d] = r.R.H[k]; ctx.fillStyle = css("--blue"); ctx.fillRect(x0 + k * w + 2, r.y - Math.min(60, c * scl), w / 2 - 2, Math.min(60, c * scl)); ctx.fillStyle = css("--red"); ctx.fillRect(x0 + k * w + w / 2, r.y - Math.min(60, d * scl), w / 2 - 2, Math.min(60, d * scl)); }
+      ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(x0, r.y); ctx.lineTo(x0 + N * w, r.y); ctx.stroke();
+      board.label("blue: cue in the state   red: burst in the state   (bars scaled to the cue as written)", x0, r.y + 16, css("--muted"), "left", 11);
+    });
+    // gate row for the selective layer
+    const gy = 440; board.label("the selective layer's step size per input: open for the cue, shut for the burst", x0, gy - 30, css("--ink"), "left", 13);
+    for (let k = 0; k < N; k++) { const g = S.gates[k]; ctx.fillStyle = mix(css("--panel"), "#2E7D5B", Math.min(1, g / 1.5)); ctx.fillRect(x0 + k * w + 2, gy - 24, w - 4, 24); ctx.strokeStyle = css("--line"); ctx.strokeRect(x0 + k * w + 2, gy - 24, w - 4, 24); }
+    board.label("at the end the fixed layer's state is " + (100 * fc).toFixed(0) + " % cue and " + (100 - 100 * fc).toFixed(0) + " % burst; the selective layer's is " + (100 * sc).toFixed(0) + " % cue", x0, gy + 40, css("--ink"), "left", 13);
+    const v = document.getElementById("seVerdict"); v.hidden = false; v.className = "ask " + (len > 0 && fc < 0.3 && sc > 0.8 ? "ok" : ""); v.textContent = len === 0 ? "No burst: both layers end with a state that is all cue, though the fixed layer has let " + (100 - 100 * fr).toFixed(0) + " % of it decay. Add a burst." : (fc < 0.3 && sc > 0.8 ? "The burst has displaced the cue in the fixed layer (state " + (100 * fc).toFixed(0) + " % cue) while the selective layer still holds it (" + (100 * sc).toFixed(0) + " % cue, " + (100 * sr).toFixed(0) + " % of what was written). Fixed matrices treat every step the same; selectivity lets the input decide what is worth writing." : "The fixed layer's state is still " + (100 * fc).toFixed(0) + " % cue. Lengthen the burst or raise the fixed step size and watch the red take over.");
+    stepEl.innerHTML = '<span class="k">reading the bars</span><p>Each state is drawn as two parts, which the linear recurrence keeps separate: the blue part came from the cue, the red from the burst. The fixed layer decays and rewrites at every step, so the burst displaces the cue. The selective layer closes its step size for the burst and keeps the cue intact.</p><p>Drag the burst next to the cue, then far from it, and change its length.</p>';
+  }
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const w = (board.W - 100) / N; const k = Math.floor((mx - 60) / w); if (my < 100 && k >= start - 1 && k <= start + len) drag = true; });
+  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx] = board.pos(ev); const w = (board.W - 100) / N; start = Math.max(CUE + 2, Math.min(N - len, Math.round((mx - 60) / w - len / 2))); draw(); });
+  window.addEventListener("mouseup", () => { drag = false; });
+  pressGroup("seLen", v => { len = v; start = Math.min(start, N - len); draw(); }); pressGroup("seDt", v => { dtFix = v; draw(); });
+  quiz(document.getElementById("seQuiz"), { q: "Making the step size depend on the input costs the layer something at training time. What?", options: ["Linear cost; it becomes quadratic again", "The single convolution kernel: with input-dependent matrices the layer is no longer one fixed convolution, so training uses a parallel scan instead of a fast transform", "The fixed-size state"], answer: 1, why: "A fixed layer unrolls into one long convolution and trains with a transform. Selectivity makes the kernel depend on the record, which breaks that trick; Mamba's hardware-aware scan recovers most of the speed. Inference keeps its fixed state and linear cost either way." });
+  draw();
+})();
+
+/* ---------- tabs ---------- */
+const tabs = Array.from(document.querySelectorAll("nav [role=tab]"));
+function show(name, push) {
+  if (!document.getElementById(name)) name = "scaling";
+  tabs.forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll("section.demo").forEach(s => s.classList.toggle("active", s.id === name));
+  if (push) { try { history.replaceState(null, "", "#" + name); } catch (e) {} }
+}
+tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
+show(location.hash.slice(1) || "scaling", false);
+
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
