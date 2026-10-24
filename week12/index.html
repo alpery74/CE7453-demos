@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Week 12 Demos</title>
-<meta name="description" content="CE 7453 Week 12: interactive demonstrations of contrastive training, retrieval and wording, triage recall at a review budget, planning in a learned model, and drift monitoring.">
+<meta name="description" content="CE 7453 Week 12: arrange a contrastive embedding by hand, write retrieval queries from word chips, flip the inspector's queue, pilot a system with a wrong model, and decide when to retrain a deployed model.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -100,231 +100,228 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 </style>
 </head>
 <body>
+<style>
+/* components for the instructional formats */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.step { font-size: 15px; line-height: 1.5; }
+.step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
+.step p { margin: 6px 0; }
+.ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
+.ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
+.ask.no { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ask.ok { background: #1E3A2C; } :root:not([data-theme="light"]) .ask.no { background: #432426; } }
+:root[data-theme="dark"] .ask.ok { background: #1E3A2C; } :root[data-theme="dark"] .ask.no { background: #432426; }
+.quiz { font-size: 15px; }
+.quiz .q { margin: 0 0 8px; font-weight: 500; }
+.quiz .opts { display: grid; gap: 6px; }
+.quiz button { text-align: left; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.quiz button.right { border-color: #2E7D5B; background: #E3F2EA; }
+.quiz button.wrong { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quiz button.right { background: #1E3A2C; } :root:not([data-theme="light"]) .quiz button.wrong { background: #432426; } }
+:root[data-theme="dark"] .quiz button.right { background: #1E3A2C; } :root[data-theme="dark"] .quiz button.wrong { background: #432426; }
+.quiz .why { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { color: #2E7D5B; border-color: #2E7D5B; }
+.bet { display: flex; flex-wrap: wrap; gap: 6px; }
+.bet button { font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.bet button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.bet button.right { border-color: #2E7D5B; background: #E3F2EA; color: var(--ink); }
+.bet button.wrong { border-color: var(--red); background: #F9E4E2; color: var(--ink); }
+canvas.hit { cursor: pointer; }
+canvas.grab { cursor: grab; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { font: inherit; font-size: 14px; padding: 5px 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.chips button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.search { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 18px; }
+.search .box { font-family: var(--mono); font-size: 17px; padding: 10px 14px; border: 2px solid var(--blue); border-radius: 8px; min-height: 46px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.search .box .ph { color: var(--muted); font-family: var(--sans); font-size: 14px; }
+.search .box .w { background: var(--blue-soft); padding: 2px 10px; border-radius: 12px; }
+.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-top: 12px; }
+.result { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); font-size: 13px; display: grid; gap: 4px; }
+.result.top { border-color: var(--blue); background: var(--blue-soft); }
+.result .rk { font-family: var(--mono); color: var(--muted); font-size: 12px; }
+.result .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.result .bar i { display: block; height: 100%; background: var(--blue); }
+.result canvas { width: 100%; height: auto; border-radius: 4px; display: block; }
+.meter { height: 14px; background: var(--line); border-radius: 7px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--red); }
+.cal { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+.cal .m { aspect-ratio: 1; border-radius: 4px; border: 1px solid var(--line); display: grid; grid-template-rows: 1fr 1fr; overflow: hidden; font-family: var(--mono); font-size: 10px; position: relative; }
+.cal .m span { display: block; }
+.cal .m .lab { position: absolute; left: 3px; top: 2px; color: var(--muted); }
+.cal .m.now { outline: 2px solid var(--orange); outline-offset: 1px; }
+.cal .m.retrain::after { content: "R"; position: absolute; right: 3px; top: 1px; color: var(--blue); font-weight: 600; font-size: 11px; }
+.legend2 { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.legend2 span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; background: var(--c); }
+.big { font-family: var(--mono); font-size: 24px; font-weight: 600; }
+</style>
+
 <header>
   <a class="weeks" href="../">All weeks</a>
-  <span class="course">CE 7453 &middot; Week 12 &middot; Vision, action, and the road ahead</span>
+  <span class="course">CE 7453 &middot; Week 12 &middot; Multimodal models, world models and deployment</span>
   <h1>Interactive demonstrations</h1>
 </header>
 
 <nav role="tablist" aria-label="Demos">
-  <button role="tab" data-tab="contrastive" aria-selected="true">Contrastive training<span class="slide">slides 5, 6</span></button>
-  <button role="tab" data-tab="retrieval" aria-selected="false">Retrieval and wording<span class="slide">slide 7</span></button>
-  <button role="tab" data-tab="triage" aria-selected="false">Triage at a review budget<span class="slide">slide 10</span></button>
-  <button role="tab" data-tab="worldmodel" aria-selected="false">Planning in a learned model<span class="slide">slides 17, 18</span></button>
-  <button role="tab" data-tab="drift" aria-selected="false">Drift monitoring<span class="slide">slide 20</span></button>
+  <button role="tab" data-tab="contrastive" aria-selected="true">Be the loss<span class="slide">slides 5, 6</span></button>
+  <button role="tab" data-tab="retrieval" aria-selected="false">Write the query<span class="slide">slide 7</span></button>
+  <button role="tab" data-tab="triage" aria-selected="false">The inspector's queue<span class="slide">slide 10</span></button>
+  <button role="tab" data-tab="worldmodel" aria-selected="false">Pilot it yourself<span class="slide">slides 17, 18</span></button>
+  <button role="tab" data-tab="drift" aria-selected="false">Decide when to retrain<span class="slide">slide 20</span></button>
 </nav>
 
 <main>
 
-<!-- ============ 1. CONTRASTIVE ============ -->
+<!-- ============ 1. CONTRASTIVE: be the loss ============ -->
 <section class="demo active" id="contrastive" role="tabpanel">
-  <h2>Contrastive alignment: two towers pulled into one space</h2>
-  <p class="lead">N photo and caption pairs, each tower producing a unit vector in the plane. Train on the symmetric cross entropy over the batch similarity matrix and watch matched pairs meet.</p>
-  <div class="grid">
+  <h2>Be the loss: arrange five photos and five captions on the circle</h2>
+  <p class="lead">A two-tower model puts photos and captions on the same unit circle. The contrastive loss wants each photo next to its own caption and away from the other four. You are the optimizer: drag the ten points, read the loss, and try to beat the number gradient descent reaches.</p>
+  <div class="stage">
     <div class="plot two">
-      <canvas id="ctSpace" width="900" height="460"></canvas>
-      <canvas id="ctMat" width="450" height="460"></canvas>
+      <canvas id="ctCircle" class="grab" width="760" height="560"></canvas>
+      <canvas id="ctMat" width="440" height="560"></canvas>
     </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="ctN">pairs in the batch N <output id="ctNOut">8</output></label>
-        <input type="range" id="ctN" min="3" max="16" step="1" value="8">
-        <div class="hint">changing N restarts from random towers</div>
+    <div class="side">
+      <div class="panel step" id="ctStep"></div>
+      <div class="panel">
+        <h3>temperature</h3>
+        <div class="bet"><button id="ctT1" aria-pressed="true">tau = 0.1</button><button id="ctT2" aria-pressed="false">tau = 0.5</button></div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="ctGrad">Let gradient descent take over</button><button id="ctShuffle">Scramble</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>your loss</dt><dd id="ctLoss">-</dd>
+          <dt>best possible with five pairs</dt><dd id="ctBest">-</dd>
+          <dt>photos that retrieve their own caption</dt><dd id="ctAcc">-</dd>
+          <dt>your best so far</dt><dd id="ctRecord">-</dd>
+        </dl>
       </div>
-      <div class="ctl">
-        <label for="ctTau">temperature <output id="ctTauOut">0.10</output></label>
-        <input type="range" id="ctTau" min="0.02" max="1" step="0.01" value="0.10">
-        <div class="hint">divides the similarities before the softmax</div>
-      </div>
-      <div class="btns">
-        <button class="primary" id="ctPlay">Train</button>
-        <button id="ctStep">20 steps</button>
-        <button id="ctReset">Restart</button>
-      </div>
-      <dl class="readout">
-        <dt>steps</dt><dd id="ctSteps">0</dd>
-        <dt>loss, both directions</dt><dd id="ctLoss">-</dd>
-        <dt>photo to caption, top-1 correct</dt><dd id="ctAcc">-</dd>
-        <dt>mean matched similarity</dt><dd id="ctDiag">-</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--blue)">photo embeddings (filled)</span>
-        <span style="--c: var(--red)">caption embeddings (hollow), same colour means same pair</span>
-      </div>
+      <div class="panel quiz" id="ctQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>On the right is the batch similarity matrix from slide 6, rows for photos and columns for captions, with the true pairs on the diagonal. Each row is scored as a classification over the N captions and each column as a classification over the N photos; the loss sums the cross entropy of both. Its gradient pulls each photo toward its caption and pushes it away from the other N - 1.</p>
-    <p>Lower the temperature and the softmax sharpens, so near misses are punished harder and training moves faster until it becomes unstable. Raise N and every photo has more negatives to separate from, which is why real training uses batches of tens of thousands. In two dimensions the towers run out of room past about twelve pairs, which is the toy's limit.</p>
+    <p>The loss is the symmetric InfoNCE of slide 6: for each photo a softmax over the five captions at temperature tau, and the same for each caption over the photos. Coinciding pairs are not enough; the pairs must also be spread apart, because every other caption in the batch is a negative. At tau = 0.1 the softmax is sharp and the loss rewards separation; at tau = 0.5 it is soft and plateaus early, which is why CLIP learns its temperature.</p>
   </div>
 </section>
 
-<!-- ============ 2. RETRIEVAL ============ -->
+<!-- ============ 2. RETRIEVAL: write the query ============ -->
 <section class="demo" id="retrieval" role="tabpanel">
-  <h2>Retrieval: type a phrase, rank the archive, and see what wording does</h2>
-  <p class="lead">Twelve site photos embedded in a trained space, four concepts of three. A query phrase is a text embedding near its concept. Reword it and the ranking shifts.</p>
-  <div class="grid">
-    <div class="plot two">
-      <canvas id="rtSpace" width="900" height="460"></canvas>
-      <canvas id="rtRecall" width="450" height="460"></canvas>
+  <h2>Write the query: find the right photos with the fewest words</h2>
+  <p class="lead">An archive of twelve site photos sits in a trained joint space. Compose a text query from the word chips; the query embedding is the normalized sum of the word vectors, and the archive is ranked by cosine similarity. Each round names a target; retrieve all three of its photos in the top three with as few words as you can.</p>
+  <div class="stage">
+    <div>
+      <div class="search">
+        <div class="box" id="rtBox"><span class="ph">click words to build the query</span></div>
+        <div class="results" id="rtResults"></div>
+      </div>
     </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="rtQ">query concept <output id="rtQOut">spalling concrete</output></label>
-        <input type="range" id="rtQ" min="0" max="3" step="1" value="0">
+    <div class="side">
+      <div class="panel step" id="rtStep"></div>
+      <div class="panel">
+        <h3>words</h3>
+        <div class="chips" id="rtChips"></div>
+        <div class="btns" style="margin-top:10px"><button id="rtClear">Clear</button><button id="rtNext" disabled>Next target</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>words in the query</dt><dd id="rtK">0</dd>
+          <dt>target photos in the top 3</dt><dd id="rtRec">-</dd>
+          <dt>rounds solved</dt><dd id="rtScore">0 / 0</dd>
+        </dl>
       </div>
-      <div class="ctl">
-        <label for="rtJ">rewording, degrees away from the trained phrase <output id="rtJOut">0</output></label>
-        <input type="range" id="rtJ" min="0" max="90" step="1" value="0">
-        <div class="hint">a synonym the model did not see lands somewhere nearby</div>
-      </div>
-      <div class="btns">
-        <button id="rtReset">Reset</button>
-      </div>
-      <dl class="readout">
-        <dt>top 3 (concept, photo)</dt><dd id="rtTop">-</dd>
-        <dt>recall at 3 for this query</dt><dd id="rtR3">-</dd>
-        <dt>mean recall at 3 over all queries</dt><dd id="rtMean">-</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--blue)">photos, coloured by concept</span>
-        <span style="--c: var(--red)">query phrase</span>
-        <span style="--c: var(--ink)">the three nearest photos</span>
-      </div>
+      <div class="panel quiz" id="rtQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>Retrieval and zero-shot recognition are the same dot product; here it ranks photos against one phrase. With no rewording the query sits where the training captions put it and the three nearest photos are the right concept. Rotate the query away and the ranking degrades long before the phrase means anything different to a person.</p>
-    <p>Slide 7 names this failure: near synonyms score differently, and the model has no idea what your organization means by a term of art. On the right, recall at 3 is plotted against rewording, averaged over the four concepts.</p>
+    <p>Each word has a direction in the shared space, close to the concept it names and, for words like "cracked" or "steel", between two concepts. The query is the mean direction of its words, which is how a text tower treats a phrase to first order. Generic words pull the query toward the middle and cost recall; a specific word is worth more than three vague ones, which is the wording effect on slide 7.</p>
   </div>
 </section>
 
-<!-- ============ 3. TRIAGE ============ -->
+<!-- ============ 3. TRIAGE: the inspector's queue ============ -->
 <section class="demo" id="triage" role="tabpanel">
-  <h2>Triage: recall at the review budget you actually used</h2>
-  <p class="lead">Two thousand photos from a site visit, one in ten worth an inspector's time. The model scores each one; a person reviews the top of the list. Set the budget and read the recall.</p>
-  <div class="grid">
-    <div class="plot two">
-      <canvas id="trCurve" width="900" height="460"></canvas>
-      <canvas id="trHist" width="450" height="460"></canvas>
-    </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="trB">review budget, share of photos <output id="trBOut">20 %</output></label>
-        <input type="range" id="trB" min="1" max="100" step="1" value="20">
+  <h2>The inspector's queue: review the top of the list and count what you caught</h2>
+  <p class="lead">Two hundred photos from a site visit, twenty of them real defects, sorted by the model's score with the most suspicious first. Pick how many the inspector will review, predict how many of the twenty defects that review will find, then flip the cards.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="trGrid" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="trStep"></div>
+      <div class="panel">
+        <h3>review budget</h3>
+        <div class="bet" id="trBudget"><button data-b="20">top 20 (10 %)</button><button data-b="40" aria-pressed="true">top 40 (20 %)</button><button data-b="60">top 60 (30 %)</button><button data-b="100">top 100 (50 %)</button></div>
+        <h3 style="margin-top:12px">your prediction: defects found</h3>
+        <div class="bet" id="trPred"><button data-p="0">under 10</button><button data-p="1">10 to 13</button><button data-p="2">14 to 17</button><button data-p="3">18 to 20</button></div>
+        <h3 style="margin-top:12px">the model</h3>
+        <div class="bet"><button id="trWeak" aria-pressed="false">weak</button><button id="trMid" aria-pressed="true">typical</button><button id="trStrong" aria-pressed="false">strong</button></div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="trFlip" disabled>Flip the reviewed cards</button><button id="trAll">Show every defect</button><button id="trNew">New site visit</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>reviewed</dt><dd id="trN">40</dd>
+          <dt>defects found</dt><dd id="trFound">-</dd>
+          <dt>recall at this budget</dt><dd id="trRecall">-</dd>
+          <dt>precision in the reviewed set</dt><dd id="trPrec">-</dd>
+        </dl>
       </div>
-      <div class="ctl">
-        <label for="trD">how well the model separates, d' <output id="trDOut">1.2</output></label>
-        <input type="range" id="trD" min="0" max="3.5" step="0.1" value="1.2">
-        <div class="hint">0 is a model that ranks at random</div>
-      </div>
-      <div class="btns">
-        <button id="trNew">New site visit</button>
-        <button id="trReset">Reset</button>
-      </div>
-      <dl class="readout">
-        <dt>photos reviewed</dt><dd id="trN">-</dd>
-        <dt>recall at this budget</dt><dd id="trRec">-</dd>
-        <dt>precision in the reviewed set</dt><dd id="trPrec">-</dd>
-        <dt>findings missed</dt><dd id="trMiss">-</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--ink)">recall against share reviewed</span>
-        <span class="dash" style="--c: var(--grey)">reviewing at random</span>
-        <span style="--c: var(--red)">this budget</span>
-      </div>
+      <div class="panel quiz" id="trQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>The model orders the queue and makes no finding. Scores for relevant photos are drawn from N(d', 1) and the rest from N(0, 1), so d' is the only thing the model contributes. At d' = 1.2 reviewing the top fifth surfaces about sixty percent of what matters, the figure on slide 10, and the right panel shows the two score distributions with the cut.</p>
-    <p>Two numbers belong in the report together, the recall and the budget it was measured at. Move the budget to 100 percent and recall is 1 at any d', which is why a recall needs its operating point before it counts as a result.</p>
+    <p>Scores are Gaussian, defects shifted up by d' = 0.7, 1.2 or 2.0 for the weak, typical and strong model. Recall at a budget is the fraction of the twenty defects that land above the cut; it is the number that matters when a person reviews a fixed share of the list, which is slide 10's argument against reporting accuracy for a triage system. Precision in the reviewed set falls as the budget grows while recall rises; the inspector's time sets the trade.</p>
   </div>
 </section>
 
-<!-- ============ 4. WORLD MODEL ============ -->
+<!-- ============ 4. WORLD MODEL: pilot it yourself ============ -->
 <section class="demo" id="worldmodel" role="tabpanel">
-  <h2>Planning in a learned model: imagine, act, observe, replan</h2>
-  <p class="lead">A real system with linear dynamics, a learned model of it that is slightly wrong, and a planner that chooses controls inside the model to reach a target. Set how wrong the model is, how far ahead it plans, and how often it replans.</p>
-  <div class="grid">
-    <div class="plot two">
-      <canvas id="wmPlane" width="900" height="460"></canvas>
-      <canvas id="wmDist" width="450" height="460"></canvas>
-    </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="wmErr">model error <output id="wmErrOut">0.10</output></label>
-        <input type="range" id="wmErr" min="0" max="0.3" step="0.01" value="0.10">
-        <div class="hint">size of the mismatch between learned and true dynamics</div>
+  <h2>Pilot it yourself, with only the learned model to guide you</h2>
+  <p class="lead">A system drifts in the plane under dynamics you cannot see. You have a learned model of it that is slightly wrong. Each turn, click where you want to push; the grey ghost shows where the model says you will land, then the real system moves. Reach the target in twenty steps, then let the planner try.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="wmPlane" class="hit" width="1200" height="600"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="wmStep"></div>
+      <div class="panel">
+        <h3>model error</h3>
+        <div class="bet" id="wmErrB"><button data-e="0.05">small</button><button data-e="0.2" aria-pressed="true">moderate</button><button data-e="0.5">large</button></div>
+        <div class="btns" style="margin-top:10px"><button id="wmRestart">Restart my run</button><button class="primary" id="wmPlanK1">Planner, replans every step</button><button id="wmPlanOnce">Planner, plans once</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>step</dt><dd id="wmT">0 / 20</dd>
+          <dt>distance to target</dt><dd id="wmD">-</dd>
+          <dt>ghost against reality, last step</dt><dd id="wmGap">-</dd>
+          <dt>final distances: you / replan / plan once</dt><dd id="wmBoard">- / - / -</dd>
+        </dl>
       </div>
-      <div class="ctl">
-        <label for="wmH">planning horizon H, steps <output id="wmHOut">12</output></label>
-        <input type="range" id="wmH" min="2" max="30" step="1" value="12">
-      </div>
-      <div class="ctl">
-        <label for="wmK">replan every k steps <output id="wmKOut">1</output></label>
-        <input type="range" id="wmK" min="1" max="30" step="1" value="1">
-        <div class="hint">k equal to H is open loop: plan once, execute all of it</div>
-      </div>
-      <div class="btns">
-        <button id="wmNew">New model fit</button>
-        <button id="wmReset">Reset</button>
-      </div>
-      <dl class="readout">
-        <dt>distance to target after 40 steps</dt><dd id="wmFinal">-</dd>
-        <dt>imagined vs real gap at horizon H</dt><dd id="wmGap">-</dd>
-        <dt>replans used</dt><dd id="wmN">-</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--blue)">what happened in the real system</span>
-        <span class="dash" style="--c: var(--grey)">what the first plan imagined</span>
-        <span style="--c: var(--red)">target</span>
-      </div>
+      <div class="panel quiz" id="wmQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>Here the learned model is the state space form from slide 17 with the transition fitted from data, a true matrix plus a fixed random error of the chosen size. Inside that model the planner solves a least-squares problem for H steps of control, executes k of them on the real system, observes, and replans. With k equal to H it trusts its imagination to the end and the error compounds, as slide 18 says.</p>
-    <p>Set the model error to 0.2 and compare k = 1 with k = H. Replanning every step reaches the target with the same wrong model, because each observation resets the drift. That is why filters run recursively, and why a long horizon buys less than it promises.</p>
+    <p>The real system is x(t+1) = A x(t) + B u(t) with a slow damped rotation; the learned model has a perturbed A. Your click sets u toward the point you chose. The planner solves a least-squares problem inside the model for a horizon of twelve steps, as on slide 17; replanning after every real observation is what closes the loop, slide 18. With a large model error the plan-once trajectory ends far from the target while the replanning one still arrives, because each observation corrects the model's drift before it compounds.</p>
   </div>
 </section>
 
-<!-- ============ 5. DRIFT ============ -->
+<!-- ============ 5. DRIFT: decide when to retrain ============ -->
 <section class="demo" id="drift" role="tabpanel">
-  <h2>Deployment: the inputs move first</h2>
-  <p class="lead">Three years of monthly monitoring for a deployed model. The site changes at some month and the inputs start to drift. Watch which chart leaves its band first.</p>
-  <div class="grid">
-    <div class="plot two">
-      <canvas id="drIn" width="900" height="460"></canvas>
-      <canvas id="drErr" width="450" height="460"></canvas>
+  <h2>Decide when to retrain: three years on call, one button</h2>
+  <p class="lead">A deployed model, monitored month by month. The top half of each tile is the input drift index, available at once. The bottom half is the held-out error, which needs labels and arrives three months late. The site starts changing at a month you do not know. Retraining costs 3; every month the true error is out of band costs 2. Press Retrain when you judge it right.</p>
+  <div class="stage">
+    <div class="panel">
+      <div class="cal" id="drCal"></div>
+      <div class="legend2"><span style="--c:#D6E3F2">inputs steady</span><span style="--c:#C9731F">inputs drifting (index above 0.5)</span><span style="--c:#E3F2EA">error in band</span><span style="--c:#B3261E">error out of band</span><span style="--c:#D9DDE3">labels not in yet</span></div>
+      <div style="margin-top:14px;font-size:14px">running cost <span class="big" id="drCost">0</span> <span class="badge" id="drMonth">month 0</span></div>
+      <div class="meter" style="margin-top:6px"><i id="drMeter" style="width:0%"></i></div>
     </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="drM0">month the site starts to change <output id="drM0Out">12</output></label>
-        <input type="range" id="drM0" min="3" max="30" step="1" value="12">
+    <div class="side">
+      <div class="panel step" id="drStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="drStart">Start the clock</button><button id="drRetrain" disabled>Retrain now (cost 3)</button><button id="drNew">New deployment</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>speed</dt><dd><button id="drSlow" class="badge" style="cursor:pointer">slow</button> <button id="drFast" class="badge done" style="cursor:pointer">fast</button></dd>
+          <dt>retrainings so far</dt><dd id="drR">0</dd>
+          <dt>months out of band so far</dt><dd id="drOut">0</dd>
+        </dl>
+        <div class="ask" id="drVerdict" hidden></div>
       </div>
-      <div class="ctl">
-        <label for="drRate">how fast the inputs drift <output id="drRateOut">0.10</output></label>
-        <input type="range" id="drRate" min="0.02" max="0.3" step="0.01" value="0.10">
-        <div class="hint">standard deviations of shift per month</div>
-      </div>
-      <div class="btns">
-        <button id="drNew">New noise</button>
-        <button id="drReset">Reset</button>
-      </div>
-      <dl class="readout">
-        <dt>drift index leaves baseline at month</dt><dd id="drA">-</dd>
-        <dt>error leaves the acceptance band at month</dt><dd id="drB">-</dd>
-        <dt>warning the input chart gave</dt><dd id="drLead">-</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--blue)">drift index on the inputs</span>
-        <span style="--c: var(--ink)">held-out error, rerun monthly</span>
-        <span class="dash" style="--c: var(--red)">alarm thresholds, set before deployment</span>
-      </div>
+      <div class="panel quiz" id="drQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>A drift index is the standardized shift of the input distribution from its deployment baseline, computable from the inputs alone every month. Error is the held-out evaluation rerun on a schedule. It responds to drift quadratically here, as a model does when its inputs move away from the training data, so it stays inside the acceptance band for months after the inputs have left theirs.</p>
-    <p>Both thresholds were written into the validation report before deployment, and the readout is the lead time one chart gives over the other. Logging inputs earns that lead time, which is the whole of slide 20 in one number.</p>
+    <p>After the change point the input shift grows linearly until the site change is complete; the drift index is its standardized size relative to the data the current model was trained on, and the error grows with the square of that shift. Retraining refits the model to the current inputs, so both restart from zero, and any change still under way shows up again afterwards. The two automatic policies compared at the end are the ones slide 20 contrasts: act on the input monitor, which sees the change at once, or act on the error monitor, which cannot see anything until the labels arrive.</p>
   </div>
 </section>
 
@@ -338,296 +335,252 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 /* ---------- utilities ---------- */
 function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-function gaussPair(rng) { const u = 1 - rng(), v = rng(); const r = Math.sqrt(-2 * Math.log(u)); return [r * Math.cos(2 * Math.PI * v), r * Math.sin(2 * Math.PI * v)]; }
-function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const g = gaussPair(rng); out[i] = g[0]; if (i + 1 < n) out[i + 1] = g[1]; } return out; }
-function linspace(a, b, n) { const out = new Float64Array(n); for (let i = 0; i < n; i++) out[i] = a + (b - a) * i / (n - 1); return out; }
+function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const u = 1 - rng(), v = rng(), r = Math.sqrt(-2 * Math.log(u)); out[i] = r * Math.cos(2 * Math.PI * v); if (i + 1 < n) out[i + 1] = r * Math.sin(2 * Math.PI * v); } return out; }
 function hexToRgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
 function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
-const PAL = ["#1F5C99", "#C9731F", "#2E7D5B", "#8E44AD", "#B3261E", "#0E8A8A", "#7A5C2E", "#4A5568", "#D4A017", "#5B7DB1", "#A0522D", "#2F4F4F", "#C71585", "#6B8E23", "#708090", "#8B0000"];
-
-/* ---------- plotting on canvas (same helper as earlier weeks) ---------- */
-function Plot(canvas, opts) {
-  this.c = canvas; this.ctx = canvas.getContext("2d"); this.o = opts || {};
-  const dpr = window.devicePixelRatio || 1;
-  this.W = canvas.width; this.H = canvas.height;
-  canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr);
-  this.m = { l: 58, r: 14, t: 28, b: 44 };
+const PAL = ["#1F5C99", "#C9731F", "#2E7D5B", "#8E44AD", "#B3261E", "#0E8A8A"];
+function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
+Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
+Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+Board.prototype.label = function (s, x, y, color, align, size, mono) { const ctx = this.ctx; ctx.fillStyle = color || css("--muted"); ctx.font = (size || 13) + "px " + css(mono ? "--mono" : "--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(s, x, y); };
+function quiz(el, spec) {
+  el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
+  const opts = el.querySelector(".opts"), why = el.querySelector(".why");
+  spec.options.forEach((o, i) => { const b = document.createElement("button"); b.textContent = o; b.addEventListener("click", () => { Array.from(opts.children).forEach(c => c.classList.remove("right", "wrong")); b.classList.add(i === spec.answer ? "right" : "wrong"); if (i !== spec.answer) opts.children[spec.answer].classList.add("right"); why.textContent = (i === spec.answer ? "Right. " : "No. ") + spec.why; }); opts.appendChild(b); });
 }
-Plot.prototype.fmt = function (v, d) { return (Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0)) ? v.toExponential(1) : v.toFixed(d); };
-Plot.prototype.begin = function (xlim, ylim) {
-  const ctx = this.ctx, o = this.o; this.xl = xlim; this.yl = ylim;
-  ctx.clearRect(0, 0, this.W, this.H);
-  ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H);
-  const ink = css("--ink"), muted = css("--muted"), line = css("--line");
-  ctx.font = "13px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "top";
-  const nx = o.nx || 5, ny = o.ny || 5;
-  ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.fillStyle = muted;
-  if (!o.noaxes) {
-    for (let i = 0; i <= nx; i++) {
-      const v = xlim[0] + (xlim[1] - xlim[0]) * i / nx, px = this.x(v);
-      ctx.beginPath(); ctx.moveTo(px, this.m.t); ctx.lineTo(px, this.H - this.m.b); ctx.stroke();
-      ctx.fillText(o.xfmt ? o.xfmt(v) : this.fmt(v, 2), px, this.H - this.m.b + 6);
-    }
-    ctx.textAlign = "right"; ctx.textBaseline = "middle";
-    for (let i = 0; i <= ny; i++) {
-      const v = ylim[0] + (ylim[1] - ylim[0]) * i / ny, py = this.y(v);
-      ctx.beginPath(); ctx.moveTo(this.m.l, py); ctx.lineTo(this.W - this.m.r, py); ctx.stroke();
-      ctx.fillText(o.yfmt ? o.yfmt(v) : this.fmt(v, 1), this.m.l - 8, py);
-    }
-  }
-  ctx.font = "13px " + css("--sans"); ctx.fillStyle = ink;
-  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  if (o.xlabel) ctx.fillText(o.xlabel, (this.m.l + this.W - this.m.r) / 2, this.H - 8);
-  if (o.ylabel) { ctx.save(); ctx.translate(14, (this.m.t + this.H - this.m.b) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(o.ylabel, 0, 0); ctx.restore(); }
-  if (o.title) { ctx.textAlign = "left"; ctx.font = "500 14px " + css("--sans"); ctx.fillText(o.title, this.m.l, 18); }
-  ctx.save(); ctx.beginPath(); ctx.rect(this.m.l, this.m.t, this.W - this.m.l - this.m.r, this.H - this.m.t - this.m.b); ctx.clip();
-};
-Plot.prototype.end = function () { this.ctx.restore(); };
-Plot.prototype.x = function (v) { return this.m.l + (v - this.xl[0]) / (this.xl[1] - this.xl[0]) * (this.W - this.m.l - this.m.r); };
-Plot.prototype.y = function (v) { return this.H - this.m.b - (v - this.yl[0]) / (this.yl[1] - this.yl[0]) * (this.H - this.m.t - this.m.b); };
-Plot.prototype.line = function (xs, ys, color, width, dash) {
-  const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 2; ctx.setLineDash(dash || []);
-  ctx.beginPath(); for (let i = 0; i < xs.length; i++) { const px = this.x(xs[i]), py = this.y(ys[i]); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
-  ctx.stroke(); ctx.setLineDash([]);
-};
-Plot.prototype.dots = function (xs, ys, color, r, hollow) {
-  const ctx = this.ctx;
-  for (let i = 0; i < xs.length; i++) { ctx.beginPath(); ctx.arc(this.x(xs[i]), this.y(ys[i]), r || 5, 0, 2 * Math.PI); if (hollow) { ctx.lineWidth = 2.5; ctx.strokeStyle = color; ctx.fillStyle = css("--panel"); ctx.fill(); ctx.stroke(); } else { ctx.fillStyle = color; ctx.fill(); } }
-};
-Plot.prototype.bars = function (xs, ys, color, w) {
-  const ctx = this.ctx; ctx.fillStyle = color;
-  for (let i = 0; i < xs.length; i++) { const x0 = this.x(xs[i] - w / 2), x1 = this.x(xs[i] + w / 2); ctx.fillRect(x0, this.y(ys[i]), Math.max(1, x1 - x0 - 1), this.y(0) - this.y(ys[i])); }
-};
-Plot.prototype.vline = function (v, color) { const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(this.x(v), this.m.t); ctx.lineTo(this.x(v), this.H - this.m.b); ctx.stroke(); ctx.setLineDash([]); };
-Plot.prototype.text = function (s, vx, vy, color, align, font) { const ctx = this.ctx; ctx.fillStyle = color; ctx.font = font || ("13px " + css("--sans")); ctx.textAlign = align || "left"; ctx.textBaseline = "middle"; ctx.fillText(s, this.x(vx), this.y(vy)); };
+/* small photo glyphs for the site archive: a 40 x 30 sketch per concept */
+function glyph(ctx, kind, x, y, w, h, tone) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = tone || "#DDE3EA"; ctx.fillRect(0, 0, w, h);
+  ctx.lineWidth = Math.max(1.5, w / 20);
+  if (kind === 0) { ctx.fillStyle = "#9AA1AB"; ctx.fillRect(0, 0, w, h); ctx.fillStyle = "#6B7280"; ctx.beginPath(); ctx.moveTo(w * 0.3, h * 0.35); ctx.lineTo(w * 0.7, h * 0.3); ctx.lineTo(w * 0.75, h * 0.7); ctx.lineTo(w * 0.35, h * 0.75); ctx.closePath(); ctx.fill(); }
+  else if (kind === 1) { ctx.fillStyle = "#9AA1AB"; ctx.fillRect(0, 0, w, h); ctx.strokeStyle = "#A0522D"; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(w * 0.1, h * (0.3 + 0.2 * i)); ctx.lineTo(w * 0.9, h * (0.3 + 0.2 * i)); ctx.stroke(); } }
+  else if (kind === 2) { ctx.fillStyle = "#4A4F57"; ctx.fillRect(0, 0, w, h); ctx.strokeStyle = "#1C2027"; ctx.beginPath(); ctx.moveTo(w * 0.15, h * 0.2); ctx.lineTo(w * 0.4, h * 0.5); ctx.lineTo(w * 0.35, h * 0.7); ctx.lineTo(w * 0.8, h * 0.9); ctx.stroke(); }
+  else { ctx.fillStyle = "#6E8B6E"; ctx.fillRect(0, 0, w, h); ctx.fillStyle = "#2E343D"; ctx.beginPath(); ctx.arc(w * 0.5, h * 0.55, h * 0.3, 0, 2 * Math.PI); ctx.fill(); ctx.fillStyle = "#7A5C2E"; ctx.fillRect(w * 0.3, h * 0.6, w * 0.4, h * 0.15); }
+  ctx.restore();
+}
 
-/* ================= 1. CONTRASTIVE ================= */
+/* ================= 1. BE THE LOSS ================= */
 (function contrastive() {
-  const pS = new Plot(document.getElementById("ctSpace"), { title: "the shared space (unit circle)", noaxes: true });
-  const pM = new Plot(document.getElementById("ctMat"), { title: "similarity matrix, photos by captions", noaxes: true });
-  const sN = document.getElementById("ctN"), sT = document.getElementById("ctTau");
-  let N, img, txt, steps, seed = 1, playing = false, raf = null, lossHist = [];
-  function reset() { N = +sN.value; const rng = mulberry32(seed); img = []; txt = []; for (let i = 0; i < N; i++) { img.push([rng() * 2 - 1, rng() * 2 - 1]); txt.push([rng() * 2 - 1, rng() * 2 - 1]); } steps = 0; lossHist = []; }
-  function unit(v) { const n = Math.hypot(v[0], v[1]) || 1e-9; return [v[0] / n, v[1] / n]; }
-  function sims(I, T) { const S = []; for (let i = 0; i < N; i++) { const ui = unit(I[i]); S.push([]); for (let j = 0; j < N; j++) { const uj = unit(T[j]); S[i].push(ui[0] * uj[0] + ui[1] * uj[1]); } } return S; }
-  function loss(I, T, tau) {
-    const S = sims(I, T); let L = 0;
-    for (let i = 0; i < N; i++) { let z = 0; for (let j = 0; j < N; j++) z += Math.exp(S[i][j] / tau); L += -S[i][i] / tau + Math.log(z); }
-    for (let j = 0; j < N; j++) { let z = 0; for (let i = 0; i < N; i++) z += Math.exp(S[i][j] / tau); L += -S[j][j] / tau + Math.log(z); }
-    return L / (2 * N);
-  }
-  function step(tau) {
-    // numerical gradient on the raw 2-D vectors, then a normalized gradient step
-    const eps = 1e-4, lr = 0.08, base = loss(img, txt, tau), gI = [], gT = [];
-    for (let i = 0; i < N; i++) { gI.push([0, 0]); gT.push([0, 0]); for (let d = 0; d < 2; d++) { img[i][d] += eps; gI[i][d] = (loss(img, txt, tau) - base) / eps; img[i][d] -= eps; txt[i][d] += eps; gT[i][d] = (loss(img, txt, tau) - base) / eps; txt[i][d] -= eps; } }
-    let gn = 0; for (let i = 0; i < N; i++) gn += gI[i][0] ** 2 + gI[i][1] ** 2 + gT[i][0] ** 2 + gT[i][1] ** 2; gn = Math.sqrt(gn) + 1e-9;
-    for (let i = 0; i < N; i++) for (let d = 0; d < 2; d++) { img[i][d] -= lr * gI[i][d] / gn * Math.sqrt(N); txt[i][d] -= lr * gT[i][d] / gn * Math.sqrt(N); img[i] = unit(img[i]); txt[i] = unit(txt[i]); }
-    steps++; lossHist.push(base);
-  }
+  const N = 5, names = ["spalling", "rebar", "crack", "culvert", "pothole"];
+  const circle = new Board(document.getElementById("ctCircle")), mat = new Board(document.getElementById("ctMat"));
+  const cx = circle.W / 2, cy = circle.H / 2 + 10, R = 210;
+  let ang = { p: [], c: [] }, tau = 0.1, drag = null, record = null, anim = null, seed = 3;
+  function scramble() { const rng = mulberry32(seed); ang.p = []; ang.c = []; for (let i = 0; i < N; i++) { ang.p.push(rng() * 2 * Math.PI); ang.c.push(rng() * 2 * Math.PI); } }
+  function sims(a) { const S = []; for (let i = 0; i < N; i++) { S.push([]); for (let j = 0; j < N; j++) S[i].push(Math.cos(a.p[i] - a.c[j])); } return S; }
+  function loss(a, t) { const S = sims(a); let L = 0; for (let i = 0; i < N; i++) { let z = 0; for (let j = 0; j < N; j++) z += Math.exp(S[i][j] / t); L += -S[i][i] / t + Math.log(z); } for (let j = 0; j < N; j++) { let z = 0; for (let i = 0; i < N; i++) z += Math.exp(S[i][j] / t); L += -S[j][j] / t + Math.log(z); } return L / (2 * N); }
+  function best(t) { const a = { p: [], c: [] }; for (let i = 0; i < N; i++) { a.p.push(2 * Math.PI * i / N); a.c.push(2 * Math.PI * i / N); } return loss(a, t); }
+  function acc(a) { const S = sims(a); let k = 0; for (let i = 0; i < N; i++) { let b = 0; for (let j = 1; j < N; j++) if (S[i][j] > S[i][b]) b = j; if (b === i) k++; } return k; }
+  const stepEl = document.getElementById("ctStep");
   function draw() {
-    const tau = +sT.value; document.getElementById("ctNOut").textContent = N; document.getElementById("ctTauOut").textContent = tau.toFixed(2);
-    const S = sims(img, txt), L = loss(img, txt, tau);
-    let acc = 0, diag = 0; for (let i = 0; i < N; i++) { let best = 0; for (let j = 1; j < N; j++) if (S[i][j] > S[i][best]) best = j; if (best === i) acc++; diag += S[i][i]; }
-    document.getElementById("ctSteps").textContent = steps;
-    document.getElementById("ctLoss").textContent = L.toFixed(3);
-    document.getElementById("ctAcc").textContent = acc + " / " + N;
-    document.getElementById("ctDiag").textContent = (diag / N).toFixed(3);
-    pS.begin([-1.3, 1.3], [-1.3, 1.3]);
-    const ctx = pS.ctx; ctx.strokeStyle = css("--line"); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(pS.x(0), pS.y(0), pS.x(1) - pS.x(0), 0, 2 * Math.PI); ctx.stroke();
-    for (let i = 0; i < N; i++) { const a = unit(img[i]), b = unit(txt[i]); pS.line([a[0], b[0]], [a[1], b[1]], mix(css("--panel"), PAL[i % PAL.length], 0.35), 1.5); }
-    for (let i = 0; i < N; i++) { const a = unit(img[i]), b = unit(txt[i]); pS.dots([a[0]], [a[1]], PAL[i % PAL.length], 8); pS.dots([b[0]], [b[1]], PAL[i % PAL.length], 8, true); }
-    pS.text("step " + steps, -1.25, 1.2, css("--muted"), "left");
-    pS.end();
-    pM.begin([0, N], [0, N]);
-    const c2 = pM.ctx, cw = (pM.x(1) - pM.x(0)), ch = (pM.y(0) - pM.y(1));
-    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { const v = (S[i][j] + 1) / 2; c2.fillStyle = mix(css("--panel"), css("--blue"), v); c2.fillRect(pM.x(j), pM.y(N - i), cw, ch); if (i === j) { c2.strokeStyle = css("--red"); c2.lineWidth = 2; c2.strokeRect(pM.x(j) + 1, pM.y(N - i) + 1, cw - 2, ch - 2); } }
-    pM.end();
+    const L = loss(ang, tau), B = best(tau), A = acc(ang);
+    if (record === null || L < record) record = L;
+    document.getElementById("ctLoss").textContent = L.toFixed(3); document.getElementById("ctBest").textContent = B.toFixed(3); document.getElementById("ctAcc").textContent = A + " / " + N; document.getElementById("ctRecord").textContent = record.toFixed(3);
+    circle.clear("the shared space: round markers are photos, square markers are captions (drag any of them)"); const ctx = circle.ctx;
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI); ctx.stroke();
+    for (let i = 0; i < N; i++) { ctx.strokeStyle = mix(css("--panel"), PAL[i], 0.45); ctx.lineWidth = 2; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(cx + R * Math.cos(ang.p[i]), cy + R * Math.sin(ang.p[i])); ctx.lineTo(cx + R * Math.cos(ang.c[i]), cy + R * Math.sin(ang.c[i])); ctx.stroke(); ctx.setLineDash([]); }
+    for (let i = 0; i < N; i++) {
+      const px = cx + R * Math.cos(ang.p[i]), py = cy + R * Math.sin(ang.p[i]); ctx.fillStyle = PAL[i]; ctx.beginPath(); ctx.arc(px, py, 13, 0, 2 * Math.PI); ctx.fill(); ctx.fillStyle = "#fff"; ctx.font = "600 11px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("P" + (i + 1), px, py);
+      const qx = cx + R * Math.cos(ang.c[i]), qy = cy + R * Math.sin(ang.c[i]); ctx.fillStyle = css("--panel"); ctx.strokeStyle = PAL[i]; ctx.lineWidth = 3; ctx.fillRect(qx - 12, qy - 12, 24, 24); ctx.strokeRect(qx - 12, qy - 12, 24, 24); ctx.fillStyle = PAL[i]; ctx.fillText("C" + (i + 1), qx, qy);
+    }
+    for (let i = 0; i < N; i++) circle.label("P" + (i + 1) + "/C" + (i + 1) + ": " + names[i], 20, 50 + 18 * i, PAL[i], "left", 12, true);
+    mat.clear("similarity matrix, photos down, captions across"); const m = mat.ctx, S = sims(ang), s = 60, ox = 80, oy = 70;
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { const v = S[i][j]; m.fillStyle = v >= 0 ? mix(css("--panel"), css("--blue"), v) : mix(css("--panel"), css("--red"), -v); m.fillRect(ox + j * s, oy + i * s, s, s); m.strokeStyle = i === j ? css("--ink") : css("--line"); m.lineWidth = i === j ? 2.5 : 1; m.strokeRect(ox + j * s + (i === j ? 1 : 0), oy + i * s + (i === j ? 1 : 0), s - (i === j ? 2 : 0), s - (i === j ? 2 : 0)); m.fillStyle = Math.abs(v) > 0.6 ? "#fff" : css("--ink"); m.font = "12px " + css("--mono"); m.textAlign = "center"; m.textBaseline = "middle"; m.fillText(v.toFixed(2), ox + j * s + s / 2, oy + i * s + s / 2); }
+    for (let i = 0; i < N; i++) { mat.label("P" + (i + 1), ox - 10, oy + i * s + s / 2 + 4, PAL[i], "right", 12, true); mat.label("C" + (i + 1), ox + i * s + s / 2, oy - 8, PAL[i], "center", 12, true); }
+    mat.label("the loss wants the outlined diagonal high and everything else low", 16, oy + N * s + 30, css("--muted"), "left", 12);
+    mat.label("blue positive, red negative cosine", 16, oy + N * s + 50, css("--muted"), "left", 12);
+    const ratio = (L - B);
+    stepEl.innerHTML = '<span class="k">' + (ratio < 0.05 ? 'at the optimum' : (A === N ? 'all retrieved, not yet optimal' : 'keep going')) + '</span>' + (A < N ? '<p>' + (N - A) + ' of the photos still pick the wrong caption. Bring each P next to its own C first.</p>' : (ratio < 0.05 ? '<div class="ask ok">Your loss ' + L.toFixed(3) + ' is within 0.05 of the best possible, ' + B.toFixed(3) + '. The ten points sit as five coincident pairs spread evenly around the circle.</div>' : '<div class="ask">Every photo retrieves its caption, but the loss is ' + L.toFixed(3) + ' against a possible ' + B.toFixed(3) + '. Matched pairs that sit close to <i>other</i> pairs are still penalized: spread the five pairs apart.</div>')) + '<p>Switch the temperature and watch the same layout score differently. At tau = 0.5 the gap between a good and a perfect layout almost vanishes.</p>';
   }
-  function loop() { if (!playing) return; const tau = +sT.value; for (let i = 0; i < 3; i++) step(tau); draw(); if (steps >= 400) { playing = false; document.getElementById("ctPlay").textContent = "Train"; return; } raf = requestAnimationFrame(loop); }
-  sN.addEventListener("input", () => { reset(); draw(); });
-  sT.addEventListener("input", draw);
-  document.getElementById("ctPlay").addEventListener("click", function () { playing = !playing; this.textContent = playing ? "Pause" : "Train"; if (playing) { if (steps >= 400) { reset(); } raf = requestAnimationFrame(loop); } else if (raf) cancelAnimationFrame(raf); });
-  document.getElementById("ctStep").addEventListener("click", () => { const tau = +sT.value; for (let i = 0; i < 20; i++) step(tau); draw(); });
-  document.getElementById("ctReset").addEventListener("click", () => { playing = false; document.getElementById("ctPlay").textContent = "Train"; seed += 1; reset(); draw(); });
+  function nearest(mx, my) { let best = null, bd = 1e9; for (let i = 0; i < N; i++) { for (const k of ["p", "c"]) { const x = cx + R * Math.cos(ang[k][i]), y = cy + R * Math.sin(ang[k][i]), d = Math.hypot(mx - x, my - y); if (d < bd) { bd = d; best = { k, i }; } } } return bd < 22 ? best : null; }
+  circle.c.addEventListener("mousedown", ev => { const [mx, my] = circle.pos(ev); drag = nearest(mx, my); if (anim) { cancelAnimationFrame(anim); anim = null; } });
+  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = circle.pos(ev); ang[drag.k][drag.i] = Math.atan2(my - cy, mx - cx); draw(); });
+  window.addEventListener("mouseup", () => { drag = null; });
+  function gradStep() { const eps = 1e-4, lr = 0.15, base = loss(ang, tau), g = { p: [], c: [] }; for (const k of ["p", "c"]) for (let i = 0; i < N; i++) { ang[k][i] += eps; g[k].push((loss(ang, tau) - base) / eps); ang[k][i] -= eps; } let gn = 0; for (const k of ["p", "c"]) for (let i = 0; i < N; i++) gn += g[k][i] ** 2; gn = Math.sqrt(gn) + 1e-9; const scale = Math.min(1, 0.5 / gn); for (const k of ["p", "c"]) for (let i = 0; i < N; i++) ang[k][i] -= lr * g[k][i] * scale * 4; return gn; }
+  document.getElementById("ctGrad").addEventListener("click", () => { if (anim) cancelAnimationFrame(anim); let n = 0; (function f() { const gn = gradStep(); draw(); n++; if (n < 400 && gn > 1e-3) anim = requestAnimationFrame(f); })(); });
+  document.getElementById("ctShuffle").addEventListener("click", () => { seed += 1; scramble(); record = null; draw(); });
+  document.getElementById("ctT1").addEventListener("click", () => { tau = 0.1; record = null; document.getElementById("ctT1").setAttribute("aria-pressed", "true"); document.getElementById("ctT2").setAttribute("aria-pressed", "false"); draw(); });
+  document.getElementById("ctT2").addEventListener("click", () => { tau = 0.5; record = null; document.getElementById("ctT1").setAttribute("aria-pressed", "false"); document.getElementById("ctT2").setAttribute("aria-pressed", "true"); draw(); });
+  quiz(document.getElementById("ctQuiz"), { q: "A batch of 5 pairs gives each photo 4 negatives; a batch of 32 000 gives it 31 999. Why do contrastive models train with huge batches?", options: ["Larger batches make each gradient step cheaper", "More negatives make the task harder and the learned space finer, since near misses must be separated too", "Small batches cannot fit the loss in memory"], answer: 1, why: "With five pairs the model only has to tell five concepts apart. With tens of thousands it must separate photos that differ in small ways, so the embedding has to carry fine detail. The cost is memory, which is why CLIP needed hundreds of GPUs." });
   window.addEventListener("themechange", draw);
-  reset(); draw();
+  scramble(); draw();
 })();
 
-/* ================= 2. RETRIEVAL ================= */
+/* ================= 2. WRITE THE QUERY ================= */
 (function retrieval() {
-  const concepts = ["spalling concrete", "corroded rebar", "cracked asphalt", "clogged culvert"];
-  const centers = [0.3, 1.9, 3.4, 5.0]; // angles on the circle
-  const rng = mulberry32(21);
-  const photos = []; for (let c = 0; c < 4; c++) for (let k = 0; k < 3; k++) { const a = centers[c] + (rng() - 0.5) * 0.7; photos.push({ c: c, a: a, x: Math.cos(a), y: Math.sin(a) }); }
-  const pS = new Plot(document.getElementById("rtSpace"), { title: "photos and the query in the shared space", noaxes: true });
-  const pR = new Plot(document.getElementById("rtRecall"), { xlabel: "rewording, degrees", ylabel: "recall at 3", title: "how wording costs recall", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1), nx: 3 });
-  const sQ = document.getElementById("rtQ"), sJ = document.getElementById("rtJ");
-  function rank(c, deg) { const a = centers[c] + deg * Math.PI / 180; const q = [Math.cos(a), Math.sin(a)]; const scored = photos.map((p, i) => ({ i, s: p.x * q[0] + p.y * q[1] })).sort((u, v) => v.s - u.s); return { q, scored }; }
-  function recall3(c, deg) { const r = rank(c, deg); return r.scored.slice(0, 3).filter(o => photos[o.i].c === c).length / 3; }
-  function draw() {
-    const c = +sQ.value, deg = +sJ.value; document.getElementById("rtQOut").textContent = concepts[c]; document.getElementById("rtJOut").textContent = deg;
-    const r = rank(c, deg), top = r.scored.slice(0, 3);
-    document.getElementById("rtTop").textContent = top.map(o => concepts[photos[o.i].c].slice(0, 4) + (o.i % 3 + 1)).join(", ");
-    document.getElementById("rtR3").textContent = recall3(c, deg).toFixed(2);
-    let m = 0; for (let k = 0; k < 4; k++) m += recall3(k, deg); document.getElementById("rtMean").textContent = (m / 4).toFixed(2);
-    pS.begin([-1.75, 1.75], [-1.45, 1.45]);
-    const ctx = pS.ctx; ctx.strokeStyle = css("--line"); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(pS.x(0), pS.y(0), pS.x(1) - pS.x(0), pS.y(0) - pS.y(1), 0, 0, 2 * Math.PI); ctx.stroke();
-    photos.forEach((p, i) => { pS.dots([p.x], [p.y], PAL[p.c], 8); });
-    top.forEach(o => { const p = photos[o.i]; pS.dots([p.x], [p.y], css("--ink"), 12, true); });
-    pS.line([0, r.q[0]], [0, r.q[1]], css("--red"), 2);
-    pS.dots([r.q[0]], [r.q[1]], css("--red"), 7);
-    concepts.forEach((nm, k) => { const a = centers[k]; pS.text(nm, 1.12 * Math.cos(a), 1.12 * Math.sin(a), PAL[k], Math.cos(a) < 0 ? "right" : "left"); });
-    pS.end();
-    const degs = linspace(0, 90, 91), rc = degs.map(d => { let s = 0; for (let k = 0; k < 4; k++) s += recall3(k, d); return s / 4; });
-    pR.begin([0, 90], [0, 1.05]);
-    pR.line(degs, rc, css("--ink"), 2);
-    pR.dots([deg], [m / 4], css("--red"), 6);
-    pR.end();
+  const concepts = ["spalling concrete", "corroded rebar", "cracked asphalt", "clogged culvert"], centers = [0.3, 1.9, 3.4, 5.0];
+  const WORDS = [["spalling", 0.3], ["concrete", 0.55], ["flaking", 0.2], ["surface", 1.0], ["rebar", 1.9], ["corroded", 1.8], ["rusty", 1.15], ["steel", 2.75], ["asphalt", 3.4], ["pavement", 3.6], ["pothole", 3.2], ["cracked", 2.6], ["culvert", 5.0], ["clogged", 4.85], ["drain", 5.2], ["debris", 4.5], ["damage", 1.3], ["photo", 2.9]];
+  const rng = mulberry32(21), photos = []; for (let c = 0; c < 4; c++) for (let k = 0; k < 3; k++) { const a = centers[c] + (rng() - 0.5) * 0.7; photos.push({ c, a, name: concepts[c].split(" ")[1] + " " + (k + 1) }); }
+  const ROUNDS = [1, 2, 0, 3];
+  let round = 0, used = [], solved = 0, played = 0, done = false;
+  const box = document.getElementById("rtBox"), res = document.getElementById("rtResults"), chips = document.getElementById("rtChips"), stepEl = document.getElementById("rtStep");
+  function query() { if (!used.length) return null; let x = 0, y = 0; for (const i of used) { x += Math.cos(WORDS[i][1]); y += Math.sin(WORDS[i][1]); } const n = Math.hypot(x, y) || 1e-9; return [x / n, y / n]; }
+  function ranked() { const q = query(); if (!q) return photos.map((p, i) => ({ i, s: 0 })); return photos.map((p, i) => ({ i, s: Math.cos(p.a) * q[0] + Math.sin(p.a) * q[1] })).sort((u, v) => v.s - u.s); }
+  function render() {
+    const target = ROUNDS[round], r = ranked(), q = query();
+    box.innerHTML = used.length ? used.map(i => '<span class="w">' + WORDS[i][0] + '</span>').join("") : '<span class="ph">click words to build the query</span>';
+    res.innerHTML = "";
+    r.forEach((o, k) => { const p = photos[o.i], d = document.createElement("div"); d.className = "result" + (q && k < 3 ? " top" : ""); d.innerHTML = '<span class="rk">#' + (k + 1) + (q ? '  cos ' + o.s.toFixed(2) : '') + '</span><canvas width="160" height="90"></canvas><span>' + p.name + (q && k < 3 && p.c === target ? ' <span class="badge done">target</span>' : (q && k < 3 ? ' <span class="badge">off target</span>' : '')) + '</span><div class="bar"><i style="width:' + (q ? 50 + 50 * o.s : 0) + '%"></i></div>'; res.appendChild(d); const cv = d.querySelector("canvas"); glyph(cv.getContext("2d"), p.c, 0, 0, 160, 90); });
+    chips.innerHTML = ""; WORDS.forEach((w, i) => { const b = document.createElement("button"); b.textContent = w[0]; b.setAttribute("aria-pressed", used.includes(i) ? "true" : "false"); b.addEventListener("click", () => { if (done) return; if (used.includes(i)) used = used.filter(j => j !== i); else used.push(i); render(); }); chips.appendChild(b); });
+    const hits = q ? r.slice(0, 3).filter(o => photos[o.i].c === target).length : 0;
+    document.getElementById("rtK").textContent = used.length; document.getElementById("rtRec").textContent = q ? hits + " / 3" : "-"; document.getElementById("rtScore").textContent = solved + " / " + played;
+    if (!done && hits === 3) { done = true; solved++; played++; document.getElementById("rtNext").disabled = false; }
+    const costly = used.some(i => ["damage", "photo", "surface"].includes(WORDS[i][0]));
+    stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>Target: <b>' + concepts[target] + '</b>. Get all three of its photos into the top three.</p>' + (done ? '<div class="ask ok">Solved with ' + used.length + (used.length === 1 ? ' word.' : ' words.') + (used.length > 1 ? ' Try Clear and solve it with one: the most specific word usually does it alone.' : ' One specific word beats any phrase built from vague ones.') + '</div>' : (q ? '<div class="ask">' + hits + ' of 3 in the top three. ' + (costly ? 'Generic words like damage, photo or surface pull the query toward the middle of the space and help no concept.' : (hits === 2 ? 'Close: one word is nudging the query toward a neighbouring concept. Remove it or add the exact term.' : 'Add the word that names the thing itself.')) + '</div>' : '<p>Each word is a direction; the query is their mean. Start with one chip and read the ranking.</p>'));
   }
-  sQ.addEventListener("input", draw); sJ.addEventListener("input", draw);
-  document.getElementById("rtReset").addEventListener("click", () => { sQ.value = 0; sJ.value = 0; draw(); });
-  window.addEventListener("themechange", draw);
-  draw();
+  document.getElementById("rtClear").addEventListener("click", () => { used = []; if (done) { done = false; } render(); });
+  document.getElementById("rtNext").addEventListener("click", () => { round = (round + 1) % ROUNDS.length; if (round === 0) { solved = 0; played = 0; } used = []; done = false; document.getElementById("rtNext").disabled = true; render(); });
+  quiz(document.getElementById("rtQuiz"), { q: "Two queries differ by one word and return different top-three sets. In a joint embedding space this happens because", options: ["The archive index was rebuilt between the two searches", "The text tower maps the two phrases to different points, and ranking is by nearest neighbours of that point", "The photos changed"], answer: 1, why: "Retrieval is nearest-neighbour search around the text embedding. Any change in wording moves the query point, and photos near the boundary between concepts change rank. Robust retrieval needs either query expansion or a text tower trained on the vocabulary the users actually type." });
+  render();
 })();
 
-/* ================= 3. TRIAGE ================= */
+/* ================= 3. THE INSPECTOR'S QUEUE ================= */
 (function triage() {
-  const n = 2000, prev = 0.1;
-  const pC = new Plot(document.getElementById("trCurve"), { xlabel: "share of photos reviewed", ylabel: "recall", title: "recall against review budget", xfmt: v => v.toFixed(1), yfmt: v => v.toFixed(1) });
-  const pH = new Plot(document.getElementById("trHist"), { xlabel: "model score", ylabel: "count", title: "the two score distributions", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(0), nx: 4 });
-  const sB = document.getElementById("trB"), sD = document.getElementById("trD");
-  let seed = 2, base = null;
-  function make() { const rng = mulberry32(seed); base = []; for (let i = 0; i < n; i++) base.push({ rel: rng() < prev, z: randn(rng, 2)[0] }); }
-  function scored(dp) { return base.map(it => ({ rel: it.rel, s: it.z + (it.rel ? dp : 0) })).sort((a, b) => b.s - a.s); }
+  const n = 200, K = 20, DP = { weak: 0.7, mid: 1.2, strong: 2.0 };
+  const board = new Board(document.getElementById("trGrid"));
+  let seed = 2, dp = "mid", budget = 40, pred = null, flipped = false, showAll = false, items = null;
+  function make() { const rng = mulberry32(seed); items = []; for (let i = 0; i < n; i++) items.push({ rel: i < K, z: randn(rng, 2)[0] }); }
+  function sorted() { return items.map(it => ({ rel: it.rel, s: it.z + (it.rel ? DP[dp] : 0) })).sort((a, b) => b.s - a.s); }
+  const stepEl = document.getElementById("trStep");
+  function text() { stepEl.innerHTML = '<span class="k">before you flip</span><p>The cards are the queue, highest score at the top left. The first ' + budget + ' are inside the review line.</p><p>Twenty of the 200 are defects. Predict how many the inspector finds in the top ' + budget + ', then flip.</p>'; }
   function draw() {
-    const budget = +sB.value / 100, dp = +sD.value; document.getElementById("trBOut").textContent = sB.value + " %"; document.getElementById("trDOut").textContent = dp.toFixed(1);
-    const items = scored(dp), total = items.filter(it => it.rel).length, nrev = Math.round(budget * n);
-    let hit = 0; const xs = [0], ys = [0]; for (let i = 0; i < n; i++) { if (items[i].rel) hit++; if ((i + 1) % 20 === 0) { xs.push((i + 1) / n); ys.push(hit / total); } }
-    let hb = 0; for (let i = 0; i < nrev; i++) if (items[i].rel) hb++;
-    document.getElementById("trN").textContent = nrev + " / " + n;
-    document.getElementById("trRec").textContent = (100 * hb / total).toFixed(0) + " %";
-    document.getElementById("trPrec").textContent = nrev ? (100 * hb / nrev).toFixed(0) + " %" : "-";
-    document.getElementById("trMiss").textContent = (total - hb) + " of " + total;
-    pC.begin([0, 1], [0, 1]);
-    pC.line([0, 1], [0, 1], css("--grey"), 1.5, [6, 5]);
-    pC.line(xs, ys, css("--ink"), 2.2);
-    pC.vline(budget, css("--red")); pC.dots([budget], [hb / total], css("--red"), 6);
-    pC.end();
-    const lo = -4, hi = 7, nb = 44, bw = (hi - lo) / nb, cr = new Float64Array(nb), ci = new Float64Array(nb);
-    for (const it of items) { const b = Math.floor((it.s - lo) / bw); if (b >= 0 && b < nb) { if (it.rel) cr[b]++; else ci[b]++; } }
-    const ymax = Math.max.apply(null, ci) * 1.1, cut = nrev > 0 && nrev < n ? items[nrev - 1].s : (nrev === 0 ? hi : lo);
-    pH.begin([lo, hi], [0, ymax]);
-    pH.bars(Array.from(ci, (_, b) => lo + (b + 0.5) * bw), ci, css("--grey") + "99", bw);
-    pH.bars(Array.from(cr, (_, b) => lo + (b + 0.5) * bw), Array.from(cr, v => v * 4), css("--blue") + "AA", bw);
-    pH.vline(cut, css("--red"));
-    pH.text("relevant, x4", hi - 0.2, ymax * 0.92, css("--blue"), "right");
-    pH.text("the rest", hi - 0.2, ymax * 0.84, css("--grey"), "right");
-    pH.end();
+    const q = sorted(), cols = 20, rows = 10, cw = 54, ch = 44, ox = 60, oy = 40;
+    board.clear(""); const ctx = board.ctx;
+    board.label("rank 1", ox, oy - 10, css("--muted"), "left", 12); board.label("rank 200", ox + cols * cw, oy - 10, css("--muted"), "right", 12);
+    q.forEach((it, k) => {
+      const x = ox + (k % cols) * cw, y = oy + Math.floor(k / cols) * ch, inside = k < budget;
+      const known = (flipped && inside) || showAll;
+      ctx.fillStyle = known ? (it.rel ? css("--red") : mix(css("--panel"), css("--blue"), 0.25)) : mix(css("--panel"), css("--grey"), inside ? 0.35 : 0.15);
+      ctx.fillRect(x + 3, y + 3, cw - 6, ch - 6); ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(x + 3, y + 3, cw - 6, ch - 6);
+      if (known && it.rel) { ctx.fillStyle = "#fff"; ctx.font = "600 11px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("defect", x + cw / 2, y + ch / 2); }
+      else if (known) { ctx.fillStyle = css("--muted"); ctx.font = "10px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("ok", x + cw / 2, y + ch / 2); }
+      else { ctx.fillStyle = css("--muted"); ctx.font = "10px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(it.s.toFixed(1), x + cw / 2, y + ch / 2); }
+    });
+    // review line
+    const bx = ox + (budget % cols) * cw, by = oy + Math.floor(budget / cols) * ch;
+    ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.beginPath();
+    if (budget % cols === 0) { ctx.moveTo(ox, by); ctx.lineTo(ox + cols * cw, by); } else { ctx.moveTo(ox, by + ch); ctx.lineTo(bx, by + ch); ctx.lineTo(bx, by); ctx.lineTo(ox + cols * cw, by); }
+    ctx.stroke(); board.label("review line: the inspector looks at everything above it", ox + cols * cw, oy + rows * ch + 20, css("--orange"), "right", 12);
+    board.label("unflipped cards show the model's score; red is a confirmed defect", ox, oy + rows * ch + 20, css("--muted"), "left", 12);
+    const found = q.slice(0, budget).filter(it => it.rel).length;
+    document.getElementById("trN").textContent = budget; document.getElementById("trFound").textContent = flipped ? found + " of " + K : "-"; document.getElementById("trRecall").textContent = flipped ? (100 * found / K).toFixed(0) + " %" : "-"; document.getElementById("trPrec").textContent = flipped ? (100 * found / budget).toFixed(0) + " %" : "-";
   }
-  sB.addEventListener("input", draw); sD.addEventListener("input", draw);
-  document.getElementById("trNew").addEventListener("click", () => { seed += 1; make(); draw(); });
-  document.getElementById("trReset").addEventListener("click", () => { sB.value = 20; sD.value = 1.2; seed = 2; make(); draw(); });
+  function flip() {
+    if (pred === null) return; flipped = true; const q = sorted(), found = q.slice(0, budget).filter(it => it.rel).length, bin = found < 10 ? 0 : found < 14 ? 1 : found < 18 ? 2 : 3, ok = bin === pred;
+    document.querySelectorAll("#trPred button").forEach((b, i) => { if (i === bin) b.classList.add("right"); else if (i === pred) b.classList.add("wrong"); });
+    const curve = [20, 40, 60, 100].map(b => q.slice(0, b).filter(it => it.rel).length);
+    stepEl.innerHTML = '<span class="k">the count</span><div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'Not quite. ') + 'The top ' + budget + ' hold ' + found + ' of the 20 defects: recall ' + (100 * found / K).toFixed(0) + ' % at a ' + (100 * budget / n).toFixed(0) + ' % budget.</div><p>On this site visit the same model finds ' + curve.join(', ') + ' defects at budgets of 20, 40, 60 and 100. The number to report is the one at the budget the inspector will really have. Press Show every defect to see where the misses sit in the queue.</p>';
+    document.getElementById("trFlip").disabled = true; draw();
+  }
+  function reset() { flipped = false; showAll = false; pred = null; document.querySelectorAll("#trPred button").forEach(b => { b.className = ""; b.setAttribute("aria-pressed", "false"); }); document.getElementById("trFlip").disabled = true; text(); draw(); }
+  document.querySelectorAll("#trBudget button").forEach(b => b.addEventListener("click", () => { budget = +b.dataset.b; document.querySelectorAll("#trBudget button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); reset(); }));
+  document.querySelectorAll("#trPred button").forEach((b, i) => b.addEventListener("click", () => { if (flipped) return; pred = i; document.querySelectorAll("#trPred button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); document.getElementById("trFlip").disabled = false; }));
+  [["trWeak", "weak"], ["trMid", "mid"], ["trStrong", "strong"]].forEach(([id, k]) => document.getElementById(id).addEventListener("click", () => { dp = k; ["trWeak", "trMid", "trStrong"].forEach(j => document.getElementById(j).setAttribute("aria-pressed", j === id ? "true" : "false")); reset(); }));
+  document.getElementById("trFlip").addEventListener("click", flip);
+  document.getElementById("trAll").addEventListener("click", () => { showAll = true; flipped = true; draw(); });
+  document.getElementById("trNew").addEventListener("click", () => { seed += 1; make(); reset(); });
+  quiz(document.getElementById("trQuiz"), { q: "The vendor reports 92 % accuracy for the defect detector. With 10 % of photos defective, what does that number tell the inspector who reviews the top 20 %?", options: ["That recall at 20 % is about 92 %", "Almost nothing: a model that flags nothing scores 90 %, and accuracy says nothing about the ranking at the budget", "That precision is 92 %"], answer: 1, why: "Accuracy mixes the two classes at their base rates and is dominated by the 90 % of harmless photos. The inspector needs recall at the budget they will actually spend, read off the ranked list, which is the curve this page flips through." });
   window.addEventListener("themechange", draw);
-  make(); draw();
+  make(); reset();
 })();
 
-/* ================= 4. WORLD MODEL ================= */
+/* ================= 4. PILOT IT YOURSELF ================= */
 (function worldmodel() {
-  const th = 0.25, damp = 0.985, A = [[damp * Math.cos(th), -damp * Math.sin(th)], [damp * Math.sin(th), damp * Math.cos(th)]], B = 0.12, target = [1.5, 0.6], x0 = [-1.8, -1.2], TOT = 40, lam = 0.02;
-  const pP = new Plot(document.getElementById("wmPlane"), { xlabel: "state 1", ylabel: "state 2", title: "the plane: imagined and real", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(0) });
-  const pD = new Plot(document.getElementById("wmDist"), { xlabel: "step", ylabel: "distance to target", title: "how the real system did", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1), nx: 4 });
-  const sE = document.getElementById("wmErr"), sH = document.getElementById("wmH"), sK = document.getElementById("wmK");
-  let seed = 5, Enoise = null;
+  const th = 0.25, damp = 0.985, A = [[damp * Math.cos(th), -damp * Math.sin(th)], [damp * Math.sin(th), damp * Math.cos(th)]], B = 0.12, target = [1.5, 0.6], x0 = [-1.8, -1.2], TOT = 20, H = 12, lam = 0.02, UMAX = 2.5;
+  const board = new Board(document.getElementById("wmPlane"));
+  const px = v => board.W / 2 + v * 95, py = v => board.H / 2 - v * 95;
+  let seed = 5, Enoise = null, err = 0.2, x = null, t = 0, path = [], ghosts = [], lastGap = null, finals = { you: null, k1: null, once: null }, finished = false, planPaths = { k1: null, once: null };
   function newFit() { const g = randn(mulberry32(seed), 4); Enoise = [[g[0], g[1]], [g[2], g[3]]].map(r => r.map(v => v / 2)); }
   const mul = (M, v) => [M[0][0] * v[0] + M[0][1] * v[1], M[1][0] * v[0] + M[1][1] * v[1]];
   const mm = (M, N) => [[M[0][0] * N[0][0] + M[0][1] * N[1][0], M[0][0] * N[0][1] + M[0][1] * N[1][1]], [M[1][0] * N[0][0] + M[1][1] * N[1][0], M[1][0] * N[0][1] + M[1][1] * N[1][1]]];
-  function model(err) { return [[A[0][0] + err * Enoise[0][0], A[0][1] + err * Enoise[0][1]], [A[1][0] + err * Enoise[1][0], A[1][1] + err * Enoise[1][1]]]; }
-  function solve(Mtx, rhs) {
-    // gaussian elimination with partial pivoting, Mtx is n x n (array of rows), rhs length n
-    const n = rhs.length, A = Mtx.map((r, i) => r.concat([rhs[i]]));
-    for (let p = 0; p < n; p++) { let best = p; for (let r = p + 1; r < n; r++) if (Math.abs(A[r][p]) > Math.abs(A[best][p])) best = r; const tmp = A[p]; A[p] = A[best]; A[best] = tmp; for (let r = p + 1; r < n; r++) { const f = A[r][p] / A[p][p]; if (f === 0) continue; for (let j = p; j <= n; j++) A[r][j] -= f * A[p][j]; } }
-    const out = new Array(n).fill(0); for (let p = n - 1; p >= 0; p--) { let s = A[p][n]; for (let j = p + 1; j < n; j++) s -= A[p][j] * out[j]; out[p] = s / A[p][p]; } return out;
-  }
-  function plan(Ah, x, H) {
-    // u_0..u_{H-1} minimizing sum_t |x_t - target|^2 + lam |u|^2 under x_{t+1} = Ah x_t + B u_t (linear least squares)
-    const pw = [[[1, 0], [0, 1]]]; for (let i = 1; i <= H; i++) pw.push(mm(Ah, pw[i - 1]));
-    const n = 2 * H, G = [], r = [];
-    for (let t = 1; t <= H; t++) {
-      const free = mul(pw[t], x); r.push(target[0] - free[0], target[1] - free[1]);
-      const row0 = new Array(n).fill(0), row1 = new Array(n).fill(0);
-      for (let j = 0; j < t; j++) { const M = pw[t - 1 - j]; row0[2 * j] = M[0][0] * B; row0[2 * j + 1] = M[0][1] * B; row1[2 * j] = M[1][0] * B; row1[2 * j + 1] = M[1][1] * B; }
-      G.push(row0, row1);
-    }
-    const GG = []; for (let a = 0; a < n; a++) { GG.push(new Array(n).fill(0)); for (let b = 0; b < n; b++) { let s = 0; for (let i = 0; i < G.length; i++) s += G[i][a] * G[i][b]; GG[a][b] = s + (a === b ? lam : 0); } }
-    const Gr = new Array(n).fill(0); for (let a = 0; a < n; a++) { let s = 0; for (let i = 0; i < G.length; i++) s += G[i][a] * r[i]; Gr[a] = s; }
-    const u = solve(GG, Gr); const out = []; for (let j = 0; j < H; j++) out.push([u[2 * j], u[2 * j + 1]]); return out;
-  }
+  function model() { return [[A[0][0] + err * Enoise[0][0], A[0][1] + err * Enoise[0][1]], [A[1][0] + err * Enoise[1][0], A[1][1] + err * Enoise[1][1]]]; }
+  function solve(Mtx, rhs) { const n = rhs.length, M = Mtx.map((r, i) => r.concat([rhs[i]])); for (let p = 0; p < n; p++) { let best = p; for (let r = p + 1; r < n; r++) if (Math.abs(M[r][p]) > Math.abs(M[best][p])) best = r; const tmp = M[p]; M[p] = M[best]; M[best] = tmp; for (let r = p + 1; r < n; r++) { const f = M[r][p] / M[p][p]; if (f === 0) continue; for (let j = p; j <= n; j++) M[r][j] -= f * M[p][j]; } } const out = new Array(n).fill(0); for (let p = n - 1; p >= 0; p--) { let s = M[p][n]; for (let j = p + 1; j < n; j++) s -= M[p][j] * out[j]; out[p] = s / M[p][p]; } return out; }
+  function plan(Ah, xs) { const pw = [[[1, 0], [0, 1]]]; for (let i = 1; i <= H; i++) pw.push(mm(Ah, pw[i - 1])); const n = 2 * H, G = [], r = []; for (let k = 1; k <= H; k++) { const free = mul(pw[k], xs); r.push(target[0] - free[0], target[1] - free[1]); const row0 = new Array(n).fill(0), row1 = new Array(n).fill(0); for (let j = 0; j < k; j++) { const M = pw[k - 1 - j]; row0[2 * j] = M[0][0] * B; row0[2 * j + 1] = M[0][1] * B; row1[2 * j] = M[1][0] * B; row1[2 * j + 1] = M[1][1] * B; } G.push(row0, row1); } const GG = []; for (let a = 0; a < n; a++) { GG.push(new Array(n).fill(0)); for (let b = 0; b < n; b++) { let s = 0; for (let i = 0; i < G.length; i++) s += G[i][a] * G[i][b]; GG[a][b] = s + (a === b ? lam : 0); } } const Gr = new Array(n).fill(0); for (let a = 0; a < n; a++) { let s = 0; for (let i = 0; i < G.length; i++) s += G[i][a] * r[i]; Gr[a] = s; } const u = solve(GG, Gr); const out = []; for (let j = 0; j < H; j++) out.push([u[2 * j], u[2 * j + 1]]); return out; }
+  function realStep(xs, u, rng) { const nx = mul(A, xs); nx[0] += B * u[0] + 0.01 * (rng() - 0.5); nx[1] += B * u[1] + 0.01 * (rng() - 0.5); return nx; }
+  function runPlanner(k) { const Ah = model(), rng = mulberry32(seed + 100); let xs = x0.slice(), u = [], out = [xs.slice()]; for (let i = 0; i < TOT; i++) { if (i % k === 0 || !u.length) u = plan(Ah, xs); const ut = u.shift(); xs = realStep(xs, ut, rng); out.push(xs.slice()); } return out; }
+  const stepEl = document.getElementById("wmStep");
+  function restart() { x = x0.slice(); t = 0; path = [x.slice()]; ghosts = []; lastGap = null; finished = false; finals.you = null; planPaths = { k1: null, once: null }; finals.k1 = null; finals.once = null; text(); draw(); }
+  function text() { stepEl.innerHTML = '<span class="k">your turn, step ' + (t + 1) + ' of ' + TOT + '</span><p>Click anywhere on the plane. The push goes toward your click, capped at a fixed strength. The grey ghost marks where the learned model says you will land; the blue dot is where you really land.</p>' + (t > 2 ? '<p>Notice the ghost and the real dot disagree by a different amount each step. You are correcting for that with every click, which is exactly what the replanning planner does.</p>' : ''); }
   function draw() {
-    const err = +sE.value, H = +sH.value, k = Math.min(+sK.value, H);
-    document.getElementById("wmErrOut").textContent = err.toFixed(2); document.getElementById("wmHOut").textContent = H; document.getElementById("wmKOut").textContent = k;
-    const Ah = model(err), rng = mulberry32(seed + 100);
-    let x = x0.slice(); const real = [x.slice()], imag = []; let replans = 0, firstPlan = null, u = [];
-    for (let t = 0; t < TOT; t++) {
-      if (t % k === 0 || u.length === 0) { u = plan(Ah, x, H); replans++; if (firstPlan === null) { firstPlan = u.slice(); let xi = x.slice(); imag.push(xi.slice()); for (let j = 0; j < H; j++) { xi = mul(Ah, xi); xi[0] += B * u[j][0]; xi[1] += B * u[j][1]; imag.push(xi.slice()); } } }
-      const ut = u.shift() || [0, 0]; x = mul(A, x); x[0] += B * ut[0] + 0.01 * (rng() - 0.5); x[1] += B * ut[1] + 0.01 * (rng() - 0.5); real.push(x.slice());
-    }
-    const dist = real.map(p => Math.hypot(p[0] - target[0], p[1] - target[1]));
-    const gap = Math.hypot(real[H][0] - imag[H][0], real[H][1] - imag[H][1]);
-    document.getElementById("wmFinal").textContent = dist[TOT].toFixed(3);
-    document.getElementById("wmGap").textContent = gap.toFixed(3);
-    document.getElementById("wmN").textContent = replans;
-    pP.begin([-3, 3], [-3, 3]);
-    pP.line(imag.map(p => p[0]), imag.map(p => p[1]), css("--grey"), 2, [6, 5]);
-    pP.line(real.map(p => p[0]), real.map(p => p[1]), css("--blue"), 2.4);
-    pP.dots([x0[0]], [x0[1]], css("--ink"), 6); pP.text("start", x0[0] + 0.12, x0[1] - 0.2, css("--muted"), "left");
-    pP.dots([target[0]], [target[1]], css("--red"), 8); pP.text("target", target[0] + 0.15, target[1] + 0.2, css("--red"), "left");
-    pP.dots([real[TOT][0]], [real[TOT][1]], css("--blue"), 6);
-    pP.end();
-    pD.begin([0, TOT], [0, 4]);
-    pD.line(dist.map((_, i) => i), dist, css("--blue"), 2);
-    pD.vline(H, css("--grey"));
-    pD.end();
+    board.clear("the plane: click to push toward that point"); const ctx = board.ctx;
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; for (let v = -3; v <= 3; v++) { ctx.beginPath(); ctx.moveTo(px(v), py(-3)); ctx.lineTo(px(v), py(3)); ctx.moveTo(px(-3), py(v)); ctx.lineTo(px(3), py(v)); ctx.stroke(); }
+    const trace = (pts, color, width, dash) => { ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []); ctx.beginPath(); pts.forEach((p, i) => { if (i === 0) ctx.moveTo(px(p[0]), py(p[1])); else ctx.lineTo(px(p[0]), py(p[1])); }); ctx.stroke(); ctx.setLineDash([]); };
+    if (planPaths.once) { trace(planPaths.once, css("--grey"), 2, [6, 5]); board.label("planner, plans once", px(planPaths.once[TOT][0]) + 10, py(planPaths.once[TOT][1]), css("--grey"), "left", 12); }
+    if (planPaths.k1) { trace(planPaths.k1, "#2E7D5B", 2); board.label("planner, replans every step", px(planPaths.k1[TOT][0]) + 10, py(planPaths.k1[TOT][1]) + 14, "#2E7D5B", "left", 12); }
+    trace(path, css("--blue"), 2.6);
+    ghosts.forEach(g => { ctx.fillStyle = mix(css("--panel"), css("--grey"), 0.6); ctx.beginPath(); ctx.arc(px(g[0]), py(g[1]), 6, 0, 2 * Math.PI); ctx.fill(); });
+    path.forEach(p => { ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(px(p[0]), py(p[1]), 4, 0, 2 * Math.PI); ctx.fill(); });
+    ctx.fillStyle = css("--ink"); ctx.beginPath(); ctx.arc(px(x0[0]), py(x0[1]), 6, 0, 2 * Math.PI); ctx.fill(); board.label("start", px(x0[0]) + 10, py(x0[1]) - 8, css("--muted"), "left", 12);
+    ctx.strokeStyle = css("--red"); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(px(target[0]), py(target[1]), 12, 0, 2 * Math.PI); ctx.stroke(); board.label("target", px(target[0]) + 16, py(target[1]) - 10, css("--red"), "left", 13);
+    ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(px(x[0]), py(x[1]), 9, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
+    board.label("grey dots: where the model said you would land; blue: where you did", 16, board.H - 14, css("--muted"), "left", 12);
+    document.getElementById("wmT").textContent = t + " / " + TOT; document.getElementById("wmD").textContent = Math.hypot(x[0] - target[0], x[1] - target[1]).toFixed(2); document.getElementById("wmGap").textContent = lastGap === null ? "-" : lastGap.toFixed(3);
+    document.getElementById("wmBoard").textContent = (finals.you === null ? "-" : finals.you.toFixed(2)) + " / " + (finals.k1 === null ? "-" : finals.k1.toFixed(2)) + " / " + (finals.once === null ? "-" : finals.once.toFixed(2));
   }
-  sE.addEventListener("input", draw); sH.addEventListener("input", draw); sK.addEventListener("input", draw);
-  document.getElementById("wmNew").addEventListener("click", () => { seed += 1; newFit(); draw(); });
-  document.getElementById("wmReset").addEventListener("click", () => { sE.value = 0.10; sH.value = 12; sK.value = 1; seed = 5; newFit(); draw(); });
+  board.c.addEventListener("click", ev => {
+    if (finished) return; const [mx, my] = board.pos(ev), wx = (mx - board.W / 2) / 95, wy = -(my - board.H / 2) / 95;
+    let u = [(wx - x[0]) / B * 0.3, (wy - x[1]) / B * 0.3]; const un = Math.hypot(u[0], u[1]); if (un > UMAX) u = [u[0] / un * UMAX, u[1] / un * UMAX];
+    const Ah = model(), ghost = mul(Ah, x); ghost[0] += B * u[0]; ghost[1] += B * u[1]; ghosts.push(ghost);
+    const rng = mulberry32(seed + 200 + t); x = realStep(x, u, rng); path.push(x.slice()); t++; lastGap = Math.hypot(ghost[0] - x[0], ghost[1] - x[1]);
+    if (t >= TOT) { finished = true; finals.you = Math.hypot(x[0] - target[0], x[1] - target[1]); stepEl.innerHTML = '<span class="k">your run is over</span><div class="ask">You ended ' + finals.you.toFixed(2) + ' from the target. Now run the two planners on the same system and model.</div><p>Both planners optimize a twelve-step plan inside the learned model. One throws the plan away after each real step and plans again from where it actually is; the other trusts its first plan to the end.</p>'; } else text();
+    draw();
+  });
+  document.getElementById("wmRestart").addEventListener("click", restart);
+  document.getElementById("wmPlanK1").addEventListener("click", () => { planPaths.k1 = runPlanner(1); const e = planPaths.k1[TOT]; finals.k1 = Math.hypot(e[0] - target[0], e[1] - target[1]); draw(); });
+  document.getElementById("wmPlanOnce").addEventListener("click", () => { planPaths.once = runPlanner(TOT); const e = planPaths.once[TOT]; finals.once = Math.hypot(e[0] - target[0], e[1] - target[1]); draw(); if (finals.k1 !== null) stepEl.innerHTML = '<span class="k">the comparison</span><div class="ask">Final distances: you ' + (finals.you === null ? '(unfinished)' : finals.you.toFixed(2)) + ', replanning planner ' + finals.k1.toFixed(2) + ', plan-once planner ' + finals.once.toFixed(2) + '.</div><p>The plan-once run is what a world model does without feedback: its errors compound for twenty steps. Replanning is cheap insurance against a wrong model, and your own clicking was a form of it. Switch the model error to large and run both again.</p>'; });
+  document.querySelectorAll("#wmErrB button").forEach(b => b.addEventListener("click", () => { err = +b.dataset.e; document.querySelectorAll("#wmErrB button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); restart(); }));
+  quiz(document.getElementById("wmQuiz"), { q: "A learned world model is 5 % wrong per step. Planning twenty steps ahead inside it and executing the plan blind is risky because", options: ["The planner is too slow", "Errors compound: after twenty steps the imagined state can be far from the real one, and the plan was made for the imagined one", "Twenty steps is too short a horizon"], answer: 1, why: "Model error accumulates multiplicatively through the rollout. Replanning after each observation resets the rollout to the true state, which is why model-based control is almost always receding-horizon in practice." });
   window.addEventListener("themechange", draw);
-  newFit(); draw();
+  newFit(); restart();
 })();
 
-/* ================= 5. DRIFT ================= */
+/* ================= 5. DECIDE WHEN TO RETRAIN ================= */
 (function drift() {
-  const M = 36, base = 0.20, band = 1.3, alarm = 0.5;
-  const pI = new Plot(document.getElementById("drIn"), { xlabel: "month in service", ylabel: "drift index (standardized shift)", title: "input monitoring", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(1), nx: 6 });
-  const pE = new Plot(document.getElementById("drErr"), { xlabel: "month", ylabel: "held-out error", title: "error monitoring", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(2), nx: 3 });
-  const s0 = document.getElementById("drM0"), sR = document.getElementById("drRate");
-  let seed = 7;
-  function draw() {
-    const m0 = +s0.value, rate = +sR.value; document.getElementById("drM0Out").textContent = m0; document.getElementById("drRateOut").textContent = rate.toFixed(2);
-    const g = randn(mulberry32(seed), 2 * (M + 1)), months = [], D = [], E = [];
-    let a = null, b = null;
-    for (let t = 0; t <= M; t++) { const shift = Math.max(0, t - m0) * rate; const d = Math.abs(shift + 0.08 * g[t]); const e = base * (1 + 0.2 * shift * shift) + 0.015 * g[M + 1 + t]; months.push(t); D.push(d); E.push(e); if (a === null && d > alarm) a = t; if (b === null && e > base * band) b = t; }
-    document.getElementById("drA").textContent = a === null ? "never in 36 months" : String(a);
-    document.getElementById("drB").textContent = b === null ? "never in 36 months" : String(b);
-    document.getElementById("drLead").textContent = (a !== null && b !== null) ? (b - a) + " months" : (a !== null ? "error never left the band" : "-");
-    pI.begin([0, M], [0, 3]);
-    pI.line([0, M], [alarm, alarm], css("--red"), 1.5, [6, 5]);
-    pI.line(months, D, css("--blue"), 2.2);
-    if (a !== null) pI.vline(a, css("--blue"));
-    pI.text("drift alarm", 0.5, alarm + 0.12, css("--red"), "left");
-    pI.end();
-    pE.begin([0, M], [0, 0.8]);
-    pE.line([0, M], [base * band, base * band], css("--red"), 1.5, [6, 5]);
-    pE.line(months, E, css("--ink"), 2.2);
-    if (b !== null) pE.vline(b, css("--ink"));
-    pE.text("acceptance band", 0.8, base * band + 0.04, css("--red"), "left");
-    pE.end();
+  const M = 36, base = 0.20, band = 1.3, alarm = 0.5, LAG = 3, CR = 3, CO = 2, CAP = 2.0;
+  let seed = 7, m0, rate, g, month = 0, timer = null, running = false, retrains = [], speed = 350, finishedRun = false;
+  const cal = document.getElementById("drCal"), stepEl = document.getElementById("drStep");
+  function setup() { const rng = mulberry32(seed); m0 = 4 + Math.floor(rng() * 11); rate = 0.35 + rng() * 0.2; g = randn(rng, 2 * (M + 2)); month = 0; retrains = []; running = false; finishedRun = false; if (timer) clearTimeout(timer); document.getElementById("drVerdict").hidden = true; document.getElementById("drRetrain").disabled = true; document.getElementById("drStart").disabled = false; render(); }
+  // the site changes by S(t), linear after the change point and then complete; a model retrained at r is fit to S(r), so the shift it sees is S(t) - S(r)
+  function S(t) { return Math.min(CAP, Math.max(0, t - m0) * rate); }
+  function shiftAt(t, rs) { let ref = null; for (const r of rs) if (r <= t && (ref === null || r > ref)) ref = r; return S(t) - (ref === null ? 0 : S(ref)); }
+  function driftIdx(t, rs) { return Math.abs(shiftAt(t, rs) + 0.08 * g[t]); }
+  function errAt(t, rs) { const s = shiftAt(t, rs); return base * (1 + 0.2 * s * s) + 0.015 * g[M + 2 + t]; }
+  function cost(rs, upTo) { let c = CR * rs.filter(r => r <= upTo).length, out = 0; for (let t = 0; t <= upTo; t++) if (errAt(t, rs) > base * band) { c += CO; out++; } return { c, out }; }
+  function simulate(policy) { const rs = []; for (let t = 0; t <= M; t++) { if (policy === "input" && driftIdx(t, rs) > alarm && !rs.includes(t)) rs.push(t); if (policy === "error" && t - LAG >= 0 && (rs.length === 0 || t - LAG > rs[rs.length - 1]) && errAt(t - LAG, rs) > base * band) rs.push(t); } return rs; }
+  function render() {
+    cal.innerHTML = "";
+    for (let t = 0; t < M; t++) {
+      const d = document.createElement("div"); d.className = "m" + (t === month - 1 && running ? " now" : "") + (retrains.includes(t) ? " retrain" : "");
+      const seen = t < month, labelled = t < month - LAG;
+      const top = document.createElement("span"), bot = document.createElement("span");
+      top.style.background = seen ? (driftIdx(t, retrains) > alarm ? "#C9731F" : "#D6E3F2") : "transparent";
+      bot.style.background = labelled ? (errAt(t, retrains) > base * band ? "#B3261E" : "#E3F2EA") : (seen ? "#D9DDE3" : "transparent");
+      const lab = document.createElement("span"); lab.className = "lab"; lab.textContent = t + 1;
+      d.appendChild(top); d.appendChild(bot); d.appendChild(lab); cal.appendChild(d);
+    }
+    const c = cost(retrains, Math.max(0, month - 1));
+    document.getElementById("drCost").textContent = month ? c.c : 0; document.getElementById("drMeter").style.width = Math.min(100, 100 * c.c / 60) + "%"; document.getElementById("drMonth").textContent = "month " + month + " of " + M;
+    document.getElementById("drR").textContent = retrains.length; document.getElementById("drOut").textContent = month ? c.out : 0;
   }
-  s0.addEventListener("input", draw); sR.addEventListener("input", draw);
-  document.getElementById("drNew").addEventListener("click", () => { seed += 1; draw(); });
-  document.getElementById("drReset").addEventListener("click", () => { s0.value = 12; sR.value = 0.10; seed = 7; draw(); });
-  window.addEventListener("themechange", draw);
-  draw();
+  function tick() {
+    month++; render();
+    if (month >= M) { running = false; finish(); return; }
+    timer = setTimeout(tick, speed);
+  }
+  function finish() {
+    finishedRun = true; document.getElementById("drRetrain").disabled = true;
+    const mine = cost(retrains, M - 1), inp = simulate("input"), errp = simulate("error"), ci = cost(inp, M - 1), ce = cost(errp, M - 1), none = cost([], M - 1);
+    const v = document.getElementById("drVerdict"); v.hidden = false; const bestC = Math.min(mine.c, ci.c, ce.c); v.className = "ask " + (mine.c <= bestC ? "ok" : (mine.c <= ce.c ? "" : "no"));
+    v.innerHTML = "Your three years cost <b>" + mine.c + "</b> (" + retrains.length + " retrainings, " + mine.out + " months out of band). Acting on the input monitor would have cost " + ci.c + " (retrained at month" + (inp.length === 1 ? " " : "s ") + inp.map(r => r + 1).join(", ") + "); waiting for the error monitor would have cost " + ce.c + "; never retraining, " + none.c + ". The site started changing in month " + (m0 + 1) + ".";
+    stepEl.innerHTML = '<span class="k">debrief</span><p>The error monitor is the ground truth, and it is always three months late, so its policy pays for the months it could not see. The input monitor sees the change the month it starts, and its policy pays instead for retraining while the change is still under way. On this deployment the input policy ' + (ci.c < ce.c ? 'won by ' + (ce.c - ci.c) : (ci.c === ce.c ? 'tied the error policy' : 'lost by ' + (ci.c - ce.c))) + '. A single well-timed retraining, a few months after the first alarm, beats both; the alarm tells you the change has begun, not that it has finished. Press New deployment: the change point and the rate move.</p>';
+  }
+  document.getElementById("drStart").addEventListener("click", () => { if (running || finishedRun) return; running = true; document.getElementById("drStart").disabled = true; document.getElementById("drRetrain").disabled = false; stepEl.innerHTML = '<span class="k">on call</span><p>Months are filling in. The top half of a tile turns orange when the input drift index passes 0.5. The bottom half stays grey until the labels for that month arrive, three months later.</p><p>Retrain too early and you pay 3 for nothing, and a change still under way will set the alarm off again; too late and you pay 2 for every month the model is out of band.</p>'; tick(); });
+  document.getElementById("drRetrain").addEventListener("click", () => { if (!running) return; const t = month - 1; if (!retrains.includes(t)) retrains.push(t); render(); });
+  document.getElementById("drNew").addEventListener("click", () => { seed += 1; setup(); });
+  document.getElementById("drSlow").addEventListener("click", () => { speed = 900; document.getElementById("drSlow").className = "badge done"; document.getElementById("drFast").className = "badge"; });
+  document.getElementById("drFast").addEventListener("click", () => { speed = 350; document.getElementById("drSlow").className = "badge"; document.getElementById("drFast").className = "badge done"; });
+  quiz(document.getElementById("drQuiz"), { q: "Why monitor the inputs at all, when the error is what you actually care about?", options: ["Inputs are cheaper to store", "Error needs labels, which arrive late or never; the input distribution is observable the moment data comes in", "Input drift always causes error drift"], answer: 1, why: "The error monitor is the right target and the wrong instrument: in most deployments labels lag by weeks or months. Input drift is a leading indicator; it can raise false alarms, since not every shift hurts the model, which is why the two monitors are run together." });
+  setup();
 })();
 
 /* ---------- tabs ---------- */
