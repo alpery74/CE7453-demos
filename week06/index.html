@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week 6 Demos</title>
+<meta name="description" content="CE 7453 Week 6: blend encoder states onto a target, see why the softmax saturates without the square root of d, label attention heads, shuffle a record to test order blindness, build the causal mask, and read the bill for long records.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-line course header with a tab strip, then one demo at a time:
+   a wide plot on the left, a narrow control column on the right, a caption underneath.
+   Colors follow the lecture deck (dark body text, one blue, red for the figure's "wrong" curve). */
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --ink: #2B2B2B;
+  --muted: #6B7280;
+  --line: #D9DDE3;
+  --blue: #1F5C99;
+  --blue-soft: #D6E3F2;
+  --red: #B3261E;
+  --orange: #C9731F;
+  --grey: #8A8F98;
+  --focus: #1F5C99;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+    --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+  --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  padding-block: 14px 8px; border-bottom: 1px solid var(--line);
+}
+header .weeks { font-size: 13px; color: var(--blue); text-decoration: none; border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px; }
+header .weeks:hover { background: var(--blue-soft); }
+header .course { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+nav button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+nav button[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+nav button:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+nav button .slide { font-family: var(--mono); font-size: 12px; opacity: 0.8; margin-left: 6px; }
+main { padding-block: 4px 24px; }
+section.demo { display: none; }
+section.demo.active { display: block; }
+.demo h2 { font-size: 22px; font-weight: 600; margin: 6px 0 2px; text-wrap: balance; }
+.demo .lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.plot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-width: 0; }
+.plot canvas { width: 100%; height: auto; display: block; max-width: 100%; }
+.plot.two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 860px) { .plot.two { grid-template-columns: 1fr; } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctl label output { font-family: var(--mono); font-weight: 400; color: var(--blue); }
+.ctl input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--blue); }
+.ctl .hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; background: var(--c); }
+.legend span.dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.caption { margin: 12px 0 0; max-width: 90ch; font-size: 15px; }
+.caption p { margin: 0 0 6px; }
+footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<style>
+/* components for the instructional formats */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.step { font-size: 15px; line-height: 1.5; }
+.step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
+.step p { margin: 6px 0; }
+.ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
+.ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
+.ask.no { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ask.ok { background: #1E3A2C; } :root:not([data-theme="light"]) .ask.no { background: #432426; } }
+:root[data-theme="dark"] .ask.ok { background: #1E3A2C; } :root[data-theme="dark"] .ask.no { background: #432426; }
+.quiz { font-size: 15px; }
+.quiz .q { margin: 0 0 8px; font-weight: 500; }
+.quiz .opts { display: grid; gap: 6px; }
+.quiz button { text-align: left; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.quiz button.right { border-color: #2E7D5B; background: #E3F2EA; }
+.quiz button.wrong { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quiz button.right { background: #1E3A2C; } :root:not([data-theme="light"]) .quiz button.wrong { background: #432426; } }
+:root[data-theme="dark"] .quiz button.right { background: #1E3A2C; } :root[data-theme="dark"] .quiz button.wrong { background: #432426; }
+.quiz .why { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { color: #2E7D5B; border-color: #2E7D5B; }
+.badge.fail { color: var(--red); border-color: var(--red); }
+.bet { display: flex; flex-wrap: wrap; gap: 6px; }
+.bet button { font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.bet button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.bet button.right { border-color: #2E7D5B; background: #E3F2EA; color: var(--ink); }
+.bet button.wrong { border-color: var(--red); background: #F9E4E2; color: var(--ink); }
+canvas.hit { cursor: pointer; }
+canvas.grab { cursor: grab; }
+.heads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.head { display: grid; gap: 6px; }
+.head canvas { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; display: block; }
+.head .labs { display: grid; gap: 4px; }
+.head .labs button { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; text-align: left; }
+.head .labs button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.head .labs button.right { border-color: #2E7D5B; background: #E3F2EA; color: var(--ink); }
+.head .labs button.wrong { border-color: var(--red); background: #F9E4E2; color: var(--ink); }
+.records { display: grid; gap: 6px; }
+.records button { font: inherit; font-size: 14px; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; text-align: left; display: flex; justify-content: space-between; gap: 8px; }
+.records button[aria-pressed="true"] { border-color: var(--blue); background: var(--blue-soft); }
+.records button span.t { font-family: var(--mono); color: var(--muted); font-size: 13px; }
+.ledger { font-family: var(--mono); font-size: 14px; display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.ledger div { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 9px 14px; border-bottom: 1px dashed var(--line); }
+.ledger div:last-child { border-bottom: none; }
+.ledger div.head { background: var(--bg); font-family: var(--sans); font-weight: 600; }
+.ledger div.total { font-weight: 600; }
+.ledger .warn { color: var(--red); }
+.ledger .good { color: #2E7D5B; }
+.gpu { margin-top: 12px; }
+.gpu .bar { height: 26px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--bg); position: relative; }
+.gpu .bar i { display: block; height: 100%; background: var(--blue); }
+.gpu .bar i.over { background: var(--red); }
+.gpu .cap { font-size: 12.5px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+</style>
+
+<header>
+  <a class="weeks" href="../">All weeks</a>
+  <span class="course">CE 7453 &middot; Week 6 &middot; Attention and the transformer</span>
+  <h1>Interactive demonstrations</h1>
+</header>
+
+<nav role="tablist" aria-label="Demos">
+  <button role="tab" data-tab="blend" aria-selected="true">Blend it<span class="slide">slides 5, 7</span></button>
+  <button role="tab" data-tab="scale" aria-selected="false">The saturation bench<span class="slide">slide 8</span></button>
+  <button role="tab" data-tab="heads" aria-selected="false">Read the heads<span class="slide">slides 10, 14</span></button>
+  <button role="tab" data-tab="position" aria-selected="false">Order blind<span class="slide">slide 15</span></button>
+  <button role="tab" data-tab="mask" aria-selected="false">Build the mask<span class="slide">slide 17</span></button>
+  <button role="tab" data-tab="cost" aria-selected="false">The bill<span class="slide">slides 11, 21</span></button>
+</nav>
+
+<main>
+
+<!-- ============ 1. BLEND IT ============ -->
+<section class="demo active" id="blend" role="tabpanel">
+  <h2>Blend it: one decoder step, six encoder states, and a target to reach</h2>
+  <p class="lead">Six encoder states sit in a feature plane as the values. Set a score for each one; the softmax turns your scores into weights, and the output is the weighted blend. Drive the blend onto the target. Then hand the scoring to a query and see where the scores come from in a real model.</p>
+  <div class="stage">
+    <div class="plot two">
+      <canvas id="blPlane" class="grab" width="760" height="560"></canvas>
+      <canvas id="blScores" class="grab" width="440" height="560"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="blStep"></div>
+      <div class="panel">
+        <div class="bet"><button id="blHand" aria-pressed="true">scores by hand</button><button id="blQuery" aria-pressed="false">scores from a query</button></div>
+        <div class="btns" style="margin-top:10px"><button id="blNext">Next target</button><button id="blWhy">Why can I not reach it?</button><button id="blReset">Reset scores</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>distance to the target</dt><dd id="blDist">-</dd>
+          <dt>largest weight</dt><dd id="blMax">-</dd>
+          <dt>targets reached</dt><dd id="blScore">0 / 0</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="blQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The weights are softmax(s) and the output is the sum of w_i v_i, the two lines on slide 5. Because the weights are positive and sum to one, every output lies inside the convex hull of the values: attention can only interpolate what the encoder offered. In query mode the scores are q dot k_i over the square root of d, with the keys set equal to the values for display, and dragging the query is what a trained decoder does when it changes what it needs, slide 7.</p>
+  </div>
+</section>
+
+<!-- ============ 2. THE SATURATION BENCH ============ -->
+<section class="demo" id="scale" role="tabpanel">
+  <h2>The saturation bench: why the square root of d is in the formula</h2>
+  <p class="lead">One query and eight keys with unit-variance entries. Grow the key dimension and watch what happens to the raw dot products, to the softmax, and to the gradient that training depends on. Predict before you reveal the 512-dimensional case.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="scBench" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="scStep"></div>
+      <div class="panel">
+        <h3>key dimension d</h3>
+        <div class="bet" id="scD"><button data-d="4" aria-pressed="true">4</button><button data-d="64">64</button><button data-d="512" id="scD512">512</button></div>
+        <h3 style="margin-top:12px">scaling</h3>
+        <div class="bet"><button id="scRaw" aria-pressed="true">raw dot product</button><button id="scScaled" aria-pressed="false">divided by sqrt(d)</button></div>
+        <h3 style="margin-top:12px">your prediction for d = 512, unscaled</h3>
+        <div class="bet" id="scPred"><button data-p="0">about an eighth each</button><button data-p="1">about half on one key</button><button data-p="2">almost all on one key</button></div>
+        <div class="btns" style="margin-top:10px"><button id="scNew">New draw</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>typical score size, sqrt(d)</dt><dd id="scTyp">-</dd>
+          <dt>largest weight</dt><dd id="scMaxW">-</dd>
+          <dt>gradient through the softmax</dt><dd id="scGrad">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="scQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>A dot product of d independent unit-variance terms has variance d, so the raw scores spread by about sqrt(d): 2 at d = 4, 8 at d = 64, 23 at d = 512. The softmax of scores that far apart is a one-hot vector, and the derivative of a one-hot softmax is zero, so the layer cannot learn. Dividing by sqrt(d) puts the scores back on a scale of one at every width, which is the justification on slide 8. The gauge shows the Frobenius norm of the softmax Jacobian, the factor that multiplies every gradient passing through the layer.</p>
+  </div>
+</section>
+
+<!-- ============ 3. READ THE HEADS ============ -->
+<section class="demo" id="heads" role="tabpanel">
+  <h2>Read the heads: four attention maps, four jobs, label them</h2>
+  <p class="lead">A trained model with four heads has been run on a sixteen-step record. Each matrix shows where every query position (rows) placed its weight over the keys (columns). Hover a row to see it as a ribbon over the sequence. Label each head, then check.</p>
+  <div class="stage">
+    <div>
+      <div class="heads" id="hdHeads"></div>
+      <div class="plot" style="margin-top:12px"><canvas id="hdStrip" width="1200" height="150"></canvas></div>
+    </div>
+    <div class="side">
+      <div class="panel step" id="hdStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="hdCheck" disabled>Check my labels</button><button id="hdNew">New model</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>rounds</dt><dd id="hdScore">0 / 0</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="hdQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Four relations that real heads learn on their own, slide 14: a local head that reads the neighbouring steps, an anchor head that keeps returning to one position such as the start of the record, an offset head that reads a fixed number of steps back, and a periodic head that reads the same phase of a cycle. The maps are a record of where the weight went, slide 10; whether the attended position mattered is a separate question that the value vectors decide.</p>
+  </div>
+</section>
+
+<!-- ============ 4. ORDER BLIND ============ -->
+<section class="demo" id="position" role="tabpanel">
+  <h2>Order blind: shuffle the record and see whether the model notices</h2>
+  <p class="lead">Eight sensor readings pass through one self-attention layer with fixed weights. Each output is shown as a tile under its reading. Shuffle the readings. Without position information the tiles travel with the readings and nothing in the model knows the order changed. Add position and watch the tiles change.</p>
+  <div class="stage">
+    <div class="plot">
+      <canvas id="poStrip" width="1200" height="230"></canvas>
+      <canvas id="poCode" class="hit" width="1200" height="330"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="poStep"></div>
+      <div class="panel">
+        <div class="bet"><button id="poNone" aria-pressed="true">no position</button><button id="poSin" aria-pressed="false">sinusoidal added</button><button id="poTable" aria-pressed="false">learned table (32 entries)</button></div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="poShuffle">Shuffle the readings</button><button id="poRestore">Restore the order</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>largest change in any reading's output</dt><dd id="poChange">-</dd>
+          <dt>reference position in the barcode</dt><dd id="poRef">8</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="poQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Self attention is permutation equivariant: permute the inputs and the outputs are permuted the same way, with no other change, which is the whole of slide 15's problem. The sinusoidal code gives every position a vector of sines and cosines at wavelengths from a few steps to thousands, drawn here as a barcode; click a column and the others are tinted by their similarity to it, which falls off with distance in both directions. A learned table does the same job inside its length and has nothing to say beyond it.</p>
+  </div>
+</section>
+
+<!-- ============ 5. BUILD THE MASK ============ -->
+<section class="demo" id="mask" role="tabpanel">
+  <h2>Build the mask: let each position read as much as it honestly can</h2>
+  <p class="lead">A decoder learns to predict the next value at every position of a six-step record, all positions at once. The grid says which key positions (columns) each query position (rows) may read. Click cells to allow or block them, then train, and read which rows learned and which cheated.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="mkGrid" class="hit" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="mkStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="mkTrain">Train</button><button id="mkAll">Allow all</button><button id="mkNone">Block all</button><button id="mkPad">Record is 4 long, pad 2</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>rows that cheat</dt><dd id="mkCheat">-</dd>
+          <dt>rows with no context</dt><dd id="mkBlind">-</dd>
+          <dt>honest context used, total</dt><dd id="mkCtx">-</dd>
+        </dl>
+        <div class="ask" id="mkVerdict" hidden></div>
+      </div>
+      <div class="panel quiz" id="mkQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Position t is asked for the value at t + 1. If its row may read any column at or beyond t + 1, the model can copy the answer, the training loss there falls to nothing, and nothing useful is learned: leakage by architecture, slide 17. If the row may read nothing, the position predicts from nothing. The mask that is honest everywhere and wastes nothing is the lower triangle including the diagonal, implemented by setting the blocked scores to minus infinity before the softmax. Padding gets the same treatment in the columns.</p>
+  </div>
+</section>
+
+<!-- ============ 6. THE BILL ============ -->
+<section class="demo" id="cost" role="tabpanel">
+  <h2>The bill: what a record of your length costs one attention layer</h2>
+  <p class="lead">Pick a record. The receipt itemizes the score matrix, its memory at half precision for eight heads, and the key-value cache that inference keeps per layer, then checks the total against one graphics card. Pick the long records from your own field and see where the arithmetic breaks.</p>
+  <div class="stage">
+    <div>
+      <div class="ledger" id="coLedger"></div>
+      <div class="gpu"><div class="bar"><i id="coBar" style="width:0%"></i></div><div class="cap" id="coCap"></div></div>
+    </div>
+    <div class="side">
+      <div class="panel step" id="coStep"></div>
+      <div class="panel">
+        <h3>the record</h3>
+        <div class="records" id="coRecords"></div>
+        <h3 style="margin-top:12px">the card</h3>
+        <div class="bet" id="coGPU"><button data-g="24" aria-pressed="true">24 GB</button><button data-g="80">80 GB</button></div>
+        <h3 style="margin-top:12px">attention kernel</h3>
+        <div class="bet"><button id="coNaive" aria-pressed="true">stores the matrix</button><button id="coTiled" aria-pressed="false">tiled softmax</button></div>
+      </div>
+      <div class="panel quiz" id="coQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Compute is T squared times d for every implementation, slide 11. Memory is T squared only when the score matrix is materialized; a tiled softmax (FlashAttention) streams it in blocks and keeps the memory linear in T, at the cost of recomputing the scores in the backward pass. The cache of slide 21 is linear in T as well, two vectors per position per layer, and it is what makes long-context generation bandwidth bound rather than compute bound: each new token reads the whole cache to do a little arithmetic.</p>
+  </div>
+</section>
+
+</main>
+<footer>CE 7453 Machine Learning for Civil, Environmental and Geodetic Engineering. Each demo is a small closed-form toy chosen so that the effect on the slide is visible without a trained network.</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- utilities ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const u = 1 - rng(), v = rng(), r = Math.sqrt(-2 * Math.log(u)); out[i] = r * Math.cos(2 * Math.PI * v); if (i + 1 < n) out[i + 1] = r * Math.sin(2 * Math.PI * v); } return out; }
+function hexToRgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
+function softmax(s) { const m = Math.max.apply(null, s); const e = s.map(v => Math.exp(v - m)), z = e.reduce((a, b) => a + b, 0); return e.map(v => v / z); }
+const PAL = ["#1F5C99", "#C9731F", "#2E7D5B", "#8E44AD", "#B3261E", "#0E8A8A"];
+function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
+Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
+Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+Board.prototype.label = function (s, x, y, color, align, size, mono) { const ctx = this.ctx; ctx.fillStyle = color || css("--muted"); ctx.font = (size || 13) + "px " + css(mono ? "--mono" : "--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(s, x, y); };
+function quiz(el, spec) {
+  el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
+  const opts = el.querySelector(".opts"), why = el.querySelector(".why");
+  spec.options.forEach((o, i) => { const b = document.createElement("button"); b.textContent = o; b.addEventListener("click", () => { Array.from(opts.children).forEach(c => c.classList.remove("right", "wrong")); b.classList.add(i === spec.answer ? "right" : "wrong"); if (i !== spec.answer) opts.children[spec.answer].classList.add("right"); why.textContent = (i === spec.answer ? "Right. " : "No. ") + spec.why; }); opts.appendChild(b); });
+}
+
+/* ================= 1. BLEND IT ================= */
+(function blend() {
+  const V = [[-1.6, 0.9], [-0.2, 1.5], [1.4, 1.0], [1.7, -0.6], [0.2, -1.5], [-1.5, -0.8]], N = V.length;
+  const TARGETS = [{ p: [0.4, 0.3], ok: true }, { p: [-0.6, -0.4], ok: true }, { p: [2.2, 0.4], ok: false }, { p: [1.0, 0.8], ok: true }];
+  const plane = new Board(document.getElementById("blPlane")), bars = new Board(document.getElementById("blScores"));
+  const px = v => plane.W / 2 + v * 150, py = v => plane.H / 2 + 10 - v * 150;
+  let s = new Array(N).fill(0), mode = "hand", q = [0.5, 0.5], round = 0, reached = 0, played = 0, done = false, hull = false, drag = null;
+  const stepEl = document.getElementById("blStep");
+  function scores() { return mode === "hand" ? s : V.map(v => (q[0] * v[0] + q[1] * v[1]) * 3 / Math.sqrt(2)); }
+  function output(w) { return [V.reduce((a, v, i) => a + w[i] * v[0], 0), V.reduce((a, v, i) => a + w[i] * v[1], 0)]; }
+  function hullPts() { // gift wrapping on six points
+    const pts = V.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]); const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); const lower = []; for (const p of pts) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop(); lower.push(p); } const upper = []; for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop(); upper.push(p); } upper.pop(); lower.pop(); return lower.concat(upper);
+  }
+  function text() { const t = TARGETS[round]; stepEl.innerHTML = '<span class="k">target ' + (round + 1) + ' of ' + TARGETS.length + '</span><p>' + (mode === "hand" ? 'Drag the six score bars. A high score makes that state dominate the blend; equal scores give the plain average.' : 'Drag the query arrow. Each score is the dot product of the query with that state, so the query decides which states count.') + '</p><p>Bring the output star within 0.10 of the ring.</p>' + (hull ? '<div class="ask">The shaded region is the convex hull of the six values. Softmax weights are positive and sum to one, so the output can never leave it. Target 3 sits outside: no scores, and no query, can reach it. The encoder has to offer a state there first.</div>' : ''); }
+  function draw() {
+    const sc = scores(), w = softmax(sc), o = output(w), t = TARGETS[round], d = Math.hypot(o[0] - t.p[0], o[1] - t.p[1]);
+    document.getElementById("blDist").textContent = d.toFixed(3); document.getElementById("blMax").textContent = Math.max.apply(null, w).toFixed(2); document.getElementById("blScore").textContent = reached + " / " + played;
+    if (!done && d <= 0.10) { done = true; reached++; played++; stepEl.innerHTML = '<span class="k">target ' + (round + 1) + ' reached</span><div class="ask ok">Within 0.10 with largest weight ' + Math.max.apply(null, w).toFixed(2) + '. ' + (Math.max.apply(null, w) > 0.9 ? 'That is nearly a hard lookup: one state carries the output.' : 'That is a soft lookup: several states share the output.') + '</div><p>Press Next target.</p>'; }
+    plane.clear("the feature plane: six encoder states (values), the output star, the target ring"); const ctx = plane.ctx;
+    if (hull) { const h = hullPts(); ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.1); ctx.beginPath(); h.forEach((p, i) => { if (i === 0) ctx.moveTo(px(p[0]), py(p[1])); else ctx.lineTo(px(p[0]), py(p[1])); }); ctx.closePath(); ctx.fill(); ctx.strokeStyle = css("--blue"); ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px(-2.3), py(0)); ctx.lineTo(px(2.3), py(0)); ctx.moveTo(px(0), py(-1.7)); ctx.lineTo(px(0), py(1.7)); ctx.stroke();
+    V.forEach((v, i) => { ctx.strokeStyle = mix(css("--panel"), PAL[i], Math.min(1, 0.15 + 2 * w[i])); ctx.lineWidth = 1 + 14 * w[i]; ctx.beginPath(); ctx.moveTo(px(v[0]), py(v[1])); ctx.lineTo(px(o[0]), py(o[1])); ctx.stroke(); });
+    V.forEach((v, i) => { ctx.fillStyle = PAL[i]; ctx.beginPath(); ctx.arc(px(v[0]), py(v[1]), 11 + 10 * w[i], 0, 2 * Math.PI); ctx.fill(); plane.label("h" + (i + 1) + "  w = " + w[i].toFixed(2), px(v[0]) + 16 + 10 * w[i], py(v[1]) + 4, PAL[i], "left", 12, true); });
+    ctx.strokeStyle = css("--red"); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(px(t.p[0]), py(t.p[1]), 14, 0, 2 * Math.PI); ctx.stroke(); plane.label("target", px(t.p[0]) + 18, py(t.p[1]) - 12, css("--red"), "left", 12);
+    ctx.fillStyle = css("--ink"); ctx.beginPath(); for (let k = 0; k < 10; k++) { const r = k % 2 ? 6 : 13, a = Math.PI / 5 * k - Math.PI / 2; ctx.lineTo(px(o[0]) + r * Math.cos(a), py(o[1]) + r * Math.sin(a)); } ctx.closePath(); ctx.fill();
+    if (mode === "query") { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(px(0), py(0)); ctx.lineTo(px(q[0]), py(q[1])); ctx.stroke(); ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(px(q[0]), py(q[1]), 9, 0, 2 * Math.PI); ctx.fill(); plane.label("query q (drag)", px(q[0]) + 12, py(q[1]) - 10, css("--orange"), "left", 12); }
+    plane.label("ribbon width is the weight on that state", 16, plane.H - 14, css("--muted"), "left", 12);
+    bars.clear(mode === "hand" ? "scores (drag the bars) and softmax weights" : "scores q . k / sqrt(d), and softmax weights"); const b = bars.ctx, L = 70, mid = bars.H / 2 + 10, scl = 42;
+    b.strokeStyle = css("--line"); b.beginPath(); b.moveTo(L - 10, mid); b.lineTo(bars.W - 100, mid); b.stroke(); bars.label("score 0", L - 14, mid + 4, css("--muted"), "right", 11, true);
+    scores().forEach((v, i) => { const x = L + i * 52; b.fillStyle = PAL[i]; b.fillRect(x, Math.min(mid, mid - v * scl), 26, Math.abs(v * scl)); bars.label("h" + (i + 1), x + 13, mid + 190, PAL[i], "center", 12, true); bars.label(v.toFixed(1), x + 13, (v >= 0 ? mid - v * scl - 6 : mid - v * scl + 14), css("--ink"), "center", 11, true); });
+    w.forEach((v, i) => { const x = L + i * 52; b.fillStyle = mix(css("--panel"), PAL[i], 0.5); b.fillRect(x, mid + 172 - v * 150, 26, v * 150); });
+    bars.label("weights (sum to one)", L, mid + 212, css("--muted"), "left", 12);
+    bars.label("drag up or down", bars.W - 96, mid + 4, css("--muted"), "left", 11);
+  }
+  plane.c.addEventListener("mousedown", ev => { if (mode !== "query") return; drag = "q"; moveQ(ev); });
+  function moveQ(ev) { const [mx, my] = plane.pos(ev); q = [Math.max(-2, Math.min(2, (mx - plane.W / 2) / 150)), Math.max(-1.6, Math.min(1.6, (plane.H / 2 + 10 - my) / 150))]; draw(); }
+  bars.c.addEventListener("mousedown", ev => { if (mode !== "hand") return; const [mx] = bars.pos(ev); const i = Math.floor((mx - 70 + 13) / 52); if (i >= 0 && i < N) { drag = i; moveBar(ev); } });
+  function moveBar(ev) { const [, my] = bars.pos(ev); s[drag] = Math.max(-4, Math.min(4, (bars.H / 2 + 10 - my) / 42)); draw(); }
+  window.addEventListener("mousemove", ev => { if (drag === null) return; if (drag === "q") moveQ(ev); else moveBar(ev); });
+  window.addEventListener("mouseup", () => { drag = null; });
+  document.getElementById("blHand").addEventListener("click", () => { mode = "hand"; document.getElementById("blHand").setAttribute("aria-pressed", "true"); document.getElementById("blQuery").setAttribute("aria-pressed", "false"); text(); draw(); });
+  document.getElementById("blQuery").addEventListener("click", () => { mode = "query"; document.getElementById("blHand").setAttribute("aria-pressed", "false"); document.getElementById("blQuery").setAttribute("aria-pressed", "true"); text(); draw(); });
+  document.getElementById("blNext").addEventListener("click", () => { if (!done) played++; round = (round + 1) % TARGETS.length; if (round === 0) { reached = 0; played = 0; } done = false; hull = false; s = new Array(N).fill(0); text(); draw(); });
+  document.getElementById("blWhy").addEventListener("click", () => { hull = true; text(); draw(); });
+  document.getElementById("blReset").addEventListener("click", () => { s = new Array(N).fill(0); q = [0.5, 0.5]; draw(); });
+  quiz(document.getElementById("blQuiz"), { q: "Why must the choice of encoder state be soft rather than a hard pick of the best one?", options: ["A soft blend is cheaper to compute", "A hard pick has no gradient, so the scoring function could never be learned", "Soft blends are more accurate in every case"], answer: 1, why: "An argmax is piecewise constant: a small change in the scores changes nothing until it flips, so no gradient reaches the scorer. The softmax is a differentiable relaxation of the pick, and that is what lets the model learn where to look." });
+  text(); draw();
+})();
+
+/* ================= 2. THE SATURATION BENCH ================= */
+(function scale() {
+  const board = new Board(document.getElementById("scBench")), NK = 8;
+  let d = 4, scaled = false, seed = 1, pred = null, revealed = false;
+  const stepEl = document.getElementById("scStep");
+  function draws() { const rng = mulberry32(seed + d), q = randn(rng, d), keys = []; for (let k = 0; k < NK; k++) keys.push(randn(rng, d)); const raw = keys.map(k => { let s = 0; for (let i = 0; i < d; i++) s += q[i] * k[i]; return s; }); return raw.map(v => scaled ? v / Math.sqrt(d) : v); }
+  function jac(w) { let f = 0; for (let i = 0; i < w.length; i++) for (let j = 0; j < w.length; j++) { const v = i === j ? w[i] * (1 - w[i]) : -w[i] * w[j]; f += v * v; } return Math.sqrt(f); }
+  function text() { stepEl.innerHTML = '<span class="k">how to read the bench</span><p>Left: the eight raw scores, with the typical size sqrt(d) marked. Middle: the softmax weights they produce. Right: the gauge is the size of the gradient that passes back through the softmax; near zero means the layer has stopped learning.</p><p>Step d from 4 to 64. Then make your prediction for 512 before pressing it.</p>'; }
+  function draw() {
+    const sc = draws(), w = softmax(sc), J = jac(w), typ = scaled ? 1 : Math.sqrt(d);
+    document.getElementById("scTyp").textContent = typ.toFixed(1); document.getElementById("scMaxW").textContent = Math.max.apply(null, w).toFixed(3); document.getElementById("scGrad").textContent = J.toFixed(3);
+    board.clear("d = " + d + (scaled ? ", scores divided by sqrt(d)" : ", raw dot products")); const ctx = board.ctx;
+    const L = 70, mid = 270, unit = 7;
+    ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(L - 10, mid); ctx.lineTo(L + NK * 50, mid); ctx.stroke();
+    ctx.strokeStyle = css("--grey"); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(L - 10, mid - typ * unit); ctx.lineTo(L + NK * 50, mid - typ * unit); ctx.moveTo(L - 10, mid + typ * unit); ctx.lineTo(L + NK * 50, mid + typ * unit); ctx.stroke(); ctx.setLineDash([]);
+    board.label("+sqrt(d) = " + typ.toFixed(1), L + NK * 50 + 6, mid - typ * unit + 4, css("--muted"), "left", 11, true); board.label("-sqrt(d)", L + NK * 50 + 6, mid + typ * unit + 4, css("--muted"), "left", 11, true);
+    sc.forEach((v, k) => { const h = Math.max(-200, Math.min(200, v * unit)); ctx.fillStyle = css("--blue"); ctx.fillRect(L + k * 50, Math.min(mid, mid - h), 30, Math.abs(h)); board.label(v.toFixed(1), L + k * 50 + 15, h >= 0 ? mid - h - 6 : mid - h + 14, css("--ink"), "center", 11, true); board.label("k" + (k + 1), L + k * 50 + 15, 508, css("--muted"), "center", 11, true); });
+    board.label("raw scores q . k", L, 50, css("--ink"), "left", 13);
+    const L2 = 560; board.label("softmax weights", L2, 50, css("--ink"), "left", 13);
+    ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(L2 - 10, 540 - 0); ctx.lineTo(L2 + NK * 40, 540); ctx.stroke();
+    w.forEach((v, k) => { ctx.fillStyle = css("--orange"); ctx.fillRect(L2 + k * 40, 540 - 460 * v, 26, 460 * v); board.label(v.toFixed(2), L2 + k * 40 + 13, 540 - 460 * v - 6, css("--ink"), "center", 10, true); });
+    ctx.strokeStyle = css("--grey"); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(L2 - 10, 540 - 460 / NK); ctx.lineTo(L2 + NK * 40, 540 - 460 / NK); ctx.stroke(); ctx.setLineDash([]); board.label("uniform 1/8", L2 + NK * 40 + 6, 540 - 460 / NK + 4, css("--muted"), "left", 11, true);
+    // gauge
+    const gx = 1030, gy = 300, R = 100; ctx.strokeStyle = css("--line"); ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(gx, gy, R, Math.PI * 0.75, Math.PI * 2.25); ctx.stroke();
+    const frac = Math.min(1, J / 0.35), ang = Math.PI * 0.75 + frac * Math.PI * 1.5; ctx.strokeStyle = mix(css("--red"), "#2E7D5B", frac); ctx.beginPath(); ctx.arc(gx, gy, R, Math.PI * 0.75, ang); ctx.stroke();
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + (R - 18) * Math.cos(ang), gy + (R - 18) * Math.sin(ang)); ctx.stroke();
+    board.label(J.toFixed(3), gx, gy + 50, css("--ink"), "center", 24, true); board.label("gradient through the softmax", gx, gy + 72, css("--muted"), "center", 12); board.label("0", gx - R * 0.72, gy + R * 0.85, css("--muted"), "center", 11, true); board.label("0.35", gx + R * 0.72, gy + R * 0.85, css("--muted"), "center", 11, true);
+    board.label(J < 0.02 ? "saturated: nothing trains" : (J < 0.15 ? "sharp" : "healthy"), gx, gy - R - 20, J < 0.02 ? css("--red") : css("--ink"), "center", 13);
+  }
+  document.querySelectorAll("#scD button").forEach(b => b.addEventListener("click", () => { const nd = +b.dataset.d; if (nd === 512 && !scaled && pred === null && !revealed) { stepEl.innerHTML = '<span class="k">predict first</span><p>Say how the softmax will look at d = 512 without scaling, then press 512 again.</p>'; return; } d = nd; document.querySelectorAll("#scD button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); if (nd === 512 && !scaled && !revealed) { revealed = true; const w = softmax(draws()), mx = Math.max.apply(null, w), bin = mx < 0.3 ? 0 : (mx < 0.9 ? 1 : 2), ok = bin === pred; document.querySelectorAll("#scPred button").forEach((c, i) => { if (i === bin) c.classList.add("right"); else if (i === pred) c.classList.add("wrong"); }); stepEl.innerHTML = '<span class="k">the reveal</span><div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'Not quite. ') + 'At d = 512 the largest weight is ' + mx.toFixed(3) + ' and the gradient gauge reads ' + jac(w).toFixed(4) + '.</div><p>The scores spread over tens of units, the softmax has become a one-hot pick, and almost no gradient passes. Now press "divided by sqrt(d)": the scores return to a scale of one and the gauge comes back, at every d.</p>'; } draw(); }));
+  document.querySelectorAll("#scPred button").forEach((b, i) => b.addEventListener("click", () => { if (revealed) return; pred = i; document.querySelectorAll("#scPred button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); }));
+  document.getElementById("scRaw").addEventListener("click", () => { scaled = false; document.getElementById("scRaw").setAttribute("aria-pressed", "true"); document.getElementById("scScaled").setAttribute("aria-pressed", "false"); draw(); });
+  document.getElementById("scScaled").addEventListener("click", () => { scaled = true; document.getElementById("scRaw").setAttribute("aria-pressed", "false"); document.getElementById("scScaled").setAttribute("aria-pressed", "true"); draw(); });
+  document.getElementById("scNew").addEventListener("click", () => { seed += 1; draw(); });
+  quiz(document.getElementById("scQuiz"), { q: "A colleague doubles the key dimension from 64 to 128 and keeps the division by sqrt(64). What happens to the scores?", options: ["Nothing; the constant is a convention", "Their spread grows by sqrt(2), so the softmax sharpens and gradients shrink", "Their spread halves"], answer: 1, why: "The variance of the dot product scales with d, so the standard deviation grows by sqrt(128/64). The divisor has to track the key dimension in use; it is a normalization, not a tuning constant." });
+  text(); draw();
+})();
+
+/* ================= 3. READ THE HEADS ================= */
+(function heads() {
+  const T = 16, KINDS = [{ k: "local", name: "local: the neighbouring steps" }, { k: "anchor", name: "anchor: one fixed position" }, { k: "offset", name: "offset: a fixed number of steps back" }, { k: "periodic", name: "periodic: the same phase of a cycle" }];
+  let seed = 3, order = [], mats = [], labels = [null, null, null, null], checked = false, score = 0, played = 0, hover = null;
+  const strip = new Board(document.getElementById("hdStrip")), wrap = document.getElementById("hdHeads"), stepEl = document.getElementById("hdStep");
+  function matrix(kind, rng) { const M = []; const anchor = Math.floor(rng() * 3), off = 3 + Math.floor(rng() * 3), per = 4 + Math.floor(rng() * 2); for (let i = 0; i < T; i++) { const s = []; for (let j = 0; j < T; j++) { let v = -2; if (kind === "local") v = -Math.abs(i - j) * 1.6; else if (kind === "anchor") v = j === anchor ? 2.5 : (Math.abs(i - j) < 1 ? 0.5 : -2); else if (kind === "offset") v = (i - j === off) ? 3 : (i - j === off - 1 || i - j === off + 1 ? 0.5 : -2); else v = ((i - j) % per === 0 && j <= i) ? 2.2 : -2; if (kind === "offset" && i < off) v = j === 0 ? 1.5 : -2; s.push(v + 0.5 * (rng() - 0.5)); } M.push(softmax(s)); } return M; }
+  function make() { const rng = mulberry32(seed); order = [0, 1, 2, 3]; for (let i = 3; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } mats = order.map(k => matrix(KINDS[k].k, rng)); labels = [null, null, null, null]; checked = false; hover = null; }
+  function render() {
+    wrap.innerHTML = "";
+    mats.forEach((M, h) => {
+      const div = document.createElement("div"); div.className = "head"; div.innerHTML = '<span class="badge">head ' + (h + 1) + '</span><canvas width="260" height="260"></canvas><div class="labs"></div>';
+      const cv = div.querySelector("canvas"), ctx = cv.getContext("2d"), s = 260 / T;
+      for (let i = 0; i < T; i++) for (let j = 0; j < T; j++) { ctx.fillStyle = mix(css("--panel"), css("--blue"), Math.min(1, M[i][j] * 1.6)); ctx.fillRect(j * s, i * s, s + 0.5, s + 0.5); }
+      if (hover && hover.h === h) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.strokeRect(0, hover.i * s, 260, s); }
+      cv.addEventListener("mousemove", ev => { const r = cv.getBoundingClientRect(); const i = Math.floor((ev.clientY - r.top) / r.height * T); if (!hover || hover.h !== h || hover.i !== i) { hover = { h, i }; render(); } });
+      const labs = div.querySelector(".labs");
+      KINDS.forEach((kd, ki) => { const b = document.createElement("button"); b.textContent = kd.name; b.setAttribute("aria-pressed", labels[h] === ki ? "true" : "false"); if (checked) { if (ki === order[h]) b.classList.add("right"); else if (labels[h] === ki) b.classList.add("wrong"); } b.addEventListener("click", () => { if (checked) return; labels[h] = ki; render(); }); labs.appendChild(b); });
+      wrap.appendChild(div);
+    });
+    document.getElementById("hdCheck").disabled = checked || labels.some(l => l === null);
+    document.getElementById("hdScore").textContent = score + " / " + played;
+    strip.clear(hover ? "head " + (hover.h + 1) + ", query position " + (hover.i + 1) + ": where its weight went" : "hover a row of any head to read it as a ribbon over the record"); const c = strip.ctx;
+    const x0 = 60, w = (strip.W - 120) / T;
+    for (let j = 0; j < T; j++) { const v = hover ? mats[hover.h][hover.i][j] : 0; c.fillStyle = mix(css("--panel"), css("--blue"), Math.min(1, v * 1.6)); c.fillRect(x0 + j * w + 3, 60, w - 6, 50); c.strokeStyle = css("--line"); c.strokeRect(x0 + j * w + 3, 60, w - 6, 50); strip.label(String(j + 1), x0 + j * w + w / 2, 130, css("--muted"), "center", 11, true); if (hover && hover.i === j) { c.strokeStyle = css("--orange"); c.lineWidth = 3; c.strokeRect(x0 + j * w + 1, 58, w - 2, 54); c.lineWidth = 1; } if (hover && v > 0.08) strip.label(v.toFixed(2), x0 + j * w + w / 2, 50, css("--ink"), "center", 11, true); }
+    strip.label("orange: the query position; blue: weight on each key position", x0, strip.H - 6, css("--muted"), "left", 12);
+  }
+  function text() { stepEl.innerHTML = '<span class="k">the task</span><p>Each head has learned one relation. Match the four relations to the four maps. Rows are query positions, top to bottom; columns are key positions, left to right; dark is high weight.</p><p>Hover rows to see a single query as a ribbon before you decide.</p>'; }
+  document.getElementById("hdCheck").addEventListener("click", () => { checked = true; played++; const right = labels.filter((l, h) => l === order[h]).length; if (right === 4) score++; stepEl.innerHTML = '<span class="k">result</span><div class="ask ' + (right === 4 ? 'ok' : 'no') + '">' + right + ' of 4 heads labelled correctly.</div><p>Local heads show a diagonal band; anchor heads a bright column; offset heads a diagonal shifted by a fixed number of columns; periodic heads a comb of stripes. Trained models show all four, and nobody assigned them: the maps are evidence of what the model reads, and nothing more.</p>'; render(); });
+  document.getElementById("hdNew").addEventListener("click", () => { seed += 1; make(); text(); render(); });
+  quiz(document.getElementById("hdQuiz"), { q: "A head puts 0.9 of its weight on position 1 for every query. What may you conclude?", options: ["Position 1 is the most important input for the prediction", "The head reads position 1; whether that matters depends on the value vector there, which may carry almost nothing", "The model is broken"], answer: 1, why: "Attention weight is where the head looks, not how much it took. Anchor heads often park weight on a start token whose value is near zero, which acts as a no-op. Influence needs its own evidence, such as ablating the position and measuring the change, the same discipline as permutation importance." });
+  make(); text(); render();
+})();
+
+/* ================= 4. ORDER BLIND ================= */
+(function position() {
+  const T = 8, D = 4, rng0 = mulberry32(11);
+  const X = []; for (let t = 0; t < T; t++) X.push(Array.from(randn(rng0, D)));
+  const Wq = [], Wk = [], Wv = []; for (let i = 0; i < D; i++) { Wq.push(Array.from(randn(rng0, D)).map(v => v * 0.7)); Wk.push(Array.from(randn(rng0, D)).map(v => v * 0.7)); Wv.push(Array.from(randn(rng0, D)).map(v => v * 0.7)); }
+  const mv = (W, x) => W.map(r => r.reduce((s, v, i) => s + v * x[i], 0));
+  const PEMAX = 32, PED = 8; const pe = p => { const v = []; for (let i = 0; i < PED / 2; i++) { const wl = Math.pow(100, 2 * i / PED); v.push(Math.sin(p / wl), Math.cos(p / wl)); } return v; };
+  const strip = new Board(document.getElementById("poStrip")), code = new Board(document.getElementById("poCode"));
+  let perm = [0, 1, 2, 3, 4, 5, 6, 7], mode = "none", base = null, ref = 8, anim = null, slide = 1, prevPerm = null;
+  function inputs(order) { return order.map((tok, pos) => { const x = X[tok].slice(); if (mode === "sin") { const p = pe(pos); for (let i = 0; i < D; i++) x[i] += 0.8 * p[i]; } else if (mode === "table") { const g = randn(mulberry32(500 + pos), D); for (let i = 0; i < D; i++) x[i] += 0.8 * g[i]; } return x; }); }
+  function attend(order) { const xs = inputs(order), Q = xs.map(x => mv(Wq, x)), K = xs.map(x => mv(Wk, x)), Vv = xs.map(x => mv(Wv, x)); return Q.map(q => { const s = K.map(k => k.reduce((a, v, i) => a + v * q[i], 0) / Math.sqrt(D)), w = softmax(s); return Vv[0].map((_, i) => w.reduce((a, wi, j) => a + wi * Vv[j][i], 0)); }); }
+  function tile(o) { const h = ((Math.atan2(o[1], o[0]) / Math.PI + 1) * 180), l = 35 + 30 * Math.max(0, Math.min(1, (o[2] + 1.5) / 3)); return "hsl(" + h.toFixed(0) + ",55%," + l.toFixed(0) + "%)"; }
+  const stepEl = document.getElementById("poStep");
+  function draw() {
+    const out = attend(perm); if (!base) base = attend([0, 1, 2, 3, 4, 5, 6, 7]);
+    // change per reading: compare the output of reading tok now with its output in the original order
+    let maxd = 0; perm.forEach((tok, pos) => { const d = Math.sqrt(out[pos].reduce((s, v, i) => s + (v - base[tok][i]) ** 2, 0)); maxd = Math.max(maxd, d); });
+    document.getElementById("poChange").textContent = maxd.toFixed(3); document.getElementById("poRef").textContent = ref + 1;
+    strip.clear("the record (top) and each reading's attention output as a tile (bottom)"); const c = strip.ctx, x0 = 60, w = (strip.W - 120) / T;
+    perm.forEach((tok, pos) => {
+      const from = prevPerm ? prevPerm.indexOf(tok) : pos, x = x0 + (from + (pos - from) * slide) * w;
+      c.fillStyle = css("--bg"); c.fillRect(x + 4, 44, w - 8, 60); c.strokeStyle = css("--line"); c.strokeRect(x + 4, 44, w - 8, 60);
+      strip.label("r" + (tok + 1), x + w / 2, 70, css("--ink"), "center", 15, true); strip.label(X[tok][0].toFixed(2) + ", " + X[tok][1].toFixed(2), x + w / 2, 92, css("--muted"), "center", 11, true);
+      c.fillStyle = tile(out[pos]); c.fillRect(x + 4, 120, w - 8, 60); c.strokeStyle = css("--line"); c.strokeRect(x + 4, 120, w - 8, 60);
+      strip.label("slot " + (pos + 1), x + w / 2, 205, css("--muted"), "center", 11, true);
+    });
+    strip.label("tile colour encodes the output vector; a reading whose tile changes after a shuffle has noticed its new position", x0, strip.H - 8, css("--muted"), "left", 12);
+    code.clear(mode === "table" ? "a learned position table: 32 rows of free parameters, nothing beyond" : "the sinusoidal position code, 8 dimensions by 32 positions (click a column)"); const k = code.ctx, cx0 = 90, cw = (code.W - 150) / PEMAX, ch = 22, cy0 = 50;
+    const refv = mode === "table" ? Array.from(randn(mulberry32(500 + ref), PED)) : pe(ref);
+    for (let p = 0; p < PEMAX; p++) { const v = mode === "table" ? Array.from(randn(mulberry32(500 + p), PED)) : pe(p); let dot = 0, n1 = 0, n2 = 0; for (let i = 0; i < PED; i++) { dot += v[i] * refv[i]; n1 += v[i] * v[i]; n2 += refv[i] * refv[i]; } const sim = dot / Math.sqrt(n1 * n2); for (let i = 0; i < PED; i++) { const g = (v[i] + 1.5) / 3; k.fillStyle = mix(css("--panel"), css("--ink"), Math.max(0, Math.min(1, g))); k.fillRect(cx0 + p * cw, cy0 + i * ch, cw - 1, ch - 1); } k.fillStyle = mix(css("--panel"), css("--orange"), Math.max(0, sim)); k.fillRect(cx0 + p * cw, cy0 + PED * ch + 8, cw - 1, 18); if (p === ref) { k.strokeStyle = css("--orange"); k.lineWidth = 3; k.strokeRect(cx0 + p * cw - 1, cy0 - 2, cw + 1, PED * ch + 30); k.lineWidth = 1; } if (p % 4 === 0) code.label(String(p + 1), cx0 + p * cw + cw / 2, cy0 + PED * ch + 44, css("--muted"), "center", 11, true); }
+    for (let i = 0; i < PED; i++) code.label(i % 2 === 0 ? "sin, wavelength " + Math.pow(100, i / PED).toFixed(0) : "cos", cx0 - 8, cy0 + i * ch + 15, css("--muted"), "right", 10, true);
+    code.label("similarity to the clicked position (orange, cosine)", cx0, cy0 + PED * ch + 62, css("--muted"), "left", 12);
+    code.label("position", code.W / 2, code.H - 10, css("--muted"), "center", 12);
+    if (mode === "none") { k.fillStyle = mix(css("--panel"), css("--grey"), 0.55); k.fillRect(cx0 - 4, cy0 - 4, PEMAX * cw + 8, PED * ch + 34); code.label("no position code is added in this mode", code.W / 2, cy0 + PED * ch / 2 + 6, css("--ink"), "center", 15); }
+  }
+  function text() { stepEl.innerHTML = '<span class="k">' + (mode === "none" ? "no position" : (mode === "sin" ? "sinusoidal position added" : "learned table")) + '</span><p>' + (mode === "none" ? 'Shuffle. Every tile keeps its colour and simply moves with its reading: the layer computed the same thing, because a weighted sum has no notion of order.' : 'Shuffle. The tiles change colour, since each reading now carries a different position vector and attends differently. Order has become visible to the model.') + '</p>' + (mode === "table" ? '<p>The table has 32 rows. A record of position 33 has no vector at all, which is why fixed codes survive longer records and learned tables do not.</p>' : '') ; }
+  function shuffle() { const rng = mulberry32(Date.now() % 100000); prevPerm = perm.slice(); const p = perm.slice(); for (let i = T - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; } perm = p; animate(); }
+  function animate() { if (anim) cancelAnimationFrame(anim); slide = 0; const t0 = performance.now(); (function f(now) { slide = Math.min(1, (now - t0) / 600); draw(); if (slide < 1) anim = requestAnimationFrame(f); })(t0); }
+  code.c.addEventListener("click", ev => { const [mx] = code.pos(ev); const p = Math.floor((mx - 90) / ((code.W - 150) / PEMAX)); if (p >= 0 && p < PEMAX) { ref = p; draw(); } });
+  document.getElementById("poShuffle").addEventListener("click", shuffle);
+  document.getElementById("poRestore").addEventListener("click", () => { prevPerm = perm.slice(); perm = [0, 1, 2, 3, 4, 5, 6, 7]; animate(); });
+  [["poNone", "none"], ["poSin", "sin"], ["poTable", "table"]].forEach(([id, m]) => document.getElementById(id).addEventListener("click", () => { mode = m; base = null; ["poNone", "poSin", "poTable"].forEach(j => document.getElementById(j).setAttribute("aria-pressed", j === id ? "true" : "false")); text(); draw(); }));
+  quiz(document.getElementById("poQuiz"), { q: "Self attention is permutation equivariant. For a sequence model this means", options: ["It handles any order equally well, which is an advantage", "It cannot tell the order at all, so position must be supplied as input", "It only works on sorted data"], answer: 1, why: "Equivariance means a permuted input gives the identically permuted output: the layer carries no information about which position is which. Order is the structure of a sequence, so the position code is a necessary input, not a refinement." });
+  text(); draw();
+})();
+
+/* ================= 5. BUILD THE MASK ================= */
+(function mask() {
+  const T = 6; let allow = [], padded = false, trained = false, losses = null;
+  const board = new Board(document.getElementById("mkGrid")), stepEl = document.getElementById("mkStep");
+  const s = 66, ox = 250, oy = 70;
+  function reset(all) { allow = []; for (let i = 0; i < T; i++) { allow.push([]); for (let j = 0; j < T; j++) allow[i].push(all); } trained = false; losses = null; document.getElementById("mkVerdict").hidden = true; }
+  function len() { return padded ? 4 : T; }
+  function train() {
+    losses = []; const L = len();
+    for (let i = 0; i < L - 1; i++) { let cheat = false, ctx = 0, padRead = false; for (let j = 0; j < T; j++) if (allow[i][j]) { if (j >= i + 1 && j < L) cheat = true; if (j >= L) padRead = true; if (j <= i) ctx++; } losses.push({ cheat, ctx, padRead, loss: cheat ? 0.0 : (ctx === 0 ? 1.0 : 1.0 - 0.6 * (1 - Math.exp(-0.7 * ctx))) }); }
+    trained = true;
+  }
+  function draw() {
+    board.clear(""); const ctx = board.ctx, L = len();
+    board.label("key positions the row may read", ox + T * s / 2, oy - 34, css("--muted"), "center", 12); board.label("query position, predicting the next value", 16, oy - 14, css("--muted"), "left", 12);
+    for (let j = 0; j < T; j++) board.label("k" + (j + 1) + (j >= L ? " pad" : ""), ox + j * s + s / 2, oy - 12, j >= L ? css("--red") : css("--muted"), "center", 12, true);
+    for (let i = 0; i < T; i++) {
+      board.label("q" + (i + 1) + (i >= L ? " pad" : (i === L - 1 ? " (nothing to predict)" : " -> x" + (i + 2))), ox - 12, oy + i * s + s / 2 + 4, i >= L ? css("--red") : css("--ink"), "right", 12, true);
+      for (let j = 0; j < T; j++) {
+        const X = ox + j * s, Y = oy + i * s, a = allow[i][j], pad = j >= L || i >= L;
+        ctx.fillStyle = pad ? mix(css("--panel"), css("--red"), a ? 0.25 : 0.06) : (a ? mix(css("--panel"), css("--blue"), 0.55) : css("--bg")); ctx.fillRect(X + 2, Y + 2, s - 4, s - 4); ctx.strokeStyle = css("--line"); ctx.strokeRect(X + 2, Y + 2, s - 4, s - 4);
+        board.label(a ? "read" : "-inf", X + s / 2, Y + s / 2 + 4, a ? css("--ink") : css("--muted"), "center", 12, true);
+        if (trained && i < L - 1 && a && j >= i + 1 && j < L) { ctx.strokeStyle = css("--red"); ctx.lineWidth = 3; ctx.strokeRect(X + 4, Y + 4, s - 8, s - 8); ctx.lineWidth = 1; }
+      }
+      if (trained && i < L - 1) { const r = losses[i], bx = ox + T * s + 40; ctx.fillStyle = css("--bg"); ctx.fillRect(bx, oy + i * s + 18, 300, 28); ctx.fillStyle = r.cheat ? css("--red") : (r.ctx === 0 ? css("--grey") : "#2E7D5B"); ctx.fillRect(bx, oy + i * s + 18, 300 * r.loss, 28); board.label((r.cheat ? "loss 0.00: copied the answer" : (r.ctx === 0 ? "loss 1.00: nothing to read" : "loss " + r.loss.toFixed(2) + ": honest, " + r.ctx + " of " + (i + 1) + " past values")) + (r.padRead ? ", reads padding" : ""), bx + 8, oy + i * s + 37, r.cheat ? css("--red") : css("--ink"), "left", 12, true); }
+    }
+    if (trained) board.label("training loss per query position after training", ox + T * s + 40, oy - 12, css("--muted"), "left", 12);
+    if (trained) { const cheat = losses.filter(r => r.cheat).length, blind = losses.filter(r => !r.cheat && r.ctx === 0).length, ctxN = losses.reduce((a, r) => a + (r.cheat ? 0 : r.ctx), 0), maxCtx = losses.reduce((a, r, i) => a + i + 1, 0), padR = losses.some(r => r.padRead); document.getElementById("mkCheat").textContent = cheat; document.getElementById("mkBlind").textContent = blind; document.getElementById("mkCtx").textContent = ctxN + " / " + maxCtx; const v = document.getElementById("mkVerdict"); v.hidden = false; const perfect = cheat === 0 && blind === 0 && ctxN === maxCtx && !padR; v.className = "ask " + (perfect ? "ok" : (cheat ? "no" : "")); v.textContent = perfect ? "Honest everywhere and nothing wasted: this is the causal mask, the lower triangle with the diagonal" + (padded ? ", with the padding columns blocked too" : "") + "." : (cheat ? cheat + (cheat === 1 ? " row can" : " rows can") + " read a position at or beyond the one it predicts. Its loss collapses to zero and it learns to copy, which is leakage built into the architecture." : (blind ? blind + (blind === 1 ? " row reads" : " rows read") + " nothing and must guess." : (padR ? "Honest, but some rows read padding, which contributes noise from positions that do not exist." : "Honest, but " + (maxCtx - ctxN) + " past values are blocked that could have been read."))); }
+    else { document.getElementById("mkCheat").textContent = "-"; document.getElementById("mkBlind").textContent = "-"; document.getElementById("mkCtx").textContent = "-"; }
+  }
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const j = Math.floor((mx - ox) / s), i = Math.floor((my - oy) / s); if (i < 0 || j < 0 || i >= T || j >= T) return; allow[i][j] = !allow[i][j]; trained = false; document.getElementById("mkVerdict").hidden = true; draw(); });
+  document.getElementById("mkTrain").addEventListener("click", () => { train(); draw(); });
+  document.getElementById("mkAll").addEventListener("click", () => { reset(true); draw(); });
+  document.getElementById("mkNone").addEventListener("click", () => { reset(false); draw(); });
+  document.getElementById("mkPad").addEventListener("click", () => { padded = !padded; document.getElementById("mkPad").textContent = padded ? "Record is 6 long again" : "Record is 4 long, pad 2"; trained = false; document.getElementById("mkVerdict").hidden = true; draw(); });
+  stepEl.innerHTML = '<span class="k">the task</span><p>Everything is allowed at the start. Train once and watch every row cheat. Then block cells until every row is honest and still reads as much as it can.</p><p>A blocked cell is a score set to minus infinity before the softmax, so its weight is exactly zero.</p>';
+  quiz(document.getElementById("mkQuiz"), { q: "Why is the causal mask what allows a decoder to train on all positions in one parallel pass?", options: ["It makes the attention matrix smaller", "It makes every position's view identical to what it will have at inference, so the whole target can be fed at once without leakage", "It removes the need for position codes"], answer: 1, why: "At inference position t has seen only positions up to t. The mask reproduces exactly that view during training, so the full sequence can be processed in parallel and every position is an honest training example. A recurrent model has to walk the sequence to get the same honesty." });
+  reset(true); draw();
+})();
+
+/* ================= 6. THE BILL ================= */
+(function cost() {
+  const RECORDS = [{ name: "a 30-word sentence", T: 30 }, { name: "a 224 px image as 16 px patches", T: 196 }, { name: "a lidar scan line", T: 2048 }, { name: "a 1 km strain profile at 1 cm", T: 100000 }, { name: "one hour of a bridge accelerometer at 100 Hz", T: 360000 }, { name: "one day of a water meter at 10 Hz", T: 864000 }];
+  const HEADS = 8, DM = 512, LAYERS = 12, BYTES = 2;
+  let rec = 0, gpu = 24, tiled = false;
+  const ledger = document.getElementById("coLedger"), recs = document.getElementById("coRecords"), stepEl = document.getElementById("coStep");
+  function fmt(n) { if (n >= 1e12) return (n / 1e12).toFixed(2) + " T"; if (n >= 1e9) return (n / 1e9).toFixed(2) + " G"; if (n >= 1e6) return (n / 1e6).toFixed(2) + " M"; if (n >= 1e3) return (n / 1e3).toFixed(1) + " k"; return String(n); }
+  function bytes(n) { if (n >= 2 ** 40) return (n / 2 ** 40).toFixed(1) + " TB"; if (n >= 2 ** 30) return (n / 2 ** 30).toFixed(2) + " GB"; if (n >= 2 ** 20) return (n / 2 ** 20).toFixed(1) + " MB"; return (n / 1024).toFixed(1) + " kB"; }
+  function render() {
+    const T = RECORDS[rec].T, pairs = T * T, flops = 2 * pairs * DM, matBytes = tiled ? T * DM * BYTES : pairs * HEADS * BYTES, cache = 2 * LAYERS * T * DM * BYTES, total = matBytes + cache, cap = gpu * 2 ** 30;
+    recs.innerHTML = ""; RECORDS.forEach((r, i) => { const b = document.createElement("button"); b.setAttribute("aria-pressed", i === rec ? "true" : "false"); b.innerHTML = "<span>" + r.name + "</span><span class='t'>T = " + fmt(r.T) + "</span>"; b.addEventListener("click", () => { rec = i; render(); }); recs.appendChild(b); });
+    ledger.innerHTML = '<div class="head"><span>one attention layer on ' + RECORDS[rec].name + '</span><span>T = ' + T.toLocaleString() + '</span></div>' +
+      '<div><span>score matrix entries, T x T</span><span>' + fmt(pairs) + '</span></div>' +
+      '<div><span>multiply-adds for the scores, 2 T^2 d (d = ' + DM + ')</span><span>' + fmt(flops) + '</span></div>' +
+      '<div><span>' + (tiled ? 'memory with a tiled softmax, T x d x 2 bytes (the matrix is never stored)' : 'memory for the matrix, ' + HEADS + ' heads x T^2 x 2 bytes') + '</span><span class="' + (matBytes > cap ? 'warn' : 'good') + '">' + bytes(matBytes) + '</span></div>' +
+      '<div><span>key-value cache at inference, 2 x ' + LAYERS + ' layers x T x d x 2 bytes</span><span class="' + (cache > cap ? 'warn' : 'good') + '">' + bytes(cache) + '</span></div>' +
+      '<div class="total"><span>memory, this layer plus the cache</span><span class="' + (total > cap ? 'warn' : 'good') + '">' + bytes(total) + (total > cap ? '  over the card' : '  fits') + '</span></div>';
+    const frac = Math.min(1, total / cap); document.getElementById("coBar").style.width = (100 * frac) + "%"; document.getElementById("coBar").className = total > cap ? "over" : ""; document.getElementById("coCap").textContent = "card: " + gpu + " GB    needed: " + bytes(total) + (total > cap ? "    (" + (total / cap).toFixed(total / cap > 100 ? 0 : 1) + " x the card)" : "");
+    stepEl.innerHTML = '<span class="k">reading the receipt</span><p>' + (T <= 2048 ? 'A record this short is comfortable: the matrix is small and the cache is what you pay for.' : (tiled ? 'With a tiled softmax the matrix line is linear in T and the cache dominates. The compute line did not move: it is still quadratic.' : 'The matrix line is the problem. At this length the quadratic term is ' + (matBytes / cap).toFixed(0) + ' times the card, and no setting of batch size or precision closes a gap that size.')) + '</p><p>' + (T > 2048 && !tiled ? 'Switch to the tiled softmax, then to Week 7 for the ways to make the compute line linear too.' : 'Try the longest record and the 80 GB card.') + '</p>';
+  }
+  document.querySelectorAll("#coGPU button").forEach(b => b.addEventListener("click", () => { gpu = +b.dataset.g; document.querySelectorAll("#coGPU button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); render(); }));
+  document.getElementById("coNaive").addEventListener("click", () => { tiled = false; document.getElementById("coNaive").setAttribute("aria-pressed", "true"); document.getElementById("coTiled").setAttribute("aria-pressed", "false"); render(); });
+  document.getElementById("coTiled").addEventListener("click", () => { tiled = true; document.getElementById("coNaive").setAttribute("aria-pressed", "false"); document.getElementById("coTiled").setAttribute("aria-pressed", "true"); render(); });
+  quiz(document.getElementById("coQuiz"), { q: "FlashAttention makes attention memory linear in T. What does it do to the compute?", options: ["Also linear", "Unchanged, still quadratic; it avoids storing the matrix and reads memory far less, which is the actual speed-up", "Cubic, because of recomputation"], answer: 1, why: "Every pair of positions is still scored, so the arithmetic is T squared. The gain is in not writing a T by T matrix to slow memory and reading it back; recomputing a block in the backward pass is cheaper than that traffic. Linear-time attention needs a different formula, which is next week." });
+  render();
+})();
+
+/* ---------- tabs ---------- */
+const tabs = Array.from(document.querySelectorAll("nav [role=tab]"));
+function show(name, push) {
+  if (!document.getElementById(name)) name = "blend";
+  tabs.forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll("section.demo").forEach(s => s.classList.toggle("active", s.id === name));
+  if (push) { try { history.replaceState(null, "", "#" + name); } catch (e) {} }
+}
+tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
+show(location.hash.slice(1) || "blend", false);
+
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
