@@ -87,6 +87,7 @@ section.demo.active { display: block; }
   border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
 }
 .btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btns button:disabled { opacity: 0.45; cursor: not-allowed; }
 .readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
 .readout dt { color: var(--muted); }
 .readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
@@ -97,6 +98,23 @@ section.demo.active { display: block; }
 .caption p { margin: 0 0 6px; }
 footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* classroom mode and touch (shared patch) */
+canvas { touch-action: none; -webkit-user-select: none; user-select: none; }
+#classroomBtn { position: fixed; right: 14px; bottom: 14px; z-index: 50; font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; opacity: 0.85; }
+#classroomBtn:hover { opacity: 1; color: var(--ink); }
+body.classroom #classroomBtn { background: var(--blue); border-color: var(--blue); color: #fff; }
+body.classroom header, body.classroom .lead, body.classroom .caption, body.classroom footer, body.classroom .ask-note { display: none; }
+body.classroom nav { padding-block: 6px 4px; }
+body.classroom nav button { font-size: 17px; padding: 9px 16px; }
+body.classroom main { padding-block: 0 8px; }
+body.classroom .demo h2 { font-size: 26px; margin: 4px 0 8px; }
+body.classroom .step, body.classroom .ask, body.classroom .quiz, body.classroom .quiz button, body.classroom .readout, body.classroom .ctl label, body.classroom .choice button, body.classroom .bet button, body.classroom .btns button, body.classroom .legend, body.classroom .board { font-size: 18px; }
+body.classroom .step .k, body.classroom .ctl .hint, body.classroom .badge { font-size: 15px; }
+body.classroom .panel h3 { font-size: 15px; }
+body.classroom .stage { grid-template-columns: minmax(0, 1fr) 400px; }
+body.classroom .grid { grid-template-columns: minmax(0, 1fr) 360px; }
+@media (max-width: 1100px) { body.classroom .stage, body.classroom .grid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -169,6 +187,7 @@ canvas.hit { cursor: pointer; }
           <dt>hops so far</dt><dd id="mpK">0</dd>
           <dt>junctions reached</dt><dd id="mpReach">1 / 12</dd>
           <dt>spread across junctions</dt><dd id="mpStd">-</dd>
+          <dt>spread, 3 hops to 12 hops</dt><dd id="mpOver">-</dd>
         </dl>
       </div>
       <div class="panel quiz" id="mpQuiz"></div>
@@ -196,7 +215,7 @@ canvas.hit { cursor: pointer; }
       <div class="panel">
         <h3>challenges</h3>
         <div class="ask" id="pmC1">1. Change the red model's output by at least 0.5 without moving any point. <span class="badge" id="pmB1">not yet</span></div>
-        <div class="ask" id="pmC2">2. Now change the blue model's output by at least 0.05. <span class="badge" id="pmB2">not yet</span></div>
+        <div class="ask" id="pmC2">2. Reorder the file to change the blue model's output by 0.05. Can you? <span class="badge" id="pmB2">not yet</span></div>
         <div class="btns"><button id="pmReset">Reset</button></div>
       </div>
       <div class="panel quiz" id="pmQuiz"></div>
@@ -210,16 +229,17 @@ canvas.hit { cursor: pointer; }
 <!-- ============ 3. VALUE ITERATION: design the policy ============ -->
 <section class="demo" id="bellman" role="tabpanel">
   <h2>Design the operating policy, then see how close you got</h2>
-  <p class="lead">A pump crew moves across a 6 by 6 site. The pump station pays +1, the three spillway cells pay -1, and a move slips sideways one time in ten. Click cells to set the direction the crew takes from each one. Then evaluate your policy exactly and compare it with the optimum. The coin row at the right is the discount: drag its marker to decide how fast a future reward fades, and reveal the optimum again.</p>
+  <p class="lead">A pump crew moves across a 6 by 6 site. The pump station pays +1, the three spillway cells pay -1, and a move slips sideways one time in ten. First choose the half-life of a reward, which places the marker on the coin row at the right and fixes the discount. Then click cells to set the direction the crew takes from each one, evaluate your policy exactly and compare it with the optimum. Drag the coin row's marker to change how fast a future reward fades, and reveal the optimum again.</p>
   <div class="stage">
     <div class="plot two">
       <canvas id="viGrid" class="hit" width="800" height="500"></canvas>
       <canvas id="viConv" class="grab" width="400" height="500"></canvas>
     </div>
     <div class="side">
+      <div class="panel step" id="viStep"></div>
       <div class="panel">
         <h3>your policy</h3>
-        <div class="btns"><button class="primary" id="viEval">Evaluate my policy</button><button id="viReveal">Reveal the optimum</button><button id="viClear">Clear</button></div>
+        <div class="btns"><button class="primary" id="viEval" disabled>Evaluate my policy</button><button id="viReveal" disabled>Reveal the optimum</button><button id="viClear">Clear</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>expected return from start, yours</dt><dd id="viMine">-</dd>
           <dt>expected return from start, optimal</dt><dd id="viOpt">-</dd>
@@ -244,17 +264,18 @@ canvas.hit { cursor: pointer; }
 <!-- ============ 4. Q-LEARNING: the race ============ -->
 <section class="demo" id="qlearn" role="tabpanel">
   <h2>The exploration race</h2>
-  <p class="lead">Two crews learn the same site from experience with Q-learning. The left crew always takes its current best guess. The right crew acts at random a fraction of the time, set by the sector on the coin between the two grids: drag its edge. Place your bet by clicking a crew's grid, or the tie flag under the coin, then start the race.</p>
+  <p class="lead">Two crews learn the same site from experience with Q-learning. The left crew always takes its current best guess. The right crew acts at random a fraction of the time, set by the sector on the coin between the two grids: drag its edge. Place your bet by clicking a crew's grid, or the tie flag under the coin, then start the race. After the race a green dot walks each crew's final greedy path.</p>
   <div class="stage">
     <div class="plot"><canvas id="qlRace" class="hit" width="1200" height="560"></canvas></div>
     <div class="side">
-      <div class="panel">
-        <h3>your bet: after 150 episodes, whose greedy policy is better?</h3>
+      <div class="panel step" id="qlStep">
+        <p><b id="qlPrompt">Epsilon 0.30 against 0: which crew's greedy return is higher after 150 episodes?</b></p>
+        <p>Place the bet by clicking a crew's grid, or the tie flag under the coin. Start unlocks after the bet.</p>
         <dl class="readout">
-          <dt>your bet (click a crew's grid, or the tie flag between them)</dt><dd id="qlBet">-</dd>
-          <dt>right crew's exploration rate (drag the coin's sector)</dt><dd id="qlEpsOut">0.10</dd>
+          <dt>your bet</dt><dd id="qlBet">-</dd>
+          <dt>right crew's exploration rate (drag the coin's sector)</dt><dd id="qlEpsOut">0.30</dd>
         </dl>
-        <div class="btns" style="margin-top:10px"><button class="primary" id="qlStart">Start the race</button><button id="qlReset">New site</button></div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="qlStart" disabled>Start the race</button><button id="qlReplay" disabled>Replay the paths</button><button id="qlReset">New site</button></div>
       </div>
       <div class="panel">
         <dl class="readout">
@@ -313,6 +334,7 @@ function quiz(el, spec) {
     document.getElementById("mpK").textContent = K;
     document.getElementById("mpReach").textContent = x.filter(v => v > 1e-9).length + " / " + N;
     document.getElementById("mpStd").textContent = std(x).toFixed(3) + (K === 0 ? "" : "  (was " + std(xs[0]).toFixed(3) + " at hop 0)");
+    document.getElementById("mpOver").textContent = K >= 12 ? std(xs[3]).toFixed(3) + " to " + std(xs[12]).toFixed(3) : "-";
     board.clear("the network after " + K + (K === 1 ? " hop" : " hops") + (phase < 1 ? ", messages in flight" : ""));
     const ctx = board.ctx;
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 3;
@@ -333,12 +355,12 @@ function quiz(el, spec) {
   const steps = [
     { html: '<span class="k">step 1 of 5</span><p>A reading of 1 appears at junction J1. Every other junction reads 0. Nothing has been passed yet; this is the input to the first layer.</p><p>Press Next to apply one layer.</p>', enter: () => { highlight = null; animateTo(0); } },
     { html: '<span class="k">step 2 of 5</span><p>One layer. Every junction replaces its value with a weighted sum over itself and the junctions it shares a pipe with. J1 has two pipes, so after one hop only J2 and J6 hear it, and J1 itself keeps part of the reading.</p><p>Notice that J2 and J6 received different amounts: the weights divide by the square root of each junction\'s degree.</p>', enter: () => { highlight = null; animateTo(1); } },
-    { html: '<span class="k">step 3 of 5</span><p>Two layers reach the neighbours of neighbours. The receptive field is a graph distance.</p><p><b>Predict before the next hop.</b> After the third layer, which junction will hold the largest value? Click it on the network.</p>', enter: () => { highlight = null; picked = null; answered = false; animateTo(2); } },
+    { html: '<span class="k">step 3 of 5</span><p><b>After three hops, which junction holds the largest value? Click it.</b></p><p>Two layers reach the neighbours of neighbours. The receptive field is a graph distance. Next stays locked until you have picked a junction; your pick is outlined in orange.</p>', enter: () => { highlight = null; picked = null; answered = false; animateTo(2); } },
     { html: '', enter: () => { animateTo(3, () => { const x = xs[3]; let best = 0; for (let i = 1; i < N; i++) if (x[i] > x[best]) best = i; highlight = best; const ok = picked === best; stepEl.innerHTML = '<span class="k">step 4 of 5</span><div class="ask ' + (picked === null ? '' : (ok ? 'ok' : 'no')) + '">' + (picked === null ? 'You did not pick a junction. ' : (ok ? 'Correct: ' : 'Not quite: ')) + 'after three hops the largest value sits at <b>J' + (best + 1) + '</b> (outlined in green), with ' + x[best].toFixed(2) + '.' + (picked !== null && !ok ? ' You picked J' + (picked + 1) + ', which holds ' + x[picked].toFixed(2) + '.' : '') + '</div><p>The source keeps part of its own reading at every hop, and junctions with few pipes dilute less, so the largest value after a few hops is usually the source or a low-degree neighbour, and never the far junction with the most pipes.</p>'; draw(); }); } },
-    { html: '<span class="k">step 5 of 5</span><p>Keep stacking layers and watch the fills converge: every junction drifts toward the same value and the spread readout falls toward zero. That is oversmoothing, slide 8.</p><p>Two or three layers is usually what a utility network needs. The number of layers is a statement about how far a cause is allowed to travel.</p>', enter: () => { highlight = null; animateTo(12); } },
+    { html: '<span class="k">step 5 of 5</span><p>Twelve layers. Watch the fills converge: every junction drifts toward the same value and the spread readout falls toward zero. That is oversmoothing, slide 8.</p><p id="mpOverTxt" class="ask" hidden></p><p>Two or three layers is usually what a utility network needs. The number of layers is a statement about how far a cause is allowed to travel.</p>', enter: () => { highlight = null; animateTo(12, () => { const el = document.getElementById("mpOverTxt"); if (!el) return; const s3 = std(xs[3]), s12 = std(xs[12]), lo = Math.min.apply(null, xs[12]), hi = Math.max.apply(null, xs[12]); el.hidden = false; el.innerHTML = 'Spread of the junction values: <b>' + s3.toFixed(3) + '</b> after three hops, <b>' + s12.toFixed(3) + '</b> after twelve. All twelve values now sit between ' + lo.toFixed(2) + ' and ' + hi.toFixed(2) + ', so a reader of the final layer can barely tell which junction the reading came from.'; }); } },
   ];
-  function showStep(i) { stepIdx = Math.max(0, Math.min(steps.length - 1, i)); free = false; if (steps[stepIdx].html) stepEl.innerHTML = steps[stepIdx].html; steps[stepIdx].enter(); document.getElementById("mpNext").disabled = stepIdx === steps.length - 1; document.getElementById("mpBack").disabled = stepIdx === 0; }
-  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); let best = -1, bd = 1e9; for (let i = 0; i < N; i++) { const d = Math.hypot(mx - X(i), my - Y(i)); if (d < bd) { bd = d; best = i; } } if (bd > 30) return; if (free) { source = best; series(); K = 0; highlight = null; draw(); } else if (stepIdx === 2) { picked = best; draw(); } });
+  function showStep(i) { stepIdx = Math.max(0, Math.min(steps.length - 1, i)); free = false; if (steps[stepIdx].html) stepEl.innerHTML = steps[stepIdx].html; steps[stepIdx].enter(); document.getElementById("mpNext").disabled = stepIdx === steps.length - 1 || (stepIdx === 2 && picked === null); document.getElementById("mpBack").disabled = stepIdx === 0; }
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); let best = -1, bd = 1e9; for (let i = 0; i < N; i++) { const d = Math.hypot(mx - X(i), my - Y(i)); if (d < bd) { bd = d; best = i; } } if (bd > 30) return; if (free) { source = best; series(); K = 0; highlight = null; draw(); } else if (stepIdx === 2) { picked = best; document.getElementById("mpNext").disabled = false; draw(); } });
   document.getElementById("mpNext").addEventListener("click", () => showStep(stepIdx + 1));
   document.getElementById("mpBack").addEventListener("click", () => showStep(stepIdx - 1));
   document.getElementById("mpFree").addEventListener("click", () => { free = true; highlight = null; picked = null; stepEl.innerHTML = '<span class="k">free play</span><p>Click any junction to make it the source, then use Back and Next to move one hop at a time.</p>'; document.getElementById("mpNext").disabled = false; document.getElementById("mpBack").disabled = false; document.getElementById("mpNext").onclick = null; });
@@ -357,7 +379,9 @@ function quiz(el, spec) {
 /* ================= 2. BREAK THE MODEL ================= */
 (function permute() {
   const base = [[0.15, 0.2], [0.35, 0.65], [0.5, 0.3], [0.7, 0.8], [0.85, 0.45], [0.25, 0.85], [0.6, 0.55], [0.9, 0.15]];
-  let pts, order, c0, p0, moved;
+  let pts, order, c0, p0, moved, attempts = 0, c1Ever = false;
+  // a reordering made after challenge 1 has been met counts as one attempt at challenge 2
+  function reordered() { if (c1Ever && !moved) attempts++; render(); }
   const wr = mulberry32(99), Wc = []; for (let i = 0; i < 3; i++) { const row = []; for (let j = 0; j < 16; j++) row.push(wr() * 2 - 1); Wc.push(row); }
   const concat = () => { const v = []; for (const i of order) v.push(pts[i][0], pts[i][1]); return Wc.map(r => r.reduce((s, w, j) => s + w * v[j], 0)); };
   const enc = p => [p[0] - 0.5, p[1] - 0.5, (p[0] - 0.5) ** 2 + (p[1] - 0.5) ** 2];
@@ -366,17 +390,17 @@ function quiz(el, spec) {
   const board = new Board(document.getElementById("pmPoints")), bars = new Board(document.getElementById("pmBars"));
   const PX = v => 50 + v * (board.W - 100), PY = v => board.H - 40 - v * (board.H - 90);
   const list = document.getElementById("pmList");
-  function reset() { pts = base.map(p => p.slice()); order = [0, 1, 2, 3, 4, 5, 6, 7]; moved = false; c0 = concat(); p0 = pooled(); render(); }
+  function reset() { pts = base.map(p => p.slice()); order = [0, 1, 2, 3, 4, 5, 6, 7]; moved = false; attempts = 0; c1Ever = false; c0 = concat(); p0 = pooled(); render(); }
   function renderList() {
     list.innerHTML = "";
     order.forEach((i, rank) => {
       const li = document.createElement("li"); li.draggable = true; li.dataset.rank = rank;
       li.innerHTML = '<span class="sw" style="background:' + PAL[i] + '"></span>line ' + (rank + 1) + ': (' + pts[i][0].toFixed(2) + ', ' + pts[i][1].toFixed(2) + ')<span class="mv"><button data-d="-1" aria-label="move up">up</button><button data-d="1" aria-label="move down">down</button></span>';
-      li.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { const d = +b.dataset.d, j = rank + d; if (j < 0 || j >= order.length) return; [order[rank], order[j]] = [order[j], order[rank]]; render(); }));
+      li.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { const d = +b.dataset.d, j = rank + d; if (j < 0 || j >= order.length) return; [order[rank], order[j]] = [order[j], order[rank]]; reordered(); }));
       li.addEventListener("dragstart", ev => { li.classList.add("drag"); ev.dataTransfer.setData("text/plain", String(rank)); });
       li.addEventListener("dragend", () => li.classList.remove("drag"));
       li.addEventListener("dragover", ev => ev.preventDefault());
-      li.addEventListener("drop", ev => { ev.preventDefault(); const from = +ev.dataTransfer.getData("text/plain"), to = rank; if (from === to) return; const it = order.splice(from, 1)[0]; order.splice(to, 0, it); render(); });
+      li.addEventListener("drop", ev => { ev.preventDefault(); const from = +ev.dataTransfer.getData("text/plain"), to = rank; if (from === to) return; const it = order.splice(from, 1)[0]; order.splice(to, 0, it); reordered(); });
       list.appendChild(li);
     });
   }
@@ -385,8 +409,14 @@ function quiz(el, spec) {
     const c = concat(), p = pooled(), dC = dist(c, c0), dP = dist(p, p0);
     const b1 = document.getElementById("pmB1"), b2 = document.getElementById("pmB2"), c1 = document.getElementById("pmC1"), c2 = document.getElementById("pmC2");
     const done1 = dC >= 0.5 && !moved; b1.textContent = done1 ? "done, change " + dC.toFixed(2) : (moved ? "a point moved, reset to retry" : "change so far " + dC.toFixed(2)); b1.className = "badge" + (done1 ? " done" : ""); c1.className = "ask" + (done1 ? " ok" : "");
-    const done2 = dP >= 0.05; b2.textContent = done2 ? "done, change " + dP.toFixed(3) + (moved ? ", and only after a point moved" : "") : "change so far " + dP.toFixed(3); b2.className = "badge" + (done2 ? " done" : ""); c2.className = "ask" + (done2 ? " ok" : (dC >= 0.5 && !moved ? " no" : ""));
-    if (!done2 && dC >= 0.5 && !moved) c2.innerHTML = '2. Now change the blue model\'s output by at least 0.05. <span class="badge" id="pmB2">change so far ' + dP.toFixed(3) + '</span><br><small>Reordering will never do it. Drag a point in the plot instead.</small>';
+    c1Ever = c1Ever || done1;
+    // challenge 2: the page admits that reordering cannot do it only after two reorderings have been tried
+    const done2 = dP >= 0.05; let t2, cls2 = "ask", note = "";
+    if (done2) { t2 = "done, change " + dP.toFixed(3) + (moved ? ", after a point moved" : ""); cls2 += " ok"; }
+    else if (!c1Ever || attempts < 2) { t2 = "not yet"; }
+    else { t2 = "change " + dP.toFixed(3) + " after " + attempts + " reorderings"; cls2 += " no"; note = "No ordering can. The blue model takes a maximum over the set of points, and a maximum has no memory of which point came first. Drag a point in the plot instead; geometry is the only thing it answers to."; }
+    b2.textContent = t2; b2.className = "badge" + (done2 ? " done" : ""); c2.className = cls2;
+    const noteEl = c2.querySelector("small"); if (note && !noteEl) { const sm = document.createElement("small"); sm.textContent = note; c2.appendChild(document.createElement("br")); c2.appendChild(sm); } else if (!note && noteEl) { noteEl.previousSibling.remove(); noteEl.remove(); }
     board.clear("the scan, numbered in file order (drag a point to move it)");
     const ctx = board.ctx; ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(PX(0), PY(1), PX(1) - PX(0), PY(0) - PY(1));
     order.forEach((i, rank) => { ctx.beginPath(); ctx.arc(PX(pts[i][0]), PY(pts[i][1]), 10, 0, 2 * Math.PI); ctx.fillStyle = PAL[i]; ctx.fill(); ctx.fillStyle = css("--ink"); ctx.font = "13px " + css("--mono"); ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText("line " + (rank + 1), PX(pts[i][0]) + 15, PY(pts[i][1]) - 2); });
@@ -403,9 +433,9 @@ function quiz(el, spec) {
     bx.fillStyle = css("--muted"); bx.fillText("dashes: the original outputs", 50, 70);
   }
   let dragIdx = -1;
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); dragIdx = -1; let bd = 1e9; pts.forEach((p, i) => { const d = Math.hypot(mx - PX(p[0]), my - PY(p[1])); if (d < bd) { bd = d; dragIdx = i; } }); if (bd > 18) dragIdx = -1; });
-  window.addEventListener("mousemove", ev => { if (dragIdx < 0) return; const [mx, my] = board.pos(ev); pts[dragIdx] = [Math.min(1, Math.max(0, (mx - 50) / (board.W - 100))), Math.min(1, Math.max(0, (board.H - 40 - my) / (board.H - 90)))]; moved = true; render(); });
-  window.addEventListener("mouseup", () => { dragIdx = -1; });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); dragIdx = -1; let bd = 1e9; pts.forEach((p, i) => { const d = Math.hypot(mx - PX(p[0]), my - PY(p[1])); if (d < bd) { bd = d; dragIdx = i; } }); if (bd > 18) dragIdx = -1; });
+  window.addEventListener("pointermove", ev => { if (dragIdx < 0) return; const [mx, my] = board.pos(ev); pts[dragIdx] = [Math.min(1, Math.max(0, (mx - 50) / (board.W - 100))), Math.min(1, Math.max(0, (board.H - 40 - my) / (board.H - 90)))]; moved = true; render(); });
+  window.addEventListener("pointerup", () => { dragIdx = -1; });
   document.getElementById("pmReset").addEventListener("click", reset);
   quiz(document.getElementById("pmQuiz"), { q: "Which of these makes a model blind to the order of its inputs?", options: ["Concatenate the inputs and apply a matrix", "Sum, mean, or max over the inputs after a shared encoder", "Sort the inputs by their first coordinate, then concatenate"], answer: 1, why: "A symmetric function over the set gives the same answer for every ordering. Sorting is a trick that breaks when two points tie or move past each other, and concatenation keeps the order as a feature." });
   window.addEventListener("themechange", render);
@@ -447,7 +477,35 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
   const sg = { get value() { return gammaV; } };
   const CX0 = 30, CX1 = 370, CYC = 70, halfLife = g => Math.log(0.5) / Math.log(g);
   let pol = [], Vmine = null, Vopt = null, polOpt = null, hist = [], revealed = false, anim = null;
-  function clear() { pol = []; for (let y = 0; y < G; y++) { pol.push([]); for (let x = 0; x < G; x++) pol[y].push(null); } Vmine = null; Vopt = null; polOpt = null; hist = []; revealed = false; draw(); }
+  // opening gate: the student places the half-life marker (six or sixty steps) before any policy cell can be drawn
+  let gate = null, baseHtml = "";
+  const stepEl = document.getElementById("viStep");
+  const H_PROMPT = "Where would you put the half-life marker for a bridge programme? Six steps or sixty?";
+  function setGate() {
+    gate = null; baseHtml = "";
+    stepEl.innerHTML = '<p><b>' + H_PROMPT + '</b></p><p>Half-life is the number of steps ahead at which a reward counts for half of its face value today. Your choice places the marker on the coin row and sets gamma; the policy cells unlock after it.</p><div class="btns"><button class="primary" id="viH6">Six steps</button><button class="primary" id="viH60">Sixty steps</button></div>';
+    stepEl.querySelector("#viH6").addEventListener("click", () => choose(6));
+    stepEl.querySelector("#viH60").addEventListener("click", () => choose(60));
+    document.getElementById("viEval").disabled = true; document.getElementById("viReveal").disabled = true;
+    document.getElementById("viGammaOut").textContent = "-"; document.getElementById("viHalf").textContent = "-";
+  }
+  function choose(h) {
+    gate = h; gammaV = Math.pow(0.5, 1 / h);
+    baseHtml = '<p><span class="k">half-life ' + h + ' steps, gamma ' + gammaV.toFixed(3) + '</span></p><p>Click each cell to set the crew\'s move, evaluate your policy, then reveal the optimum. The reveal says which half-life keeps the far pump station worth reaching.</p>';
+    stepEl.innerHTML = baseHtml;
+    document.getElementById("viEval").disabled = false; document.getElementById("viReveal").disabled = false;
+    update();
+  }
+  function startValue(gamma) { return valueIteration(gamma, 400).V[START[1]][START[0]]; }
+  function verdict() {
+    if (gate === null || !Vopt) return;
+    const v6 = startValue(Math.pow(0.5, 1 / 6)), v60 = startValue(Math.pow(0.5, 1 / 60)), vNow = Vopt[START[1]][START[0]];
+    const ok = gate === 60;
+    const text = ok ? 'Sixty steps was the right place. From the start cell the pump station is worth ' + vNow.toFixed(2) + ' at your discount. Under a half-life of six steps the same cell would be worth only ' + v6.toFixed(2) + '; under sixty, ' + v60.toFixed(2) + '. A programme that runs for decades needs the long half-life, or the planner stops seeing the goal.'
+      : 'Six steps is short for a bridge programme. From the start cell the pump station is worth ' + vNow.toFixed(2) + ' at your discount, against ' + v60.toFixed(2) + ' under a half-life of sixty. Only the long half-life keeps the far goal close to its face value, and that horizon is the one a programme measured in decades works to.';
+    stepEl.innerHTML = baseHtml + '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + text + '</div>';
+  }
+  function clear() { pol = []; for (let y = 0; y < G; y++) { pol.push([]); for (let x = 0; x < G; x++) pol[y].push(null); } Vmine = null; Vopt = null; polOpt = null; hist = []; revealed = false; if (anim) clearTimeout(anim); setGate(); draw(); }
   function evaluate(gamma) {
     // V = r + gamma P V for the student's policy; unset cells count as "stay put", which earns nothing
     const n = G * G, M = [], rhs = new Array(n).fill(0); for (let i = 0; i < n; i++) { M.push(new Array(n).fill(0)); M[i][i] = 1; }
@@ -455,7 +513,7 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
     const v = solveLinear(M, rhs); const V = []; for (let y = 0; y < G; y++) V.push(Float64Array.from(v.slice(y * G, y * G + G))); return V;
   }
   function draw() {
-    const ctx = board.ctx; board.clear(revealed ? "your policy (black) against the optimum (green)" : "click a cell to set the crew's move; click again to turn it");
+    const ctx = board.ctx; board.clear(gate === null ? "choose the half-life in the panel first; the cells unlock after that" : (revealed ? "your policy (black) against the optimum (green)" : "click a cell to set the crew's move; click again to turn it"));
     const vmax = 1;
     drawGrid(ctx, ox, oy, s, (x, y) => isHaz(x, y) ? mix(css("--panel"), css("--red"), 0.18) : isGoal(x, y) ? mix(css("--panel"), css("--blue"), 0.25) : (Vmine ? mix(css("--panel"), css("--blue"), 0.7 * Math.max(0, Vmine[y][x] / vmax) ** 1.4) : css("--panel")),
       (x, y) => terminal(x, y) ? null : (pol[y][x] === null ? null : pol[y][x]),
@@ -465,9 +523,12 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
     const cx2 = conv.ctx, L = 50, R = conv.W - 16, T = 190, B = conv.H - 40;
     const h = halfLife(gammaV); for (let k = 0; k < 12; k++) { const step = k * 6, a = Math.pow(gammaV, step), x = CX0 + 14 + k * 28; cx2.fillStyle = mix(css("--panel"), css("--orange"), Math.max(0.06, a)); cx2.beginPath(); cx2.arc(x, CYC, 11, 0, 2 * Math.PI); cx2.fill(); cx2.strokeStyle = css("--line"); cx2.stroke(); if (k % 2 === 0) conv.label(String(step), x, CYC + 28, css("--muted"), "center", 9, true); }
     conv.label("a reward this many steps ahead, as it counts today", CX0, CYC - 26, css("--muted"), "left", 11);
-    const hx = CX0 + 14 + Math.min(70, h) / 6 * 28; cx2.strokeStyle = css("--blue"); cx2.lineWidth = 2; cx2.beginPath(); cx2.moveTo(hx, CYC - 18); cx2.lineTo(hx, CYC + 18); cx2.stroke(); cx2.lineWidth = 1; cx2.fillStyle = css("--blue"); cx2.beginPath(); cx2.arc(hx, CYC + 44, 8, 0, 2 * Math.PI); cx2.fill();
-    conv.label("half gone after " + h.toFixed(1) + " steps: gamma " + gammaV.toFixed(2) + " (drag)", CX0, CYC + 68, css("--blue"), "left", 11, true);
-    conv.label("the optimum changes with gamma: reveal it again", CX0, CYC + 86, css("--muted"), "left", 10);
+    if (gate === null) { conv.label("the marker is placed by your choice in the panel: six or sixty steps", CX0, CYC + 68, css("--blue"), "left", 11); }
+    else {
+      const hx = CX0 + 14 + Math.min(70, h) / 6 * 28; cx2.strokeStyle = css("--blue"); cx2.lineWidth = 2; cx2.beginPath(); cx2.moveTo(hx, CYC - 18); cx2.lineTo(hx, CYC + 18); cx2.stroke(); cx2.lineWidth = 1; cx2.fillStyle = css("--blue"); cx2.beginPath(); cx2.arc(hx, CYC + 44, 8, 0, 2 * Math.PI); cx2.fill();
+      conv.label("half gone after " + h.toFixed(1) + " steps: gamma " + gammaV.toFixed(2) + " (drag)", CX0, CYC + 68, css("--blue"), "left", 11, true);
+      conv.label("the optimum changes with gamma: reveal it again", CX0, CYC + 86, css("--muted"), "left", 10);
+    }
     conv.label("value iteration, largest change per sweep", L, T - 12, css("--ink"), "left", 13);
     cx2.strokeStyle = css("--line"); cx2.beginPath(); cx2.moveTo(L, T); cx2.lineTo(L, B); cx2.lineTo(R, B); cx2.stroke();
     cx2.fillStyle = css("--muted"); cx2.font = "12px " + css("--mono"); cx2.textAlign = "right"; cx2.textBaseline = "middle"; for (let e = 0; e >= -6; e -= 2) { const y = B - (B - T) * (e + 6) / 6; cx2.fillText("1e" + e, L - 6, y); }
@@ -481,14 +542,14 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
     if (Vopt) { document.getElementById("viOpt").textContent = Vopt[START[1]][START[0]].toFixed(3); if (Vmine) { document.getElementById("viScore").textContent = (100 * Math.max(0, Vmine[START[1]][START[0]]) / Vopt[START[1]][START[0]]).toFixed(0) + " %"; let diff = 0; for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) if (!terminal(x, y) && pol[y][x] !== null && pol[y][x] !== polOpt[y][x]) diff++; document.getElementById("viDiff").textContent = diff; } }
     draw();
   }
-  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const x = Math.floor((mx - ox) / s), y = Math.floor((my - oy) / s); if (x < 0 || y < 0 || x >= G || y >= G || terminal(x, y)) return; pol[y][x] = pol[y][x] === null ? 0 : (pol[y][x] + 1) % 4; Vmine = null; document.getElementById("viMine").textContent = "-"; document.getElementById("viScore").textContent = "-"; update(); });
+  board.c.addEventListener("click", ev => { if (gate === null) return; const [mx, my] = board.pos(ev); const x = Math.floor((mx - ox) / s), y = Math.floor((my - oy) / s); if (x < 0 || y < 0 || x >= G || y >= G || terminal(x, y)) return; pol[y][x] = pol[y][x] === null ? 0 : (pol[y][x] + 1) % 4; Vmine = null; document.getElementById("viMine").textContent = "-"; document.getElementById("viScore").textContent = "-"; update(); });
   document.getElementById("viEval").addEventListener("click", () => { Vmine = evaluate(+sg.value); update(); });
-  conv.c.addEventListener("mousedown", ev => { const [mx, my] = conv.pos(ev); if (my >= CYC - 24 && my <= CYC + 56 && mx >= CX0 && mx <= CX1) { dragG = true; moveG(mx); } });
-  function moveG(mx) { const steps = Math.max(1, Math.min(70, (mx - CX0 - 14) / 28 * 6)); gammaV = Math.pow(0.5, 1 / steps); Vopt = null; polOpt = null; revealed = false; hist = []; document.getElementById("viOpt").textContent = "-"; document.getElementById("viScore").textContent = "-"; document.getElementById("viDiff").textContent = "-"; update(); }
-  window.addEventListener("mousemove", ev => { if (!dragG) return; const [mx] = conv.pos(ev); moveG(mx); });
-  window.addEventListener("mouseup", () => { dragG = false; });
-  document.getElementById("viReveal").addEventListener("click", () => { if (anim) clearTimeout(anim); const gamma = +sg.value; const frames = []; valueIteration(gamma, 400, (V, h) => frames.push({ V: V.map(r => Float64Array.from(r)), h: h.slice() })); let i = 0; revealed = true; (function play() { const f = frames[Math.min(i, frames.length - 1)]; Vopt = f.V; hist = f.h; polOpt = greedyFrom(Vopt, gamma); update(); i++; if (i < frames.length) anim = setTimeout(play, 120); })(); });
-  document.getElementById("viClear").addEventListener("click", clear);
+  conv.c.addEventListener("pointerdown", ev => { if (gate === null) return; const [mx, my] = conv.pos(ev); if (my >= CYC - 24 && my <= CYC + 56 && mx >= CX0 && mx <= CX1) { dragG = true; moveG(mx); } });
+  function moveG(mx) { const steps = Math.max(1, Math.min(70, (mx - CX0 - 14) / 28 * 6)); gammaV = Math.pow(0.5, 1 / steps); Vopt = null; polOpt = null; revealed = false; hist = []; if (anim) clearTimeout(anim); if (gate !== null) stepEl.innerHTML = baseHtml; document.getElementById("viOpt").textContent = "-"; document.getElementById("viScore").textContent = "-"; document.getElementById("viDiff").textContent = "-"; update(); }
+  window.addEventListener("pointermove", ev => { if (!dragG) return; const [mx] = conv.pos(ev); moveG(mx); });
+  window.addEventListener("pointerup", () => { dragG = false; });
+  document.getElementById("viReveal").addEventListener("click", () => { if (gate === null) return; if (anim) clearTimeout(anim); const gamma = +sg.value; const frames = []; valueIteration(gamma, 400, (V, h) => frames.push({ V: V.map(r => Float64Array.from(r)), h: h.slice() })); let i = 0; revealed = true; stepEl.innerHTML = baseHtml; (function play() { const f = frames[Math.min(i, frames.length - 1)]; Vopt = f.V; hist = f.h; polOpt = greedyFrom(Vopt, gamma); update(); i++; if (i < frames.length) anim = setTimeout(play, 120); else verdict(); })(); });
+  document.getElementById("viClear").addEventListener("click", () => { clear(); ["viMine", "viOpt", "viScore", "viDiff"].forEach(id => { document.getElementById(id).textContent = "-"; }); });
   quiz(document.getElementById("viQuiz"), { q: "Lowering the discount gamma from 0.95 to 0.6 makes the optimal policy", options: ["More willing to take a short path past the spillway", "More cautious, since the -1 cells matter more", "Unchanged: the ordering of actions does not depend on gamma"], answer: 0, why: "A small discount shrinks everything more than a few steps away, including the far-off +1, so the planner weighs the near risk and the near reward by the same short yardstick and tends to cut corners. The ordering of actions does depend on gamma." });
   window.addEventListener("themechange", draw);
   clear();
@@ -497,16 +558,20 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
 /* ================= 4. THE EXPLORATION RACE ================= */
 (function qlearn() {
   const board = new Board(document.getElementById("qlRace"));
-  const s = Math.min((board.W / 2 - 60) / G, (board.H - 80) / G), oy = 60, oxL = board.W / 4 - s * G / 2, oxR = 3 * board.W / 4 - s * G / 2;
+  const s = Math.min((board.W / 2 - 60) / G, (board.H - 110) / G), oy = 50, oxL = board.W / 4 - s * G / 2, oxR = 3 * board.W / 4 - s * G / 2;
   const ALPHA = 0.1, GAMMA = 0.95, EPIS = 150;
-  let epsV = 0.1, dragCoin = false; const se = { get value() { return epsV; } }, COIN = [600, 250, 52];
+  let epsV = 0.3, dragCoin = false; const se = { get value() { return epsV; } }, COIN = [600, 250, 52];
   let seed = 1, agents = [], running = false, bet = null, timer = null, episodes = 0;
+  // replay of each crew's final greedy path: a dot walks the grid after the race, one cell per frame
+  let replay = null, replayTimer = null;
+  function greedyPath(ag) { const path = [[START[0], START[1]]], seen = new Set([START[1] * G + START[0]]); let x = START[0], y = START[1], end = "loops"; for (let t = 0; t < 40; t++) { const q = ag.Q[y][x], a = q.indexOf(Math.max.apply(null, q)); const [nx, ny] = move(x, y, a); path.push([nx, ny]); x = nx; y = ny; if (isGoal(x, y)) { end = "pump in " + (path.length - 1) + " moves"; break; } if (isHaz(x, y)) { end = "spillway"; break; } const key = y * G + x, prev = path[path.length - 2], wall = nx === prev[0] && ny === prev[1]; if (wall || seen.has(key)) { end = wall ? "stuck at a wall" : "loops"; break; } seen.add(key); } return { cells: path, end }; }
+  function startReplay() { if (replayTimer) clearTimeout(replayTimer); if (agents[0].greedy === null) return; replay = { paths: agents.map(greedyPath), t: 0, done: false }; const maxLen = Math.max.apply(null, replay.paths.map(p => p.cells.length)); (function step() { draw(); replay.t++; if (replay.t < maxLen) replayTimer = setTimeout(step, 260); else { replay.done = true; draw(); } })(); }
   function mkAgent(eps, seedOff) { const Q = [], visits = []; for (let y = 0; y < G; y++) { Q.push([]); visits.push(new Float64Array(G)); for (let x = 0; x < G; x++) Q[y].push(new Float64Array(4)); } return { eps, Q, visits, rng: mulberry32(seed + seedOff), x: START[0], y: START[1], steps: 0, trail: [], greedy: null }; }
   function argmax(arr, rng) { let b = [0]; for (let i = 1; i < 4; i++) { if (arr[i] > arr[b[0]]) b = [i]; else if (arr[i] === arr[b[0]]) b.push(i); } return b[Math.floor(rng() * b.length)]; }
   function envStep(x, y, a, rng) { const u = rng(), o = outcomes(x, y, a); let acc = 0; for (const [p, nxy] of o) { acc += p; if (u < acc) return nxy; } return o[0][1]; }
   function oneStep(ag) { const a = ag.rng() < ag.eps ? Math.floor(ag.rng() * 4) : argmax(ag.Q[ag.y][ag.x], ag.rng); const [nx, ny] = envStep(ag.x, ag.y, a, ag.rng), r = reward(nx, ny), done = terminal(nx, ny); ag.visits[ag.y][ag.x]++; const target = r + (done ? 0 : GAMMA * Math.max.apply(null, ag.Q[ny][nx])); ag.Q[ag.y][ag.x][a] += ALPHA * (target - ag.Q[ag.y][ag.x][a]); ag.trail.push([ag.x, ag.y]); if (ag.trail.length > 12) ag.trail.shift(); ag.x = nx; ag.y = ny; ag.steps++; if (done || ag.steps >= 100) { ag.x = START[0]; ag.y = START[1]; ag.steps = 0; ag.trail = []; return true; } return false; }
   function greedyReturn(ag) { const rng = mulberry32(777); let tot = 0; for (let k = 0; k < 100; k++) { let x = START[0], y = START[1], ret = 0, d = 1; for (let t = 0; t < 100; t++) { const a = argmax(ag.Q[y][x], rng); const [nx, ny] = envStep(x, y, a, rng); ret += d * reward(nx, ny); d *= GAMMA; x = nx; y = ny; if (terminal(x, y)) break; } tot += ret; } return tot / 100; }
-  function reset() { if (timer) clearTimeout(timer); running = false; episodes = 0; agents = [mkAgent(0, 0), mkAgent(+se.value, 1000)]; document.getElementById("qlVerdict").hidden = true; document.getElementById("qlStart").textContent = "Start the race"; draw(); }
+  function reset() { if (timer) clearTimeout(timer); if (replayTimer) clearTimeout(replayTimer); replay = null; running = false; episodes = 0; agents = [mkAgent(0, 0), mkAgent(+se.value, 1000)]; document.getElementById("qlVerdict").hidden = true; document.getElementById("qlStart").textContent = "Start the race"; document.getElementById("qlReplay").disabled = true; draw(); }
   function draw() {
     board.clear(""); const ctx = board.ctx;
     agents.forEach((ag, i) => {
@@ -514,8 +579,16 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
       ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(i === 0 ? "left crew: always greedy (epsilon 0)" : "right crew: explores (epsilon " + ag.eps.toFixed(2) + ")", ox, oy - 24);
       drawGrid(ctx, ox, oy, s, (x, y) => isHaz(x, y) ? mix(css("--panel"), css("--red"), 0.18) : isGoal(x, y) ? mix(css("--panel"), css("--blue"), 0.25) : mix(css("--panel"), css("--orange"), 0.75 * Math.log1p(ag.visits[y][x]) / Math.log1p(vmax)),
         (x, y) => (terminal(x, y) || ag.visits[y][x] === 0) ? null : { dir: ag.Q[y][x].indexOf(Math.max.apply(null, ag.Q[y][x])), color: css("--ink"), thin: true }, null, null);
-      ag.trail.forEach((p, k) => { ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.2 + 0.6 * k / 12); ctx.beginPath(); ctx.arc(ox + p[0] * s + s / 2, oy + p[1] * s + s / 2, 5, 0, 2 * Math.PI); ctx.fill(); });
-      ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(ox + ag.x * s + s / 2, oy + ag.y * s + s / 2, 9, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
+      if (replay) {
+        // the final greedy path, walked one cell per frame; the walked part is drawn as a green line
+        const pth = replay.paths[i], n = Math.min(replay.t, pth.cells.length - 1), cx = c => ox + c[0] * s + s / 2, cy = c => oy + c[1] * s + s / 2;
+        ctx.strokeStyle = "#2E7D5B"; ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.beginPath(); pth.cells.slice(0, n + 1).forEach((c, k) => { if (k === 0) ctx.moveTo(cx(c), cy(c)); else ctx.lineTo(cx(c), cy(c)); }); ctx.stroke();
+        const head = pth.cells[n]; ctx.fillStyle = "#2E7D5B"; ctx.beginPath(); ctx.arc(cx(head), cy(head), 11, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = "#2E7D5B"; ctx.font = "500 12px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText("greedy path replay" + (n >= pth.cells.length - 1 ? ": " + pth.end : ""), ox + s * G / 2, oy + s * G + 40);
+      } else {
+        ag.trail.forEach((p, k) => { ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.2 + 0.6 * k / 12); ctx.beginPath(); ctx.arc(ox + p[0] * s + s / 2, oy + p[1] * s + s / 2, 5, 0, 2 * Math.PI); ctx.fill(); });
+        ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(ox + ag.x * s + s / 2, oy + ag.y * s + s / 2, 9, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
+      }
     });
     // the exploration coin
     const [cxC, cyC, rC] = COIN; ctx.fillStyle = css("--bg"); ctx.beginPath(); ctx.arc(cxC, cyC, rC, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--line"); ctx.stroke();
@@ -526,6 +599,8 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
     ctx.fillStyle = bet === "L" ? css("--blue") : css("--muted"); ctx.fillText(bet === "L" ? "your bet: the greedy crew" : "click this grid to bet on it", oxL + s * G / 2, oy + s * G + 22);
     ctx.fillStyle = bet === "R" ? css("--blue") : css("--muted"); ctx.fillText(bet === "R" ? "your bet: the exploring crew" : "click this grid to bet on it", oxR + s * G / 2, oy + s * G + 22);
     document.getElementById("qlBet").textContent = bet === null ? "-" : (bet === "L" ? "left, greedy" : (bet === "R" ? "right, exploring" : "about the same"));
+    document.getElementById("qlPrompt").textContent = "Epsilon " + epsV.toFixed(2) + " against 0: which crew's greedy return is higher after 150 episodes?";
+    document.getElementById("qlStart").disabled = bet === null || running;
     document.getElementById("qlN").textContent = episodes + " / " + EPIS;
     document.getElementById("qlL").textContent = agents[0].greedy === null ? "-" : agents[0].greedy.toFixed(3);
     document.getElementById("qlR").textContent = agents[1].greedy === null ? "-" : agents[1].greedy.toFixed(3);
@@ -549,15 +624,19 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
     const text = winner === "T" ? "A near tie this time (" + l.toFixed(2) + " against " + r.toFixed(2) + ")." : (winner === "L" ? "The greedy crew won this run (" + l.toFixed(2) + " against " + r.toFixed(2) + ")." : "The exploring crew won (" + r.toFixed(2) + " against " + l.toFixed(2) + ").");
     const ok = bet === null ? null : bet === winner;
     v.className = "ask " + (ok === null ? "" : (ok ? "ok" : "no"));
-    v.innerHTML = (bet === null ? "You did not place a bet. " : (ok ? "Your bet was right. " : "Your bet was wrong. ")) + text + " Run it again with New site: the greedy crew locks onto whichever route it found first, so over many sites it loses on average and wins on the lucky ones. Exploration pays in return during learning for a better policy afterwards, which is the trade on slide 17.";
+    v.innerHTML = (bet === null ? "You did not place a bet. " : (ok ? "Your bet was right. " : "Your bet was wrong. ")) + text + " The green dot now walks each crew's final greedy path. Run it again with New site: the greedy crew locks onto whichever route it found first, so over many sites it loses on average and wins on the lucky ones. Exploration pays in return during learning for a better policy afterwards, which is the trade on slide 17.";
     document.getElementById("qlStart").textContent = "Race again";
+    document.getElementById("qlReplay").disabled = false;
+    startReplay();
   }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const [cxC, cyC, rC] = COIN; if (Math.hypot(mx - cxC, my - cyC) < rC + 12) { if (running) return; dragCoin = true; moveCoin(mx, my); return; } if (my >= cyC + rC + 80 && my <= cyC + rC + 112 && Math.abs(mx - cxC) < 90) { bet = "T"; draw(); return; } if (my >= oy && my <= oy + s * G + 30) { if (mx >= oxL && mx <= oxL + s * G) bet = "L"; else if (mx >= oxR && mx <= oxR + s * G) bet = "R"; draw(); } });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); const [cxC, cyC, rC] = COIN; if (Math.hypot(mx - cxC, my - cyC) < rC + 12) { if (running) return; dragCoin = true; moveCoin(mx, my); return; } if (running) return; if (my >= cyC + rC + 80 && my <= cyC + rC + 112 && Math.abs(mx - cxC) < 90) { bet = "T"; draw(); return; } if (my >= oy && my <= oy + s * G + 30) { if (mx >= oxL && mx <= oxL + s * G) bet = "L"; else if (mx >= oxR && mx <= oxR + s * G) bet = "R"; draw(); } });
   function moveCoin(mx, my) { const [cxC, cyC] = COIN; let a = Math.atan2(my - cyC, mx - cxC) + Math.PI / 2; if (a < 0) a += 2 * Math.PI; epsV = Math.max(0.02, Math.min(0.5, a / (2 * Math.PI))); document.getElementById("qlEpsOut").textContent = epsV.toFixed(2); if (!running) { agents[1].eps = epsV; } draw(); }
-  window.addEventListener("mousemove", ev => { if (!dragCoin) return; const [mx, my] = board.pos(ev); moveCoin(mx, my); });
-  window.addEventListener("mouseup", () => { dragCoin = false; });
-  document.getElementById("qlStart").addEventListener("click", () => { if (running) return; if (episodes >= EPIS) { seed += 1; reset(); } running = true; agents[1].eps = +se.value; document.getElementById("qlStart").textContent = "Racing..."; tick(); });
-  document.getElementById("qlReset").addEventListener("click", () => { seed += 1; reset(); });
+  window.addEventListener("pointermove", ev => { if (!dragCoin) return; const [mx, my] = board.pos(ev); moveCoin(mx, my); });
+  window.addEventListener("pointerup", () => { dragCoin = false; });
+  document.getElementById("qlStart").addEventListener("click", () => { if (running || bet === null) return; if (episodes >= EPIS) { seed += 1; reset(); } running = true; agents[1].eps = +se.value; document.getElementById("qlStart").textContent = "Racing..."; tick(); });
+  document.getElementById("qlReplay").addEventListener("click", () => { if (!running && episodes >= EPIS) startReplay(); });
+  // New site clears the bet as well, so the gate has to be passed again
+  document.getElementById("qlReset").addEventListener("click", () => { seed += 1; bet = null; reset(); });
   quiz(document.getElementById("qlQuiz"), { q: "Q-learning is called off-policy because", options: ["It never explores", "Its update target uses the best next action, whatever action the crew actually took", "It needs a model of the transitions"], answer: 1, why: "The target r + gamma max Q(s', .) scores the greedy continuation, so the crew can behave with exploration and still learn the greedy policy. Convergence needs every state and action to keep being visited, which is what the exploration buys." });
   window.addEventListener("themechange", draw);
   reset();
@@ -578,6 +657,46 @@ show(location.hash.slice(1) || "passing", false);
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
 if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
 new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+
+<script>
+/* Classroom mode (shared patch): larger canvas text through the font setter, prose hidden, redraw via themechange. */
+(function () {
+  var desc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "font");
+  var on = false;
+  function scale(v) {
+    return String(v).replace(/(\d+(?:\.\d+)?)px/, function (m, n) {
+      var s = parseFloat(n); var t = s < 13 ? s + 5 : Math.round(s * 1.35);
+      return t + "px";
+    });
+  }
+  Object.defineProperty(CanvasRenderingContext2D.prototype, "font", {
+    configurable: true,
+    get: function () { return desc.get.call(this); },
+    set: function (v) { desc.set.call(this, on ? scale(v) : v); }
+  });
+  function apply(state) {
+    on = !!state;
+    document.body.classList.toggle("classroom", on);
+    var b = document.getElementById("classroomBtn");
+    if (b) { b.textContent = on ? "Classroom: on" : "Classroom"; b.setAttribute("aria-pressed", on ? "true" : "false"); }
+    try { localStorage.setItem("ce_classroom", on ? "1" : "0"); } catch (e) {}
+    window.dispatchEvent(new Event("themechange"));
+    window.dispatchEvent(new Event("resize"));
+  }
+  window.addEventListener("DOMContentLoaded", function () {
+    var b = document.createElement("button");
+    b.id = "classroomBtn"; b.type = "button"; b.title = "Large text for a projector; hides the explanatory prose (key: c)";
+    b.textContent = "Classroom";
+    b.addEventListener("click", function () { apply(!on); });
+    document.body.appendChild(b);
+    var saved = "0"; try { saved = localStorage.getItem("ce_classroom") || "0"; } catch (e) {}
+    if (saved === "1" || /[?&]classroom\b/.test(location.search)) apply(true);
+    window.addEventListener("keydown", function (ev) {
+      if (ev.key === "c" && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) apply(!on);
+    });
+  });
 })();
 </script>
 </body>
