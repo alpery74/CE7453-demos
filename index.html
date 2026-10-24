@@ -129,6 +129,14 @@ nav button .slide { font-family: var(--sans); font-size: 13px; }
 "use strict";
 // one entry per week page; each demo lists the slide it belongs to and the tab anchor on the week page
 const WEEKS = [
+  { n: 1, title: "What learning is, and what your field already knows", dir: "week01/", demos: [
+    { slide: "7", name: "Recover Ceres: fit an orbit to 24 noisy nights and say where to look in December", tab: "ceres" },
+    { slide: "9, 11, 14", name: "Route the leveling run: click sights and watch the design matrix build, then find a blunder", tab: "survey" },
+    { slide: "10, 12, 18", name: "The estimate is a shadow: move the lamp and the weights move the projection", tab: "shadow" },
+    { slide: "12", name: "Springs on the line: set each reading's stiffness and read the settlement rate", tab: "springs" },
+    { slide: "19, 20, 21", name: "Drag the knee: one blunder, one loss shape, squared to absolute in a single drag", tab: "blunder" },
+    { slide: "23", name: "The valley and the prior: shrink the circle in a collinear valley", tab: "valley" },
+    { slide: "24", name: "Bet on a frame: pick the fit that wins on held-out stations, then redraw the noise", tab: "filmstrip" } ] },
   { n: 6, title: "Attention and the transformer", dir: "week06/", demos: [
     { slide: "5, 7", name: "Blend it: drive a softmax blend of six encoder states onto a target", tab: "blend" },
     { slide: "8", name: "The saturation bench: why the square root of d is in the formula", tab: "scale" },
