@@ -114,7 +114,7 @@ nav button .slide { font-family: var(--sans); font-size: 13px; }
 </header>
 
 <main>
-  <p class="lead">Pick the week, then the slide. Each demo is a small closed-form toy that shows the mechanism on that slide with sliders you can drive in class or at home.</p>
+  <p class="lead">Pick the week, then the slide. Each demo is a small closed-form toy built around one exercise: a prediction to make before the reveal, a bet to settle, a design to score against the optimum, or a map to probe.</p>
 
   <h2 class="pick">Week</h2>
   <nav id="weeks" role="tablist" aria-label="Weeks"></nav>
@@ -130,27 +130,27 @@ nav button .slide { font-family: var(--sans); font-size: 13px; }
 // one entry per week page; each demo lists the slide it belongs to and the tab anchor on the week page
 const WEEKS = [
   { n: 9, title: "Diffusion and physics informed learning", dir: "week09/", demos: [
-    { slide: "4", name: "The forward process: destroy the field on a schedule", tab: "forward" },
-    { slide: "8", name: "Samplers: step count is the cost", tab: "steps" },
-    { slide: "9", name: "Conditioning, and classifier free guidance", tab: "guidance" },
-    { slide: "16", name: "Weighting the physics term is a stochastic model decision", tab: "physics" } ] },
+    { slide: "4", name: "Noise detective: guess how far along the schedule a noised patch is", tab: "forward" },
+    { slide: "8", name: "Spend the budget: place a few denoising steps and rank your placement", tab: "steps" },
+    { slide: "9", name: "Guess the guidance weight from where the samples land", tab: "guidance" },
+    { slide: "16", name: "Reveal the map: probe the error landscape of a physics-informed fit", tab: "physics" } ] },
   { n: 10, title: "Geometry and reinforcement learning", dir: "week10/", demos: [
-    { slide: "7, 8", name: "Message passing: depth on a graph is measured in hops", tab: "passing" },
-    { slide: "6, 10", name: "Permutation invariance: renumber the points and nothing may change", tab: "permute" },
-    { slide: "15, 16", name: "Value functions and the Bellman equation", tab: "bellman" },
-    { slide: "17", name: "Q-learning, and the price of exploring", tab: "qlearn" } ] },
+    { slide: "7, 8", name: "Follow the pulse: a guided walk through message passing, with a prediction", tab: "passing" },
+    { slide: "6, 10", name: "Break the model: reorder the scan and see which model notices", tab: "permute" },
+    { slide: "15, 16", name: "Design the policy, evaluate it exactly, and compare with the optimum", tab: "bellman" },
+    { slide: "17", name: "The exploration race: bet on the greedy or the exploring crew", tab: "qlearn" } ] },
   { n: 11, title: "Foundation models", dir: "week11/", demos: [
-    { slide: "7", name: "Scaling laws: where a fixed compute budget should go", tab: "scaling" },
-    { slide: "8, 9", name: "Emergence: the claim, and the metric that manufactures it", tab: "emergence" },
-    { slide: "11, 12", name: "In-context learning: the prompt conditions a fixed model", tab: "incontext" },
-    { slide: "16", name: "Low rank adapters: how much of the update does rank r keep", tab: "lora" },
-    { slide: "19, 20", name: "Score it on your task: accuracy, interval, and the refusal rate", tab: "abstain" } ] },
+    { slide: "7", name: "The procurement call: one compute budget, three bids, a resizable rectangle", tab: "scaling" },
+    { slide: "8, 9", name: "The grading sheet: one skill graded per token or all-or-nothing", tab: "emergence" },
+    { slide: "11, 12", name: "Build the prompt: teach a frozen model a rule with chosen examples", tab: "incontext" },
+    { slide: "16", name: "The adapter bench: buy the smallest rank that passes each task", tab: "lora" },
+    { slide: "19, 20", name: "Set the refusal policy a client would sign", tab: "abstain" } ] },
   { n: 12, title: "Vision, action, and the road ahead", dir: "week12/", demos: [
-    { slide: "5, 6", name: "Contrastive alignment: two towers pulled into one space", tab: "contrastive" },
-    { slide: "7", name: "Retrieval: type a phrase, rank the archive, and see what wording does", tab: "retrieval" },
-    { slide: "10", name: "Triage: recall at the review budget you actually used", tab: "triage" },
-    { slide: "17, 18", name: "Planning in a learned model: imagine, act, observe, replan", tab: "worldmodel" },
-    { slide: "20", name: "Deployment: the inputs move first", tab: "drift" } ] }
+    { slide: "5, 6", name: "Be the loss: arrange photos and captions on the circle by hand", tab: "contrastive" },
+    { slide: "7", name: "Write the query: retrieve the target photos with the fewest words", tab: "retrieval" },
+    { slide: "10", name: "The inspector's queue: pick a budget, predict, flip the cards", tab: "triage" },
+    { slide: "17, 18", name: "Pilot it yourself with a wrong model, then let the planner try", tab: "worldmodel" },
+    { slide: "20", name: "Decide when to retrain: three years on call, one button", tab: "drift" } ] }
 ];
 const nav = document.getElementById("weeks"), list = document.getElementById("slides");
 function render(n) {
