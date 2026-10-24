@@ -4,6 +4,604 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Week 11 Demos</title>
+<meta name="description" content="CE 7453 Week 11: bet on a compute budget, grade a skill two ways, build a prompt for a frozen model, buy adapter ranks on a bench, and set a refusal policy a client would sign.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-line course header with a tab strip, then one demo at a time:
+   a wide plot on the left, a narrow control column on the right, a caption underneath.
+   Colors follow the lecture deck (dark body text, one blue, red for the figure's "wrong" curve). */
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --ink: #2B2B2B;
+  --muted: #6B7280;
+  --line: #D9DDE3;
+  --blue: #1F5C99;
+  --blue-soft: #D6E3F2;
+  --red: #B3261E;
+  --orange: #C9731F;
+  --grey: #8A8F98;
+  --focus: #1F5C99;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+    --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+  --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  padding-block: 14px 8px; border-bottom: 1px solid var(--line);
+}
+header .weeks { font-size: 13px; color: var(--blue); text-decoration: none; border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px; }
+header .weeks:hover { background: var(--blue-soft); }
+header .course { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+nav button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+nav button[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+nav button:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+nav button .slide { font-family: var(--mono); font-size: 12px; opacity: 0.8; margin-left: 6px; }
+main { padding-block: 4px 24px; }
+section.demo { display: none; }
+section.demo.active { display: block; }
+.demo h2 { font-size: 22px; font-weight: 600; margin: 6px 0 2px; text-wrap: balance; }
+.demo .lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.plot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-width: 0; }
+.plot canvas { width: 100%; height: auto; display: block; max-width: 100%; }
+.plot.two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 860px) { .plot.two { grid-template-columns: 1fr; } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctl label output { font-family: var(--mono); font-weight: 400; color: var(--blue); }
+.ctl input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--blue); }
+.ctl .hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; background: var(--c); }
+.legend span.dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.caption { margin: 12px 0 0; max-width: 90ch; font-size: 15px; }
+.caption p { margin: 0 0 6px; }
+footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<style>
+/* components for the instructional formats */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.step { font-size: 15px; line-height: 1.5; }
+.step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
+.step p { margin: 6px 0; }
+.ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
+.ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
+.ask.no { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ask.ok { background: #1E3A2C; } :root:not([data-theme="light"]) .ask.no { background: #432426; } }
+:root[data-theme="dark"] .ask.ok { background: #1E3A2C; } :root[data-theme="dark"] .ask.no { background: #432426; }
+.quiz { font-size: 15px; }
+.quiz .q { margin: 0 0 8px; font-weight: 500; }
+.quiz .opts { display: grid; gap: 6px; }
+.quiz button { text-align: left; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.quiz button.right { border-color: #2E7D5B; background: #E3F2EA; }
+.quiz button.wrong { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quiz button.right { background: #1E3A2C; } :root:not([data-theme="light"]) .quiz button.wrong { background: #432426; } }
+:root[data-theme="dark"] .quiz button.right { background: #1E3A2C; } :root[data-theme="dark"] .quiz button.wrong { background: #432426; }
+.quiz .why { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { color: #2E7D5B; border-color: #2E7D5B; }
+.badge.fail { color: var(--red); border-color: var(--red); }
+.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.choice.three { grid-template-columns: 1fr 1fr 1fr; }
+.choice button, .bet button { font: inherit; font-size: 14px; padding: 8px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.choice button[aria-pressed="true"], .bet button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.choice button.right { border-color: #2E7D5B; background: #E3F2EA; color: var(--ink); }
+.choice button.wrong { border-color: var(--red); background: #F9E4E2; color: var(--ink); }
+.bet { display: flex; flex-wrap: wrap; gap: 6px; }
+canvas.hit { cursor: pointer; }
+canvas.grab { cursor: ew-resize; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.cards button { font: inherit; font-family: var(--mono); font-size: 13px; padding: 7px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; text-align: left; }
+.cards button:disabled { opacity: 0.45; cursor: default; }
+.prompt { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 20px; font-family: var(--mono); font-size: 15px; line-height: 1.7; min-height: 300px; white-space: pre-wrap; }
+.prompt .sys { color: var(--muted); }
+.prompt .ex { color: var(--ink); }
+.prompt .q { color: var(--blue); }
+.prompt .ans { color: var(--red); font-weight: 500; }
+.prompt .cursor { display: inline-block; width: 9px; height: 17px; background: var(--red); vertical-align: text-bottom; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.tasks { display: grid; gap: 8px; }
+.task { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-size: 14px; }
+.task.active { border-color: var(--blue); }
+.task .r { font-family: var(--mono); color: var(--muted); font-size: 13px; }
+.ranks { display: flex; flex-wrap: wrap; gap: 5px; }
+.ranks button { font: inherit; font-family: var(--mono); font-size: 13px; padding: 5px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.ranks button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.spec { font-size: 14px; display: grid; gap: 4px; }
+.spec div { display: flex; justify-content: space-between; gap: 8px; }
+</style>
+
+<header>
+  <a class="weeks" href="../">All weeks</a>
+  <span class="course">CE 7453 &middot; Week 11 &middot; Foundation models</span>
+  <h1>Interactive demonstrations</h1>
+</header>
+
+<nav role="tablist" aria-label="Demos">
+  <button role="tab" data-tab="scaling" aria-selected="true">The procurement call<span class="slide">slide 7</span></button>
+  <button role="tab" data-tab="emergence" aria-selected="false">The grading sheet<span class="slide">slides 8, 9</span></button>
+  <button role="tab" data-tab="incontext" aria-selected="false">Build the prompt<span class="slide">slides 11, 12</span></button>
+  <button role="tab" data-tab="lora" aria-selected="false">The adapter bench<span class="slide">slide 16</span></button>
+  <button role="tab" data-tab="abstain" aria-selected="false">Set the refusal policy<span class="slide">slides 19, 20</span></button>
+</nav>
+
+<main>
+
+<!-- ============ 1. SCALING: the procurement call ============ -->
+<section class="demo active" id="scaling" role="tabpanel">
+  <h2>The procurement call: one compute budget, three proposals</h2>
+  <p class="lead">Your lab has 10^21 floating point operations for one training run. The rectangle below has that fixed area: width is the model size N, height is the number of training tokens D, and C = 6 N D. Three teams have bid. Pick the one you expect to reach the lowest loss, then resize the rectangle yourself.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="scRect" class="grab" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="scStep"></div>
+      <div class="panel">
+        <h3>your bet</h3>
+        <div class="choice three" id="scBet"><button data-i="0">Team A<br><small>10^12 params</small></button><button data-i="1">Team B<br><small>10^10 params</small></button><button data-i="2">Team C<br><small>10^8 params</small></button></div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="scReveal" disabled>Reveal the losses</button><button id="scOpt">Show the optimum</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>model size N</dt><dd id="scN">-</dd>
+          <dt>training tokens D</dt><dd id="scD">-</dd>
+          <dt>tokens per parameter</dt><dd id="scRatio">-</dd>
+          <dt>predicted loss</dt><dd id="scL">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="scQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The loss is the fitted law L(N, D) = E + A / N^alpha + B / D^beta of Hoffmann et al. (2022) with the corrected constants of Besiroglu et al. (2024): E = 1.82, A = 482, B = 2085, alpha = 0.348, beta = 0.366. Along one budget the loss has an interior minimum, and at that minimum the two correction terms are of comparable size, which is why the optimal tokens per parameter sit near twenty rather than near one or one thousand.</p>
+  </div>
+</section>
+
+<!-- ============ 2. EMERGENCE: the grading sheet ============ -->
+<section class="demo" id="emergence" role="tabpanel">
+  <h2>The grading sheet: one skill, graded token by token or all or nothing</h2>
+  <p class="lead">Six models of increasing size answer the same twelve questions. Each answer is a row of tokens, coloured right or wrong. Per-token accuracy rises smoothly with size. Now grade the way leaderboards do, with exact match over the whole answer, and watch where the skill appears to switch on.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="emSheet" width="1200" height="600"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="emStep"></div>
+      <div class="panel">
+        <h3>answer length graded</h3>
+        <div class="bet" id="emLen"><button data-l="1" aria-pressed="true">1 token</button><button data-l="5" aria-pressed="false">5 tokens</button><button data-l="20" aria-pressed="false">20 tokens</button></div>
+        <h3 style="margin-top:12px">your prediction</h3>
+        <p style="margin:0 0 6px;font-size:14px">Smallest model that will score at least 50 % exact match on 20-token answers:</p>
+        <div class="ranks" id="emPred"><button data-m="0">10^7</button><button data-m="1">10^8</button><button data-m="2">10^9</button><button data-m="3">10^10</button><button data-m="4">10^11</button><button data-m="5">10^12</button></div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="emCheck" disabled>Check</button><button id="emNew">New test set</button></div>
+      </div>
+      <div class="panel quiz" id="emQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Per-token accuracy follows p(N) = 0.05 + 0.95 / (1 + exp(-1.5 (log10 N - 9))), a smooth curve with nothing emergent in it. Exact match over L tokens is p^L, which stays near zero until p is close to one and then rises steeply. Schaeffer, Miranda and Koyejo (2023) showed that most reported emergent abilities behave this way under a continuous metric, which is the point of slide 9.</p>
+  </div>
+</section>
+
+<!-- ============ 3. IN-CONTEXT: build the prompt ============ -->
+<section class="demo" id="incontext" role="tabpanel">
+  <h2>Build the prompt: teach a fixed model a new rule without touching a weight</h2>
+  <p class="lead">A model pretrained on many linear rules y = a x + b is asked for y at x = 1.5 under a rule it has never seen. Add worked examples to the prompt by clicking them. The weights, which are the prior over (a, b), never change; only the context does. Get within 0.10 of the truth with as few examples as you can.</p>
+  <div class="stage">
+    <div>
+      <div class="prompt" id="icPrompt"></div>
+      <div class="plot" style="margin-top:12px"><canvas id="icBelief" width="1200" height="260"></canvas></div>
+    </div>
+    <div class="side">
+      <div class="panel step" id="icStep"></div>
+      <div class="panel">
+        <h3>examples you can paste (click to add)</h3>
+        <div class="cards" id="icCards"></div>
+        <div class="btns" style="margin-top:10px"><button id="icClear">Clear the prompt</button><button id="icNew">New rule</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>examples in the prompt</dt><dd id="icK">0</dd>
+          <dt>model's answer at x = 1.5</dt><dd id="icPred">-</dd>
+          <dt>truth</dt><dd id="icTrue">-</dd>
+          <dt>best score so far (fewest examples)</dt><dd id="icBest">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="icQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The model here is Bayesian linear regression with a Gaussian prior on (a, b) standing in for pretraining. Each example in the prompt conditions the posterior in closed form; the completion is the posterior predictive mean. Nothing is gradient-updated, which is slide 11's claim that in-context learning is inference. Two well-spread examples pin the slope; four clustered ones do not, which is slide 12's point about what makes a good prompt.</p>
+  </div>
+</section>
+
+<!-- ============ 4. LORA: the adapter bench ============ -->
+<section class="demo" id="lora" role="tabpanel">
+  <h2>The adapter bench: buy the smallest rank that does the job</h2>
+  <p class="lead">Three downstream tasks each need an update Delta W to a frozen 64 by 64 weight. You pay 2 d r parameters for a rank-r adapter. For each task, choose the rank; the bench shows the full update, your low-rank version, and what is left over. Pass all three with the smallest total bill.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="loBench" width="1200" height="480"></canvas></div>
+    <div class="side">
+      <div class="panel">
+        <h3>tasks (pass: relative error at most 0.10)</h3>
+        <div class="tasks" id="loTasks"></div>
+        <h3 style="margin-top:12px">rank for the selected task</h3>
+        <div class="ranks" id="loRanks"><button data-r="1">1</button><button data-r="2">2</button><button data-r="4">4</button><button data-r="8">8</button><button data-r="16">16</button><button data-r="32">32</button><button data-r="64">64</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>relative error, this task</dt><dd id="loErr">-</dd>
+          <dt>parameters, this adapter</dt><dd id="loP">-</dd>
+          <dt>total bill, all three</dt><dd id="loBill">-</dd>
+          <dt>full fine-tuning would cost</dt><dd id="loFull">3 x 4096 = 12288</dd>
+        </dl>
+        <div class="ask" id="loVerdict" hidden></div>
+      </div>
+      <div class="panel quiz" id="loQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Each task's true update is built from singular values that decay geometrically, fast for a narrow task and slowly for a broad one. The rank-r adapter keeps the first r directions, so the relative error is the energy in the tail. LoRA's premise on slide 16 is that real fine-tuning updates have the fast-decaying kind of spectrum; the bench shows what happens when they do not.</p>
+  </div>
+</section>
+
+<!-- ============ 5. ABSTAIN: set the refusal policy ============ -->
+<section class="demo" id="abstain" role="tabpanel">
+  <h2>Set the refusal policy that a client would sign</h2>
+  <p class="lead">Two hundred held-out items from your task, laid out by the model's stated confidence; blue was answered correctly, red was not. Drag the threshold: everything to its left is refused. The client's terms are on the right. Find a threshold that meets them, for a calibrated model and then for an overconfident one.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="abStrip" class="grab" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel">
+        <h3>the client's terms</h3>
+        <div class="spec"><div><span>accuracy on answered items, lower 95 % bound</span><b>at least 82 %</b></div><div><span>items refused</span><b>at most 40 %</b></div></div>
+        <h3 style="margin-top:12px">the model</h3>
+        <div class="bet"><button id="abCal" aria-pressed="true">calibrated</button><button id="abOver" aria-pressed="false">overconfident</button></div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="abSubmit">Submit this policy</button><button id="abNew">New sample</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>threshold</dt><dd id="abTau">0.00</dd>
+          <dt>refused</dt><dd id="abRef">-</dd>
+          <dt>accuracy on answered</dt><dd id="abAcc">-</dd>
+          <dt>95 % interval (Wilson)</dt><dd id="abCI">-</dd>
+        </dl>
+        <div class="ask" id="abVerdict" hidden></div>
+      </div>
+      <div class="panel quiz" id="abQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Half the items are easy (true probability of a right answer 0.88 to 0.99) and half are hard (0.35 to 0.75); the calibrated model states that probability, the overconfident one states 0.6 + 0.4 p^0.6 plus noise, so its confidences are both inflated and jumbled. The interval is Wilson's, slide 19. Refusing low-confidence items buys accuracy only as far as the stated confidence actually ranks the items, which is the practical content of slide 20.</p>
+  </div>
+</section>
+
+</main>
+<footer>CE 7453 Machine Learning for Civil, Environmental and Geodetic Engineering. Each demo is a small closed-form toy chosen so that the effect on the slide is visible without a trained network.</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- utilities ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const u = 1 - rng(), v = rng(), r = Math.sqrt(-2 * Math.log(u)); out[i] = r * Math.cos(2 * Math.PI * v); if (i + 1 < n) out[i + 1] = r * Math.sin(2 * Math.PI * v); } return out; }
+function hexToRgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
+function sci(v) { const e = Math.floor(Math.log10(v)), m = v / Math.pow(10, e); return m.toFixed(1) + "e" + e; }
+function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
+Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
+Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+Board.prototype.label = function (s, x, y, color, align, size, mono) { const ctx = this.ctx; ctx.fillStyle = color || css("--muted"); ctx.font = (size || 13) + "px " + css(mono ? "--mono" : "--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(s, x, y); };
+function quiz(el, spec) {
+  el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
+  const opts = el.querySelector(".opts"), why = el.querySelector(".why");
+  spec.options.forEach((o, i) => { const b = document.createElement("button"); b.textContent = o; b.addEventListener("click", () => { Array.from(opts.children).forEach(c => c.classList.remove("right", "wrong")); b.classList.add(i === spec.answer ? "right" : "wrong"); if (i !== spec.answer) opts.children[spec.answer].classList.add("right"); why.textContent = (i === spec.answer ? "Right. " : "No. ") + spec.why; }); opts.appendChild(b); });
+}
+
+/* ================= 1. THE PROCUREMENT CALL ================= */
+(function scaling() {
+  const E = 1.8172, A = 482.01, B = 2085.43, al = 0.3478, be = 0.3658, logC = 21, C = Math.pow(10, logC);
+  const L = (N, D) => E + A / Math.pow(N, al) + B / Math.pow(D, be);
+  const TEAMS = [{ name: "Team A", lgN: 12, pitch: "the biggest model we can fit, trained once over the data" }, { name: "Team B", lgN: 10, pitch: "a mid-size model trained on much more data" }, { name: "Team C", lgN: 8, pitch: "a small model trained for a very long time" }];
+  const board = new Board(document.getElementById("scRect"));
+  let lgN = 10.5, bet = null, revealed = false, showOpt = false, dragging = false;
+  const LO = 7, HI = 13;
+  const opt = (function () { let bn = 0, bl = 1e9; for (let lg = 5; lg <= 13; lg += 0.005) { const N = Math.pow(10, lg), D = C / (6 * N); const l = L(N, D); if (l < bl) { bl = l; bn = lg; } } return { lgN: bn, L: bl }; })();
+  const stepEl = document.getElementById("scStep");
+  function text() { stepEl.innerHTML = '<span class="k">the bids</span><p><b>Team A</b>: ' + TEAMS[0].pitch + '. <b>Team B</b>: ' + TEAMS[1].pitch + '. <b>Team C</b>: ' + TEAMS[2].pitch + '.</p><p>All three spend the same 10^21 operations. Place your bet, reveal, then drag the rectangle\'s edge to find where the loss really bottoms out.</p>'; }
+  const LMIN = 2.0, LMAX = 4.0;
+  function draw() {
+    const N = Math.pow(10, lgN), D = C / (6 * N), loss = L(N, D);
+    document.getElementById("scN").textContent = sci(N); document.getElementById("scD").textContent = sci(D); document.getElementById("scRatio").textContent = (D / N).toFixed(1); document.getElementById("scL").textContent = loss.toFixed(3);
+    board.clear(""); const ctx = board.ctx;
+    // rectangle of fixed area: width ~ log-scaled N share, height adjusts so the drawn area is constant
+    const areaPx = 420 * 300, w = 120 + (lgN - LO) / (HI - LO) * 860, h = areaPx / w, x0 = 80, y0 = 420 - h;
+    ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.12 + 0.5 * Math.max(0, Math.min(1, (LMAX - loss) / (LMAX - LMIN)))); ctx.fillRect(x0, y0, w, h); ctx.strokeStyle = css("--blue"); ctx.lineWidth = 2; ctx.strokeRect(x0, y0, w, h);
+    ctx.fillStyle = css("--orange"); ctx.fillRect(x0 + w - 5, y0, 10, h);
+    board.label("N = " + sci(N) + " parameters", x0 + w / 2, 445, css("--ink"), "center", 14);
+    ctx.save(); ctx.translate(x0 - 14, y0 + h / 2); ctx.rotate(-Math.PI / 2); board.label("D = " + sci(D) + " tokens", 0, 0, css("--ink"), "center", 14); ctx.restore();
+    board.label("area = C = 6 N D = 10^21  (drag the orange edge)", x0 + 10, y0 + 22, css("--muted"), "left", 13);
+    board.label(D / N > 200 ? "a small model trained for a very long time" : D / N < 2 ? "a large model trained briefly" : "", x0 + 10, y0 + 44, css("--muted"), "left", 13);
+    // loss dial on the right
+    const dx = 1000, dy = 240, R = 110;
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(dx, dy, R, Math.PI * 0.75, Math.PI * 2.25); ctx.stroke();
+    const frac = Math.max(0, Math.min(1, (loss - LMIN) / (LMAX - LMIN))), ang = Math.PI * 0.75 + frac * Math.PI * 1.5;
+    ctx.strokeStyle = mix("#2E7D5B", css("--red"), frac); ctx.beginPath(); ctx.arc(dx, dy, R, Math.PI * 0.75, ang); ctx.stroke();
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(dx + (R - 20) * Math.cos(ang), dy + (R - 20) * Math.sin(ang)); ctx.stroke();
+    board.label(loss.toFixed(3), dx, dy + 60, css("--ink"), "center", 26, true); board.label("predicted loss", dx, dy + 82, css("--muted"), "center", 13);
+    board.label("2.0", dx - R * 0.72, dy + R * 0.85, css("--muted"), "center", 11, true); board.label("4.0", dx + R * 0.72, dy + R * 0.85, css("--muted"), "center", 11, true);
+    board.label("irreducible E = " + E.toFixed(2), dx, dy - R - 16, css("--muted"), "center", 12);
+    // bids and optimum as ticks under the N axis
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(80, 500); ctx.lineTo(1060, 500); ctx.stroke();
+    for (let lg = LO; lg <= HI; lg++) { const x = 200 + (lg - LO) / (HI - LO) * 860; board.label("10^" + lg, x, 522, css("--muted"), "center", 11, true); ctx.beginPath(); ctx.moveTo(x, 496); ctx.lineTo(x, 504); ctx.stroke(); }
+    board.label("model size N (the right edge of the rectangle moves along this axis)", 80, 548, css("--muted"), "left", 12);
+    TEAMS.forEach((t, i) => { const x = 200 + (t.lgN - LO) / (HI - LO) * 860; ctx.fillStyle = bet === i ? css("--orange") : css("--grey"); ctx.beginPath(); ctx.moveTo(x, 486); ctx.lineTo(x - 7, 474); ctx.lineTo(x + 7, 474); ctx.closePath(); ctx.fill(); board.label(t.name + (revealed ? ": " + L(Math.pow(10, t.lgN), C / (6 * Math.pow(10, t.lgN))).toFixed(2) : ""), x, 468, bet === i ? css("--orange") : css("--muted"), "center", 12); });
+    if (showOpt) { const x = 200 + (opt.lgN - LO) / (HI - LO) * 860; ctx.strokeStyle = "#2E7D5B"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, 455); ctx.lineTo(x, 500); ctx.stroke(); board.label("optimum " + sci(Math.pow(10, opt.lgN)) + ", loss " + opt.L.toFixed(3), x, 448, "#2E7D5B", "center", 12); }
+  }
+  board.c.addEventListener("mousedown", ev => { dragging = true; move(ev); });
+  function move(ev) { const [mx] = board.pos(ev); lgN = Math.max(LO, Math.min(HI, LO + (mx - 200) / 860 * (HI - LO))); draw(); }
+  window.addEventListener("mousemove", ev => { if (dragging) move(ev); });
+  window.addEventListener("mouseup", () => { dragging = false; });
+  document.querySelectorAll("#scBet button").forEach(b => b.addEventListener("click", () => { if (revealed) return; bet = +b.dataset.i; document.querySelectorAll("#scBet button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); document.getElementById("scReveal").disabled = false; draw(); }));
+  document.getElementById("scReveal").addEventListener("click", () => {
+    revealed = true; const losses = TEAMS.map(t => L(Math.pow(10, t.lgN), C / (6 * Math.pow(10, t.lgN)))); const win = losses.indexOf(Math.min.apply(null, losses)), ok = bet === win;
+    document.querySelectorAll("#scBet button").forEach((c, i) => { if (i === win) c.classList.add("right"); else if (i === bet) c.classList.add("wrong"); });
+    stepEl.innerHTML = '<span class="k">the result</span><div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Your bet wins. ' : 'Your bet loses. ') + TEAMS[win].name + ' reaches ' + losses[win].toFixed(2) + ', against ' + TEAMS.filter((t, i) => i !== win).map((t, j) => t.name + ' ' + losses[TEAMS.indexOf(t)].toFixed(2)).join(' and ') + '.</div><p>Team A spends the budget on parameters it cannot train: at 10^12 parameters there are only ' + (C / 6e12 / 1e12).toExponential(1) + ' tokens per parameter. Team C has the opposite problem, a model too small to use its ' + sci(C / 6e8) + ' tokens. Drag the edge and watch the dial: the bottom is near ' + sci(Math.pow(10, opt.lgN)) + ' parameters, about ' + (C / 6 / Math.pow(10, 2 * opt.lgN)).toFixed(0) + ' tokens per parameter.</p>';
+    document.getElementById("scReveal").disabled = true; draw();
+  });
+  document.getElementById("scOpt").addEventListener("click", () => { showOpt = true; lgN = opt.lgN; draw(); });
+  quiz(document.getElementById("scQuiz"), { q: "The budget doubles. The compute-optimal response is to", options: ["Double the model size and keep the tokens", "Double the tokens and keep the model", "Grow both by roughly the same factor"], answer: 2, why: "With alpha close to beta the optimal N and D both scale as about the square root of C, so a doubled budget buys about 1.4 times the parameters and 1.4 times the tokens. Keeping either fixed leaves one correction term dominant." });
+  window.addEventListener("themechange", draw);
+  text(); draw();
+})();
+
+/* ================= 2. THE GRADING SHEET ================= */
+(function emergence() {
+  const LGS = [7, 8, 9, 10, 11, 12], Q = 12, LMAX = 20;
+  const ptok = lg => 0.05 + 0.95 / (1 + Math.exp(-1.5 * (lg - 9)));
+  const board = new Board(document.getElementById("emSheet"));
+  let seed = 2, tok = null, Lg = 1, pred = null, checked = false;
+  function make() { const rng = mulberry32(seed); tok = LGS.map(lg => { const p = ptok(lg), rows = []; for (let q = 0; q < Q; q++) { const r = []; for (let t = 0; t < LMAX; t++) r.push(rng() < p); rows.push(r); } return rows; }); }
+  function scores(mi, Lq) { let right = 0, exact = 0; for (let q = 0; q < Q; q++) { let all = true; for (let t = 0; t < Lq; t++) { if (tok[mi][q][t]) right++; else all = false; } if (all) exact++; } return { tok: right / (Q * Lq), exact: exact / Q }; }
+  const stepEl = document.getElementById("emStep");
+  function text() { stepEl.innerHTML = '<span class="k">how to read it</span><p>Each row of tiles is one model\'s twelve answers. A tile is one token: blue right, red wrong. The two bars at the right are the same answers scored two ways.</p><p>Step through 1, 5 and 20 tokens. Before you press 20, predict which model is the first to clear 50 % on exact match.</p>'; }
+  function draw() {
+    board.clear(""); const ctx = board.ctx;
+    const top = 50, rowH = 86, x0 = 110, tileW = Math.min(8, 640 / (Q * Lg + Q)), gap = 6;
+    board.label("model", x0 - 12, top - 14, css("--muted"), "right", 12); board.label("twelve answers, " + Lg + (Lg === 1 ? " token each" : " tokens each"), x0, top - 14, css("--muted"), "left", 12);
+    board.label("per-token accuracy", 800, top - 14, css("--blue"), "left", 12); board.label("exact match", 1000, top - 14, css("--red"), "left", 12);
+    LGS.forEach((lg, mi) => {
+      const y = top + mi * rowH, s = scores(mi, Lg);
+      board.label("10^" + lg, x0 - 12, y + 30, css("--ink"), "right", 14, true);
+      for (let q = 0; q < Q; q++) { const bx = x0 + q * (Lg * tileW + gap); let all = true; for (let t = 0; t < Lg; t++) { const ok = tok[mi][q][t]; if (!ok) all = false; ctx.fillStyle = ok ? css("--blue") : css("--red"); ctx.fillRect(bx + t * tileW, y + 8, tileW - 1, 22); } ctx.strokeStyle = all ? "#2E7D5B" : css("--line"); ctx.lineWidth = all ? 2 : 1; ctx.strokeRect(bx - 1, y + 6, Lg * tileW + 1, 26); }
+      const barY = y + 40, bw = 130;
+      ctx.fillStyle = css("--bg"); ctx.fillRect(800, barY, bw, 14); ctx.fillStyle = css("--blue"); ctx.fillRect(800, barY, bw * s.tok, 14); board.label((100 * s.tok).toFixed(0) + " %", 800 + bw + 8, barY + 12, css("--ink"), "left", 13, true);
+      ctx.fillStyle = css("--bg"); ctx.fillRect(1000, barY, bw, 14); ctx.fillStyle = css("--red"); ctx.fillRect(1000, barY, bw * s.exact, 14); board.label((100 * s.exact).toFixed(0) + " %", 1000 + bw + 8, barY + 12, css("--ink"), "left", 13, true);
+      if (checked && Lg === 20 && pred === mi) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.strokeRect(x0 - 70, y + 2, 1120, rowH - 10); }
+    });
+    board.label("green outline: an answer with every token right, the only kind exact match counts", x0, top + LGS.length * rowH - 8, css("--muted"), "left", 12);
+  }
+  function setL(l) { Lg = l; document.querySelectorAll("#emLen button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.l === l ? "true" : "false")); draw(); }
+  document.querySelectorAll("#emLen button").forEach(b => b.addEventListener("click", () => { const l = +b.dataset.l; if (l === 20 && pred === null && !checked) { stepEl.innerHTML = '<span class="k">predict first</span><p>Pick the smallest model you expect to clear 50 % exact match on 20-token answers, press Check, and the 20-token grading unlocks.</p>'; return; } setL(l); }));
+  document.querySelectorAll("#emPred button").forEach(b => b.addEventListener("click", () => { if (checked) return; pred = +b.dataset.m; document.querySelectorAll("#emPred button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); document.getElementById("emCheck").disabled = false; }));
+  document.getElementById("emCheck").addEventListener("click", () => {
+    if (pred === null) return; checked = true; setL(20);
+    let first = -1; for (let mi = 0; mi < LGS.length; mi++) if (scores(mi, 20).exact >= 0.5) { first = mi; break; }
+    const ok = first === pred, ptA = scores(Math.max(0, first - 1), 1).tok, ptB = first >= 0 ? scores(first, 1).tok : 0;
+    stepEl.innerHTML = '<span class="k">the result</span><div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Correct. ' : 'Not quite. ') + (first < 0 ? 'No model clears 50 % on this test set.' : 'The first model past 50 % exact match is 10^' + LGS[first] + '.') + '</div><p>Per-token accuracy at 10^' + LGS[Math.max(0, first - 1)] + ' was already ' + (100 * ptA).toFixed(0) + ' %' + (first >= 0 ? ', and at 10^' + LGS[first] + ' it is ' + (100 * ptB).toFixed(0) + ' %' : '') + '. The tiles changed gradually from row to row. Only the exact-match column jumped, because a 20-token answer needs every token right and 0.83^20 is 2 %.</p><p>Press New test set to redraw the tokens: the jump moves a little, the smooth column barely does.</p>';
+    document.getElementById("emCheck").disabled = true; draw();
+  });
+  document.getElementById("emNew").addEventListener("click", () => { seed += 1; make(); draw(); });
+  quiz(document.getElementById("emQuiz"), { q: "A paper reports that a skill is absent below 10^11 parameters and present above. Which question settles whether this is emergence or an artefact?", options: ["Was the model trained with more data?", "Does a continuous metric on the same outputs rise smoothly?", "Is the skill present in humans?"], answer: 1, why: "If a per-token or partial-credit score of the very same answers rises smoothly across sizes, the discontinuity belongs to the metric, not to the model. That is the test Schaeffer et al. applied to most claimed emergent abilities." });
+  window.addEventListener("themechange", draw);
+  make(); text(); draw();
+})();
+
+/* ================= 3. BUILD THE PROMPT ================= */
+(function incontext() {
+  const prior = { ma: 1.0, sa: 0.3, mb: 0.0, sb: 0.5 }, sig = 0.05, xq = 1.5;
+  let seed = 4, truth = null, pool = null, used = [], best = null, typing = null, typed = "";
+  const belief = new Board(document.getElementById("icBelief"));
+  function newRule() { const rng = mulberry32(seed), g = randn(rng, 16); truth = { a: -0.8 + 0.3 * g[0], b: 2.0 + 0.4 * g[1] }; pool = []; const xs = [-1.9, -1.6, -1.2, -0.9, -0.5, -0.1, 0.2, 0.5, 0.9, 1.2]; for (let i = 0; i < 10; i++) pool.push({ x: xs[i], y: truth.a * xs[i] + truth.b + sig * g[i + 2] }); used = []; best = null; document.getElementById("icBest").textContent = "-"; }
+  function posterior(k) {
+    let P = [[1 / prior.sa ** 2, 0], [0, 1 / prior.sb ** 2]], h = [prior.ma / prior.sa ** 2, prior.mb / prior.sb ** 2];
+    for (const i of used) { const e = pool[i], w = 1 / sig ** 2; P[0][0] += w * e.x * e.x; P[0][1] += w * e.x; P[1][0] += w * e.x; P[1][1] += w; h[0] += w * e.x * e.y; h[1] += w * e.y; }
+    const det = P[0][0] * P[1][1] - P[0][1] * P[1][0], S = [[P[1][1] / det, -P[0][1] / det], [-P[1][0] / det, P[0][0] / det]];
+    return { m: [S[0][0] * h[0] + S[0][1] * h[1], S[1][0] * h[0] + S[1][1] * h[1]], S: S };
+  }
+  function eig2(S) { const a = S[0][0], b = S[0][1], d = S[1][1], tr = a + d, det = a * d - b * b, disc = Math.sqrt(Math.max(0, tr * tr / 4 - det)); const l1 = tr / 2 + disc, l2 = tr / 2 - disc; let v1 = [b, l1 - a]; if (Math.abs(b) < 1e-12) v1 = a >= d ? [1, 0] : [0, 1]; const n = Math.hypot(v1[0], v1[1]); v1 = [v1[0] / n, v1[1] / n]; return { l1, l2: Math.max(l2, 1e-12), v1, v2: [-v1[1], v1[0]] }; }
+  const stepEl = document.getElementById("icStep");
+  function render() {
+    const po = posterior(), pq = po.m[0] * xq + po.m[1], sq = Math.sqrt(xq * xq * po.S[0][0] + 2 * xq * po.S[0][1] + po.S[1][1] + sig * sig), tv = truth.a * xq + truth.b;
+    const ok = Math.abs(pq - tv) <= 0.10;
+    document.getElementById("icK").textContent = used.length; document.getElementById("icPred").textContent = pq.toFixed(2) + " +/- " + sq.toFixed(2); document.getElementById("icTrue").textContent = tv.toFixed(2);
+    if (ok && used.length > 0 && (best === null || used.length < best)) { best = used.length; document.getElementById("icBest").textContent = best + (best === 1 ? " example" : " examples"); }
+    // prompt text with a typed completion
+    const target = pq.toFixed(2);
+    let html = '<span class="sys">You are a calculator for a secret linear rule. Continue the pattern.</span>\n\n';
+    used.forEach(i => { const e = pool[i]; html += '<span class="ex">x = ' + e.x.toFixed(1) + '  ->  y = ' + e.y.toFixed(2) + '</span>\n'; });
+    html += '<span class="q">x = 1.5  ->  y = </span><span class="ans">' + typed + '</span><span class="cursor"></span>';
+    document.getElementById("icPrompt").innerHTML = html;
+    if (typing) clearTimeout(typing); typed = ""; (function type() { if (typed.length < target.length) { typed = target.slice(0, typed.length + 1); document.querySelector("#icPrompt .ans").textContent = typed; typing = setTimeout(type, 90); } })();
+    stepEl.innerHTML = '<span class="k">' + (used.length === 0 ? 'empty prompt' : used.length + (used.length === 1 ? ' example' : ' examples') + ' in the prompt') + '</span>' + (used.length === 0 ? '<p>With nothing in the context the model answers from its prior: slope about 1, intercept about 0, so y near 1.5. The true rule has a negative slope.</p>' : '<div class="ask ' + (ok ? 'ok' : '') + '">' + (ok ? 'Within 0.10 of the truth with ' + used.length + (used.length === 1 ? ' example.' : ' examples.') : 'Off by ' + Math.abs(pq - tv).toFixed(2) + '. Add or change examples.') + '</div><p>' + (used.length === 1 ? 'One example fixes one combination of slope and intercept; the other is still the prior\'s guess.' : (ok ? 'Try Clear and reach the same accuracy with fewer, better chosen examples: two far apart in x do more than four close together.' : 'Watch the ellipse on the belief panel: examples close together in x shrink it along one direction only.')) + '</p>');
+    // belief panel: posterior ellipse over (a, b)
+    belief.clear("the model's belief over the rule (slope a across, intercept b up); nothing here is a weight update"); const ctx = belief.ctx;
+    const px = v => 120 + (v + 2) / 4 * (belief.W - 200), py = v => belief.H - 30 - (v + 1) / 4 * (belief.H - 70);
+    ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(px(-2), py(-1)); ctx.lineTo(px(2), py(-1)); ctx.moveTo(px(-2), py(-1)); ctx.lineTo(px(-2), py(3)); ctx.stroke();
+    belief.label("a = -2", px(-2), belief.H - 12, css("--muted"), "center", 11, true); belief.label("a = 2", px(2), belief.H - 12, css("--muted"), "center", 11, true); belief.label("b = 3", px(-2) - 8, py(3) + 4, css("--muted"), "right", 11, true); belief.label("b = -1", px(-2) - 8, py(-1) + 4, css("--muted"), "right", 11, true);
+    const ev = eig2(po.S);
+    for (const s of [2, 1]) { ctx.strokeStyle = css("--blue"); ctx.lineWidth = s === 1 ? 2.2 : 1.2; ctx.beginPath(); for (let t = 0; t <= 64; t++) { const th = 2 * Math.PI * t / 64, u = Math.cos(th) * s * Math.sqrt(ev.l1), v = Math.sin(th) * s * Math.sqrt(ev.l2), ax = po.m[0] + ev.v1[0] * u + ev.v2[0] * v, ay = po.m[1] + ev.v1[1] * u + ev.v2[1] * v; if (t === 0) ctx.moveTo(px(ax), py(ay)); else ctx.lineTo(px(ax), py(ay)); } ctx.stroke(); }
+    ctx.fillStyle = css("--grey"); ctx.beginPath(); ctx.arc(px(prior.ma), py(prior.mb), 5, 0, 2 * Math.PI); ctx.fill(); belief.label("pretraining prior", px(prior.ma) + 8, py(prior.mb) - 6, css("--muted"), "left", 12);
+    ctx.fillStyle = css("--red"); ctx.beginPath(); ctx.arc(px(truth.a), py(truth.b), 6, 0, 2 * Math.PI); ctx.fill(); belief.label("true rule", px(truth.a) + 8, py(truth.b) - 6, css("--red"), "left", 12);
+    ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(px(po.m[0]), py(po.m[1]), 5, 0, 2 * Math.PI); ctx.fill();
+    // cards
+    const cards = document.getElementById("icCards"); cards.innerHTML = "";
+    pool.forEach((e, i) => { const b = document.createElement("button"); b.textContent = "x = " + e.x.toFixed(1) + " -> y = " + e.y.toFixed(2); b.disabled = used.includes(i); b.addEventListener("click", () => { used.push(i); render(); }); cards.appendChild(b); });
+  }
+  document.getElementById("icClear").addEventListener("click", () => { used = []; render(); });
+  document.getElementById("icNew").addEventListener("click", () => { seed += 1; newRule(); render(); });
+  quiz(document.getElementById("icQuiz"), { q: "In-context learning changes the model's answer without changing its weights. What, then, is being learned?", options: ["Nothing; the answer was already stored", "A posterior over the task, computed by the forward pass from the examples in the prompt", "A small gradient step taken on the prompt"], answer: 1, why: "The prompt is evidence and the forward pass performs the conditioning. The same frozen weights produce a different predictive distribution for every context, which is inference, not training. Whether transformers implement something like this Bayesian update in practice is the research question behind slide 12." });
+  window.addEventListener("themechange", render);
+  newRule(); render();
+})();
+
+/* ================= 4. THE ADAPTER BENCH ================= */
+(function lora() {
+  const d = 64;
+  const TASKS = [{ name: "Task 1: a narrow style change", q: 0.5 }, { name: "Task 2: a new output format", q: 0.8 }, { name: "Task 3: a new domain", q: 0.9 }];
+  function orthonormal(seed) { const rng = mulberry32(seed), V = []; for (let i = 0; i < d; i++) { let v = Array.from(randn(rng, d)); for (const u of V) { let dot = 0; for (let k = 0; k < d; k++) dot += v[k] * u[k]; for (let k = 0; k < d; k++) v[k] -= dot * u[k]; } let n = 0; for (let k = 0; k < d; k++) n += v[k] * v[k]; n = Math.sqrt(n); V.push(v.map(x => x / n)); } return V; }
+  TASKS.forEach((t, i) => { t.U = orthonormal(10 + i); t.V = orthonormal(20 + i); t.s = []; for (let k = 0; k < d; k++) t.s.push(Math.pow(t.q, k)); t.r = null; t.full = build(t, d); });
+  function build(t, r) { const W = new Float64Array(d * d); for (let k = 0; k < r; k++) { const sk = t.s[k], u = t.U[k], v = t.V[k]; for (let i = 0; i < d; i++) { const su = sk * u[i]; for (let j = 0; j < d; j++) W[i * d + j] += su * v[j]; } } return W; }
+  function relErr(t, r) { let tot = 0, tail = 0; for (let k = 0; k < d; k++) { tot += t.s[k] ** 2; if (k >= r) tail += t.s[k] ** 2; } return Math.sqrt(tail / tot); }
+  const board = new Board(document.getElementById("loBench"));
+  let cur = 0;
+  function heat(ctx, W, x0, y0, size, scale) { const p = size / d; for (let i = 0; i < d; i++) for (let j = 0; j < d; j++) { const v = Math.max(-1, Math.min(1, W[i * d + j] / scale)); ctx.fillStyle = v >= 0 ? mix(css("--panel"), css("--blue"), v) : mix(css("--panel"), css("--red"), -v); ctx.fillRect(x0 + j * p, y0 + i * p, p + 0.4, p + 0.4); } ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(x0, y0, size, size); }
+  function draw() {
+    const t = TASKS[cur], r = t.r;
+    board.clear(t.name + (r === null ? ": choose a rank" : ": rank " + r)); const ctx = board.ctx;
+    const size = 300, y0 = 60, xs = [90, 450, 810];
+    let scale = 0; for (let i = 0; i < d * d; i++) scale = Math.max(scale, Math.abs(t.full[i])); scale *= 0.8;
+    heat(ctx, t.full, xs[0], y0, size, scale); board.label("the full update Delta W (64 x 64 = 4096 numbers)", xs[0], y0 - 10, css("--ink"), "left", 13);
+    if (r !== null) { const low = build(t, r), res = new Float64Array(d * d); for (let i = 0; i < d * d; i++) res[i] = t.full[i] - low[i]; heat(ctx, low, xs[1], y0, size, scale); heat(ctx, res, xs[2], y0, size, scale); board.label("rank " + r + " adapter B A (" + (2 * d * r) + " numbers)", xs[1], y0 - 10, css("--ink"), "left", 13); board.label("what is left over, relative size " + relErr(t, r).toFixed(3), xs[2], y0 - 10, relErr(t, r) <= 0.1 ? "#2E7D5B" : css("--red"), "left", 13); }
+    else { ctx.strokeStyle = css("--line"); ctx.setLineDash([5, 5]); ctx.strokeRect(xs[1], y0, size, size); ctx.strokeRect(xs[2], y0, size, size); ctx.setLineDash([]); board.label("adapter", xs[1], y0 - 10, css("--muted"), "left", 13); board.label("residual", xs[2], y0 - 10, css("--muted"), "left", 13); }
+    board.label("= ", xs[1] - 30, y0 + size / 2 + 6, css("--muted"), "center", 22); board.label("+", xs[2] - 30, y0 + size / 2 + 6, css("--muted"), "center", 22);
+    // spectrum strip
+    const sy = y0 + size + 50; board.label("singular values of Delta W for this task (blue: kept by the adapter)", xs[0], sy - 8, css("--muted"), "left", 12);
+    for (let k = 0; k < d; k++) { ctx.fillStyle = (r !== null && k < r) ? css("--blue") : css("--grey"); const hgt = 40 * t.s[k]; ctx.fillRect(xs[0] + k * 16, sy + 42 - hgt, 12, hgt); }
+    // side readouts
+    const list = document.getElementById("loTasks"); list.innerHTML = "";
+    let bill = 0, allPass = true;
+    TASKS.forEach((tk, i) => { const div = document.createElement("div"); div.className = "task" + (i === cur ? " active" : ""); const pass = tk.r !== null && relErr(tk, tk.r) <= 0.1; if (tk.r !== null) bill += 2 * d * tk.r; if (!pass) allPass = false; div.innerHTML = "<span>" + tk.name + "</span><span class='badge " + (tk.r === null ? "" : (pass ? "done" : "fail")) + "'>" + (tk.r === null ? "no rank yet" : "r = " + tk.r + ", " + (pass ? "pass" : "fail " + relErr(tk, tk.r).toFixed(2))) + "</span><span class='r'>spectrum decays by " + tk.q + " per index</span>"; div.addEventListener("click", () => { cur = i; draw(); }); list.appendChild(div); });
+    document.querySelectorAll("#loRanks button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.r === r ? "true" : "false"));
+    document.getElementById("loErr").textContent = r === null ? "-" : relErr(t, r).toFixed(3); document.getElementById("loP").textContent = r === null ? "-" : (2 * d * r) + "  (" + (100 * 2 * r / d).toFixed(0) + " % of full)"; document.getElementById("loBill").textContent = bill + "  (" + (100 * bill / 12288).toFixed(0) + " % of full)";
+    const v = document.getElementById("loVerdict");
+    if (TASKS.every(tk => tk.r !== null)) { v.hidden = false; const minimal = TASKS.map(tk => { for (const rr of [1, 2, 4, 8, 16, 32, 64]) if (relErr(tk, rr) <= 0.1) return rr; return 64; }), minBill = minimal.reduce((s, rr) => s + 2 * d * rr, 0); v.className = "ask " + (allPass ? (bill === minBill ? "ok" : "") : "no"); v.textContent = allPass ? (bill === minBill ? "All three pass at the smallest possible bill, " + bill + " parameters, " + (100 * bill / 12288).toFixed(0) + " % of full fine-tuning. The broad task alone took " + (100 * 2 * d * minimal[2] / bill).toFixed(0) + " % of it." : "All three pass, but " + (bill - minBill) + " parameters could still be saved: the smallest passing ranks are " + minimal.join(", ") + ".") : "At least one task fails its error target. Raise its rank; the residual panel shows what the adapter is missing."; } else v.hidden = true;
+  }
+  document.querySelectorAll("#loRanks button").forEach(b => b.addEventListener("click", () => { TASKS[cur].r = +b.dataset.r; draw(); }));
+  quiz(document.getElementById("loQuiz"), { q: "A rank-8 adapter on a 64 by 64 weight trains 1024 numbers instead of 4096. When is this a good trade?", options: ["Always; fewer parameters means less overfitting", "When the fine-tuning update has a few dominant directions, so the tail it drops is small", "Never; the dropped directions are always needed"], answer: 1, why: "LoRA bets on a low effective rank of the update, which holds for many adaptation tasks and fails for others, such as learning a new domain or a new language. The bench's third task is the failure case: a slow spectrum forces the rank up until the saving disappears." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 5. SET THE REFUSAL POLICY ================= */
+(function abstain() {
+  const n = 200;
+  let seed = 9, items = null, over = false, tau = 0, dragging = false;
+  function make() { const rng = mulberry32(seed); items = []; for (let i = 0; i < n; i++) { const easy = rng() < 0.5, p = easy ? 0.88 + 0.11 * rng() : 0.35 + 0.4 * rng(); const correct = rng() < p; const jitter = 0.2 * (rng() - 0.5); items.push({ p: p, correct: correct, cOver: Math.min(0.99, Math.max(0.3, 0.6 + 0.4 * Math.pow(p, 0.6) + jitter)) }); } }
+  const conf = it => over ? it.cOver : it.p;
+  function wilson(k, m) { if (m === 0) return null; const z = 1.96, ph = k / m, den = 1 + z * z / m, cen = (ph + z * z / (2 * m)) / den, half = z * Math.sqrt(ph * (1 - ph) / m + z * z / (4 * m * m)) / den; return [cen - half, cen + half]; }
+  function stats(t) { let k = 0, m = 0; for (const it of items) if (conf(it) >= t) { m++; if (it.correct) k++; } return { k, m, acc: m ? k / m : null, ref: 1 - m / n, ci: wilson(k, m) }; }
+  const board = new Board(document.getElementById("abStrip"));
+  const L = 60, R = board.W - 40, TOP = 60, BOT = 330;
+  const cx = c => L + (R - L) * c;
+  function draw() {
+    const s = stats(tau);
+    document.getElementById("abTau").textContent = tau.toFixed(2); document.getElementById("abRef").textContent = (100 * s.ref).toFixed(0) + " %";
+    document.getElementById("abAcc").textContent = s.acc === null ? "-" : (100 * s.acc).toFixed(1) + " %  (" + s.k + " / " + s.m + ")"; document.getElementById("abCI").textContent = s.ci ? (100 * s.ci[0]).toFixed(0) + " to " + (100 * s.ci[1]).toFixed(0) + " %" : "-";
+    board.clear("the 200 items by stated confidence; drag the threshold line"); const ctx = board.ctx;
+    // refused shade
+    ctx.fillStyle = mix(css("--panel"), css("--grey"), 0.18); ctx.fillRect(L, TOP - 10, cx(tau) - L, BOT - TOP + 20);
+    // stack items into columns of 0.02 width
+    const cols = {}; const sorted = items.slice().sort((a, b) => conf(a) - conf(b));
+    sorted.forEach(it => { const b = Math.min(49, Math.floor(conf(it) * 50)); cols[b] = cols[b] || []; cols[b].push(it); });
+    Object.keys(cols).forEach(b => { const col = cols[b].sort((a, c) => (a.correct === c.correct) ? 0 : (a.correct ? 1 : -1)); col.forEach((it, i) => { const x = cx(b / 50) + 2, y = BOT - (i + 1) * 11, w = (R - L) / 50 - 4; ctx.fillStyle = it.correct ? css("--blue") : css("--red"); ctx.globalAlpha = conf(it) >= tau ? 1 : 0.35; ctx.fillRect(x, y, w, 9); ctx.globalAlpha = 1; }); });
+    ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(L, BOT + 2); ctx.lineTo(R, BOT + 2); ctx.stroke();
+    for (let c = 0; c <= 1.001; c += 0.1) board.label(c.toFixed(1), cx(c), BOT + 20, css("--muted"), "center", 11, true);
+    board.label("stated confidence", (L + R) / 2, BOT + 40, css("--muted"), "center", 12);
+    ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx(tau), TOP - 14); ctx.lineTo(cx(tau), BOT + 6); ctx.stroke();
+    board.label("refused: " + (100 * s.ref).toFixed(0) + " %", cx(tau) - 8, TOP - 20, css("--orange"), "right", 13); board.label("answered: " + s.m + " items, " + (s.acc === null ? "-" : (100 * s.acc).toFixed(0) + " % right"), cx(tau) + 8, TOP - 20, css("--orange"), "left", 13);
+    // selective curve below
+    const cT = 400, cB = board.H - 30, cL = 60, cR = board.W - 40; board.label("accuracy on answered items (with its interval) against the share refused", cL, cT - 12, css("--muted"), "left", 12);
+    ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(cL, cT); ctx.lineTo(cL, cB); ctx.lineTo(cR, cB); ctx.stroke();
+    const ay = a => cB - (cB - cT) * (a - 0.5) / 0.5, rx = r => cL + (cR - cL) * r;
+    ctx.strokeStyle = css("--grey"); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(cL, ay(0.82)); ctx.lineTo(cR, ay(0.82)); ctx.moveTo(rx(0.4), cT); ctx.lineTo(rx(0.4), cB); ctx.stroke(); ctx.setLineDash([]);
+    board.label("82 %", cL - 6, ay(0.82) + 4, css("--muted"), "right", 11, true); board.label("40 % refused", rx(0.4) + 4, cT + 12, css("--muted"), "left", 11);
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2; ctx.beginPath(); let first = true; for (let t = 0; t <= 0.99; t += 0.005) { const q = stats(t); if (q.m < 5) continue; const x = rx(q.ref), y = ay(Math.max(0.5, q.acc)); if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y); } ctx.stroke();
+    ctx.strokeStyle = css("--blue"); ctx.lineWidth = 1.5; ctx.beginPath(); first = true; for (let t = 0; t <= 0.99; t += 0.005) { const q = stats(t); if (q.m < 5) continue; const x = rx(q.ref), y = ay(Math.max(0.5, q.ci[0])); if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y); } ctx.stroke();
+    board.label("lower bound", cR - 4, ay(0.52), css("--blue"), "right", 11);
+    if (s.m >= 5) { ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(rx(s.ref), ay(Math.max(0.5, s.acc)), 6, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(rx(s.ref), ay(Math.max(0.5, s.ci[0]))); ctx.lineTo(rx(s.ref), ay(Math.min(1, s.ci[1]))); ctx.stroke(); }
+  }
+  board.c.addEventListener("mousedown", ev => { dragging = true; move(ev); });
+  function move(ev) { const [mx] = board.pos(ev); tau = Math.max(0, Math.min(0.99, (mx - L) / (R - L))); document.getElementById("abVerdict").hidden = true; draw(); }
+  window.addEventListener("mousemove", ev => { if (dragging) move(ev); });
+  window.addEventListener("mouseup", () => { dragging = false; });
+  document.getElementById("abSubmit").addEventListener("click", () => {
+    const s = stats(tau), v = document.getElementById("abVerdict"); v.hidden = false;
+    const okAcc = s.ci && s.ci[0] >= 0.82, okRef = s.ref <= 0.4, ok = okAcc && okRef;
+    let exists = false; for (let t = 0; t <= 0.99; t += 0.005) { const q = stats(t); if (q.m >= 5 && q.ci[0] >= 0.82 && q.ref <= 0.4) { exists = true; break; } }
+    v.className = "ask " + (ok ? "ok" : "no");
+    v.textContent = (ok ? "Signed. " : "Rejected: ") + (ok ? "" : (!okAcc ? "the lower bound on accuracy is " + (s.ci ? (100 * s.ci[0]).toFixed(0) : "-") + " %, under 82 %" : "") + (!okAcc && !okRef ? ", and " : "") + (!okRef ? "the refusal rate is " + (100 * s.ref).toFixed(0) + " %, over 40 %" : "") + ". ") + (exists ? "A threshold meeting both terms exists for this model." : "No threshold meets both terms for the " + (over ? "overconfident" : "calibrated") + " model on this sample: its stated confidence does not rank the items well enough to buy 82 % accuracy by refusing 40 %.");
+  });
+  document.getElementById("abCal").addEventListener("click", () => { over = false; document.getElementById("abCal").setAttribute("aria-pressed", "true"); document.getElementById("abOver").setAttribute("aria-pressed", "false"); document.getElementById("abVerdict").hidden = true; draw(); });
+  document.getElementById("abOver").addEventListener("click", () => { over = true; document.getElementById("abCal").setAttribute("aria-pressed", "false"); document.getElementById("abOver").setAttribute("aria-pressed", "true"); document.getElementById("abVerdict").hidden = true; draw(); });
+  document.getElementById("abNew").addEventListener("click", () => { seed += 1; make(); document.getElementById("abVerdict").hidden = true; draw(); });
+  quiz(document.getElementById("abQuiz"), { q: "The vendor's benchmark reports 92 % accuracy. On your 200 held-out items the model scores 84 % with no refusals. What is the defensible claim about your task?", options: ["The model is 92 % accurate; the sample is too small to matter", "Accuracy is 84 % with a 95 % interval of roughly 78 to 89 %, and that is the number that goes in the report", "The model is broken"], answer: 1, why: "A held-out sample from the deployment distribution is the only evidence about the deployment distribution. The interval is what 200 items can support; the benchmark figure describes a different population of inputs." });
+  window.addEventListener("themechange", draw);
+  make(); draw();
+})();
+
+/* ---------- tabs ---------- */
+const tabs = Array.from(document.querySelectorAll("nav [role=tab]"));
+function show(name, push) {
+  if (!document.getElementById(name)) name = "scaling";
+  tabs.forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll("section.demo").forEach(s => s.classList.toggle("active", s.id === name));
+  if (push) { try { history.replaceState(null, "", "#" + name); } catch (e) {} }
+}
+tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
+show(location.hash.slice(1) || "scaling", false);
+
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week 11 Demos</title>
 <meta name="description" content="CE 7453 Week 11: interactive demonstrations of compute-optimal scaling, the emergence metric artifact, in-context learning as conditioning, low rank adapters, and abstaining by confidence.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
