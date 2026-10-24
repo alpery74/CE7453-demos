@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week 5 Demos</title>
+<meta name="description" content="CE 7453 Week 5: place the Kalman compromise by hand, paint a GNSS outage and watch the band breathe, try to fix a wrong transition with Q, link the filter to the recurrent cell, read how far a training signal reaches back, run a gated memory line by hand, and compress a discharge record into a three-number telegram.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-line course header with a tab strip, then one demo at a time:
+   a wide plot on the left, a narrow control column on the right, a caption underneath.
+   Colors follow the lecture deck (dark body text, one blue, red for the figure's "wrong" curve). */
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --ink: #2B2B2B;
+  --muted: #6B7280;
+  --line: #D9DDE3;
+  --blue: #1F5C99;
+  --blue-soft: #D6E3F2;
+  --red: #B3261E;
+  --orange: #C9731F;
+  --grey: #8A8F98;
+  --focus: #1F5C99;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+    --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+  --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  padding-block: 14px 8px; border-bottom: 1px solid var(--line);
+}
+header .weeks { font-size: 13px; color: var(--blue); text-decoration: none; border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px; }
+header .weeks:hover { background: var(--blue-soft); }
+header .course { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+nav button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+nav button[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+nav button:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+nav button .slide { font-family: var(--mono); font-size: 12px; opacity: 0.8; margin-left: 6px; }
+main { padding-block: 4px 24px; }
+section.demo { display: none; }
+section.demo.active { display: block; }
+.demo h2 { font-size: 22px; font-weight: 600; margin: 6px 0 2px; text-wrap: balance; }
+.demo .lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.plot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-width: 0; }
+.plot canvas { width: 100%; height: auto; display: block; max-width: 100%; }
+.plot.two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 860px) { .plot.two { grid-template-columns: 1fr; } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctl label output { font-family: var(--mono); font-weight: 400; color: var(--blue); }
+.ctl input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--blue); }
+.ctl .hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; background: var(--c); }
+.legend span.dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.caption { margin: 12px 0 0; max-width: 90ch; font-size: 15px; }
+.caption p { margin: 0 0 6px; }
+footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<style>
+/* components for the instructional formats */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.step { font-size: 15px; line-height: 1.5; }
+.step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
+.step p { margin: 6px 0; }
+.ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
+.ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
+.ask.no { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ask.ok { background: #1E3A2C; } :root:not([data-theme="light"]) .ask.no { background: #432426; } }
+:root[data-theme="dark"] .ask.ok { background: #1E3A2C; } :root[data-theme="dark"] .ask.no { background: #432426; }
+.quiz { font-size: 15px; }
+.quiz .q { margin: 0 0 8px; font-weight: 500; }
+.quiz .opts { display: grid; gap: 6px; }
+.quiz button { text-align: left; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.quiz button.right { border-color: #2E7D5B; background: #E3F2EA; }
+.quiz button.wrong { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quiz button.right { background: #1E3A2C; } :root:not([data-theme="light"]) .quiz button.wrong { background: #432426; } }
+:root[data-theme="dark"] .quiz button.right { background: #1E3A2C; } :root[data-theme="dark"] .quiz button.wrong { background: #432426; }
+.quiz .why { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { color: #2E7D5B; border-color: #2E7D5B; }
+canvas.hit { cursor: pointer; }
+canvas.grab { cursor: grab; }
+canvas.col { cursor: col-resize; }
+.btns button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btns button.small { font-size: 12.5px; padding: 5px 9px; }
+.opt { display: grid; gap: 6px; font-size: 14px; }
+.opt label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.opt label output { font-family: var(--mono); color: var(--blue); font-size: 13px; }
+.opt input[type="range"] { width: 100%; accent-color: var(--blue); margin: 0; }
+.menu { display: grid; gap: 4px; }
+.menu label { display: flex; gap: 8px; align-items: baseline; font-size: 14px; cursor: pointer; }
+.menu label span.n { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: auto; }
+.menu input { accent-color: var(--blue); }
+.gainstrip { font-family: var(--mono); font-size: 12.5px; display: grid; grid-template-columns: auto 1fr 1fr; gap: 2px 10px; }
+.gainstrip span { text-align: right; }
+.gainstrip span.h { color: var(--muted); }
+</style>
+
+<header>
+  <a class="weeks" href="../">All weeks</a>
+  <span class="course">CE 7453 &middot; Week 5 &middot; Carrying the past: state and sequence</span>
+  <h1>Interactive demonstrations</h1>
+</header>
+
+<nav role="tablist" aria-label="Demos">
+  <button role="tab" data-tab="compromise" aria-selected="true">Place the compromise<span class="slide">slides 6, 7</span></button>
+  <button role="tab" data-tab="outage" aria-selected="false">Cut the cable<span class="slide">slides 8, 9</span></button>
+  <button role="tab" data-tab="wrong" aria-selected="false">Optimally wrong<span class="slide">slides 10, 11, 12</span></button>
+  <button role="tab" data-tab="dictionary" aria-selected="false">The dictionary<span class="slide">slides 14, 15</span></button>
+  <button role="tab" data-tab="reach" aria-selected="false">The chain of factors<span class="slide">slides 16, 17, 18</span></button>
+  <button role="tab" data-tab="valves" aria-selected="false">Valves on a memory line<span class="slide">slides 19, 20</span></button>
+  <button role="tab" data-tab="telegram" aria-selected="false">The telegram<span class="slide">slides 22, 23</span></button>
+</nav>
+
+<main>
+
+<!-- ============ 1. COMPROMISE: be the update step ============ -->
+<section class="demo active" id="compromise" role="tabpanel">
+  <h2>Place the compromise: you are the update step of a settlement monitor</h2>
+  <p class="lead">A bridge pier settles about 0.2 mm per epoch and a levelling instrument reads its height each epoch. Every epoch the filter predicts, drawn as the blue bell, and the instrument reports, drawn as the orange bell. Drag the marker to where you would put the estimate, then reveal the filter's answer. Ten epochs, then the truth is uncovered and the two tracks are scored. Change R and Q and see the computed gain move.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="cpPlot" class="grab" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="cpStep"></div>
+      <div class="panel">
+        <div class="opt">
+          <label>measurement noise R, mm squared<output id="cpROut">4.0</output></label>
+          <input type="range" id="cpR" min="-0.5" max="1.5" step="0.05" value="0.6">
+          <label>process noise Q, mm squared per epoch<output id="cpQOut">0.5</output></label>
+          <input type="range" id="cpQ" min="-2" max="1" step="0.05" value="-0.3">
+        </div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="cpReveal">Reveal the filter's answer</button><button id="cpNext">Next epoch</button><button id="cpReset">Start over</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>epoch</dt><dd id="cpEpoch">1</dd>
+          <dt>computed gain K</dt><dd id="cpK">-</dd>
+          <dt>your implied gain</dt><dd id="cpKme">-</dd>
+          <dt>RMSE against truth, you / filter / instrument</dt><dd id="cpScore">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="cpQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The update slides the answer along the line between the prediction and the measurement, and the gain says how far, slide 7: K is the predicted variance over the predicted variance plus R. That is Week 1's inverse-variance weighting, recomputed every epoch, which is why a precise instrument pulls the answer toward itself and a confident prediction holds it back. Predict grows the variance by Q, update shrinks it, and the posterior bell is narrower than either input, slide 6. Your implied gain is read off where you dropped the marker; after a few epochs most people settle near the computed one without being told it, because the two bells show the right answer.</p>
+  </div>
+</section>
+
+<!-- ============ 2. OUTAGE: cut the cable ============ -->
+<section class="demo" id="outage" role="tabpanel">
+  <h2>Cut the cable: paint an outage on a landslide record and watch the band breathe</h2>
+  <p class="lead">A GNSS station on a slow landslide reports displacement every day for 200 days, and a constant-velocity filter tracks it with a 95 percent band. Drag across the timeline to black out an outage; the filter keeps predicting through it and admits its growing ignorance. A safety rule requires the band to stay narrower than 40 mm. Find the longest outage the system tolerates, then see how Q and R change the answer.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="ouPlot" class="col" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="ouStep"></div>
+      <div class="panel">
+        <div class="opt">
+          <label>process noise Q, velocity random walk<output id="ouQOut">0.010</output></label>
+          <input type="range" id="ouQ" min="-3.5" max="-0.5" step="0.05" value="-2">
+          <label>measurement noise R, mm squared<output id="ouROut">9.0</output></label>
+          <input type="range" id="ouR" min="0" max="2" step="0.05" value="0.95">
+        </div>
+        <div class="btns" style="margin-top:10px"><button id="ouClear">Restore all observations</button><button id="ouNew">New record</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>outage length</dt><dd id="ouLen">none</dd>
+          <dt>band width at the end of the outage</dt><dd id="ouW">-</dd>
+          <dt>gain on reacquisition</dt><dd id="ouK">-</dd>
+          <dt>longest outage the 40 mm rule allows</dt><dd id="ouMax">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="ouQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Through the outage only the predict step runs, so the covariance grows by F P F transposed plus Q at every epoch with nothing to shrink it, slide 8; for a constant-velocity model the position variance grows with the cube of the outage length, because an uncertain velocity integrates. On reacquisition the predicted variance dwarfs R, the gain goes to nearly one, and the first measurement snaps the band shut, slide 9. How long an outage can last is set by Q: a smaller Q is a stronger claim that the slide moves steadily, and it buys a longer outage at the price of a slower response if the slope accelerates.</p>
+  </div>
+</section>
+
+<!-- ============ 3. WRONG: optimally wrong ============ -->
+<section class="demo" id="wrong" role="tabpanel">
+  <h2>Optimally wrong: a linear filter on a nonlinear catchment, and the knob that cannot fix it</h2>
+  <p class="lead">Rain falls on a catchment whose discharge responds nonlinearly: big storms drain faster than small ones. Someone wrote the filter for this record with a linear reservoir. Turn Q up and down and try to make the peaks come out right. Below the hydrograph, a stem plot shows the innovations, the surprises; their autocorrelation is the diagnostic that says whether the model is wrong. Then hand the filter the true transition and watch both charts change.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="wrPlot" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="wrStep"></div>
+      <div class="panel">
+        <div class="opt">
+          <label>process noise Q<output id="wrQOut">0.010</output></label>
+          <input type="range" id="wrQ" min="-3" max="2.5" step="0.05" value="-2">
+        </div>
+        <div class="btns" style="margin-top:10px"><button id="wrLin" aria-pressed="true">linear reservoir</button><button id="wrEKF" aria-pressed="false">extended filter, true dynamics</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>bias at the three largest peaks</dt><dd id="wrBias">-</dd>
+          <dt>bias at the three smallest peaks</dt><dd id="wrBiasS">-</dd>
+          <dt>innovation autocorrelation, lag 1</dt><dd id="wrAC">-</dd>
+          <dt>RMSE against the true discharge</dt><dd id="wrRMSE">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="wrQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The filter is optimal under the model it was given, and the model is wrong, slide 12: the linear reservoir drains large storms too slowly and small ones too quickly, so the big peaks come out low and the small one high whatever Q is. Raising Q only tells the filter to trust the measurements more, and it chases their noise while keeping the bias. Innovations expose it: for a correct model they are white, uncorrelated from one day to the next, and a lag-one autocorrelation outside the band is the signature of a transition that does not describe the system, slide 10. Given the true dynamics, the extended filter of slide 11 linearizes them at each estimate, and the bias and the autocorrelation both go.</p>
+  </div>
+</section>
+
+<!-- ============ 4. DICTIONARY: match the filter to the network ============ -->
+<section class="demo" id="dictionary" role="tabpanel">
+  <h2>The dictionary: connect each piece of the Kalman loop to what it becomes in a recurrent cell</h2>
+  <p class="lead">Left column, the hand-written filter. Right column, the learned cell. Click a term on the left and then its counterpart on the right to draw a link; click a link to remove it. Two of the filter's pieces have no counterpart at all, and the right column says what happened to them. Check when all eight are linked.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="dcPlot" class="hit" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="dcStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="dcCheck">Check the links</button><button id="dcClear">Clear</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>links drawn</dt><dd id="dcN">0 of 8</dd>
+          <dt>correct</dt><dd id="dcOk">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="dcQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Slide 14 keeps the skeleton exactly: carry a state, fold in the arrival, emit an estimate, repeat. F becomes the recurrent weights, H the output weights, and the measurement is now called the input, slide 15. Most people miss the gain: in the filter it is recomputed every epoch from P and R; in the cell it is baked into the input weights once, the same for every arrival, which is why a plain cell cannot weight a bad reading down. P is dropped outright, so there is no band, and Q and R are never written because the training record and the loss decide what the cell trusts.</p>
+  </div>
+</section>
+
+<!-- ============ 5. REACH: the chain of factors ============ -->
+<section class="demo" id="reach" role="tabpanel">
+  <h2>The chain of factors: how far back can the training signal reach?</h2>
+  <p class="lead">A recurrent cell unrolled over forty daily readings, the loss at the last step. Travelling back, the gradient is multiplied by one cell Jacobian per step; here each factor is the recurrent weight times the slope of the activation. Each cell is shaded by how much gradient reaches it, and the reach marker shows the earliest cell that still receives one percent. Set the recurrent weight and watch the knife edge at one on a linear cell, and the double loss on a tanh cell, which saturates above one; then open the gated memory line, which replaces the chain of products with a chain of gate values.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="rePlot" class="hit" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="reStep"></div>
+      <div class="panel">
+        <div class="opt">
+          <label>recurrent weight w<output id="reWOut">0.90</output></label>
+          <input type="range" id="reW" min="0.3" max="1.6" step="0.01" value="0.9">
+          <label>forget gate value, on the memory line<output id="reGOut">0.97</output></label>
+          <input type="range" id="reG" min="0.5" max="1" step="0.01" value="0.97">
+        </div>
+        <div class="btns" style="margin-top:10px"><button id="rePlain" aria-pressed="true">plain tanh cell</button><button id="reLin" aria-pressed="false">plain linear cell</button><button id="reGate" aria-pressed="false">gated memory line</button><button id="reClip" aria-pressed="false">clip the gradient</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>reach, steps back with 1 %</dt><dd id="reReach">-</dd>
+          <dt>gradient at day 1</dt><dd id="reG1">-</dd>
+          <dt>largest factor</dt><dd id="reMax">-</dd>
+          <dt>clicked cell</dt><dd id="reChain" style="font-size:12px">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="reQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Unrolling turns the loop into a forty-layer network with tied weights, slide 16, and backpropagation through time is the chain rule along it, slide 17. What sets the growth rate of the product is the largest factor: below one the signal decays geometrically and the early days receive nothing usable, above one it explodes, and one exactly is a knife edge that no plain cell sits on for long, slide 18. Clipping bounds the explosion and leaves the decay untouched, which is why vanishing needed an architectural fix. On the gated line the factor at each step is the forget gate itself, and a gate near one carries the signal back intact, slide 19.</p>
+  </div>
+</section>
+
+<!-- ============ 6. VALVES: operate the gates ============ -->
+<section class="demo" id="valves" role="tabpanel">
+  <h2>Valves on a memory line: set a gate policy that remembers a flood for nine days</h2>
+  <p class="lead">Four twelve-day gauge records: in two of them a flood reading arrives early, in two it never comes. At day twelve the cell must say whether a flood happened. Picture the memory line as a pipe with three valves on it. Write the policy with the three controls: how much the forget valve keeps each day, the reading above which the input valve opens, and the day from which the output valve reveals the memory. One policy runs on all four records and the score is the worst of the four, with a plain cell shown below for comparison.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="vaPlot" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="vaStep"></div>
+      <div class="panel">
+        <div class="opt">
+          <label>forget valve, fraction kept each day<output id="vaFOut">0.80</output></label>
+          <input type="range" id="vaF" min="0" max="1" step="0.01" value="0.8">
+          <label>input valve opens for readings above<output id="vaTOut">0.30</output></label>
+          <input type="range" id="vaT" min="0" max="1" step="0.01" value="0.3">
+          <label>output valve open from day<output id="vaOOut">1</output></label>
+          <input type="range" id="vaO" min="1" max="12" step="1" value="1">
+        </div>
+        <div class="btns" style="margin-top:10px"><button id="vaTie" aria-pressed="false">tie the valves, GRU style</button><button id="vaNew">New records</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>worst error at day 12, gated cell</dt><dd id="vaErr">-</dd>
+          <dt>worst error at day 12, plain cell</dt><dd id="vaPlain">-</dd>
+          <dt>memory left after nine days, plain cell</dt><dd id="vaDecay">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="vaQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The memory line is additive, slide 19: the forget valve scales what is already there, the input valve adds a fresh candidate, and nothing on the way passes through a matrix, so a forget value of one holds the flood reading unchanged for nine days and holds the gradient the same way. An input valve that opens only for large readings is a sigmoid of the input with its own weights, a learned policy; here you write it by hand. Below it, the plain cell has no valve: every day it pushes the whole state through the recurrent weight and the activation, and the flood fades. Tying the valves so that what enters is one minus what is kept is the GRU's update gate, slide 20, which leaves one control where there were two.</p>
+  </div>
+</section>
+
+<!-- ============ 7. TELEGRAM: the bottleneck ============ -->
+<section class="demo" id="telegram" role="tabpanel">
+  <h2>The telegram: compress a discharge record into three numbers, then see what the decoder gets back</h2>
+  <p class="lead">An encoder must summarize a daily discharge record into a context vector of fixed size, three numbers, and a decoder must rebuild the record from those three alone. Choose which three summaries go in the telegram. Decoding is a linear reconstruction fitted on three hundred records; a learned three-number code, the best any linear encoder can do, is drawn alongside. Change the record length and watch what a fixed budget does. Below, the decoder runs free against teacher forcing.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="tgPlot" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="tgStep"></div>
+      <div class="panel">
+        <h3>the telegram, pick three</h3>
+        <div class="menu" id="tgMenu"></div>
+        <div class="btns" style="margin-top:10px"><button class="small" data-len="10" aria-pressed="false">10 days</button><button class="small" data-len="20" aria-pressed="false">20 days</button><button class="small" data-len="50" aria-pressed="true">50 days</button><button class="small" data-len="100" aria-pressed="false">100 days</button><button class="small" data-len="200" aria-pressed="false">200 days</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>reconstruction error, your telegram</dt><dd id="tgErr">-</dd>
+          <dt>reconstruction error, learned 3-number code</dt><dd id="tgPCA">-</dd>
+          <dt>numbers in the record / in the telegram</dt><dd id="tgRatio">-</dd>
+          <dt>free-running decoder, error after 10 steps</dt><dd id="tgDrift">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="tgQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Everything the decoder will ever know has to pass through the context vector, and its size does not grow with the record, slide 23: ten days and two hundred days are squeezed into the same three numbers, so the error climbs with length for a structural reason, and the learned code climbs with it. Errors are reported as a fraction of the spread across records, so one means no better than the overall mean. Slide 22 is the lower panel: fed the true previous value at every step, teacher forcing, the one-step decoder tracks; fed its own output, it drifts, because one early error becomes the next step's input. Attention, next week, lets the decoder reread every encoder step, with no summary in between.</p>
+  </div>
+</section>
+
+</main>
+<footer>CE 7453 Machine Learning for Civil, Environmental and Geodetic Engineering. Each demo is a small closed-form toy chosen so that the effect on the slide is visible without a trained network.</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- utilities ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const u = 1 - rng(), v = rng(), r = Math.sqrt(-2 * Math.log(u)); out[i] = r * Math.cos(2 * Math.PI * v); if (i + 1 < n) out[i + 1] = r * Math.sin(2 * Math.PI * v); } return out; }
+function hexToRgb(h) { if (h.indexOf("rgb") === 0) return h.replace(/[^0-9.,]/g, "").split(",").slice(0, 3).map(Number); h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
+const PAL = ["#1F5C99", "#C9731F", "#2E7D5B", "#8E44AD"];
+function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
+Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
+Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+Board.prototype.label = function (s, x, y, color, align, size, mono) { const ctx = this.ctx; ctx.fillStyle = color || css("--muted"); ctx.font = (size || 13) + "px " + css(mono ? "--mono" : "--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(s, x, y); };
+Board.prototype.line = function (x1, y1, x2, y2, color, width, dash) { const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 1; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); };
+Board.prototype.dot = function (x, y, r, color, stroke) { const ctx = this.ctx; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); } };
+Board.prototype.path = function (pts, color, width, dash) { const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 1; ctx.setLineDash(dash || []); ctx.beginPath(); pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); }); ctx.stroke(); ctx.setLineDash([]); };
+function quiz(el, spec) {
+  el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
+  const opts = el.querySelector(".opts"), why = el.querySelector(".why");
+  spec.options.forEach((o, i) => { const b = document.createElement("button"); b.textContent = o; b.addEventListener("click", () => { Array.from(opts.children).forEach(c => c.classList.remove("right", "wrong")); b.classList.add(i === spec.answer ? "right" : "wrong"); if (i !== spec.answer) opts.children[spec.answer].classList.add("right"); why.textContent = (i === spec.answer ? "Right. " : "No. ") + spec.why; }); opts.appendChild(b); });
+}
+const sigmoid = z => 1 / (1 + Math.exp(-z));
+const mean = a => a.reduce((s, v) => s + v, 0) / (a.length || 1);
+const sd = a => { const m = mean(a); return Math.sqrt(mean(a.map(v => (v - m) * (v - m)))); };
+function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAttribute("aria-pressed", id === on ? "true" : "false")); }
+function solve(A, b) { const n = b.length; const M = A.map((r, i) => Array.from(r).concat([b[i]])); for (let c = 0; c < n; c++) { let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r; const t = M[c]; M[c] = M[p]; M[p] = t; const d = M[c][c] || 1e-12; for (let r = 0; r < n; r++) { if (r === c) continue; const f = M[r][c] / d; if (!f) continue; for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; } } return M.map((r, i) => r[n] / (r[i] || 1e-12)); }
+function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath(); }
+
+/* ================= 1. PLACE THE COMPROMISE ================= */
+(function compromise() {
+  const board = new Board(document.getElementById("cpPlot"));
+  const stepEl = document.getElementById("cpStep");
+  const DRIFT = 0.2, NE = 10;
+  let R = 4, Q = 0.5, seed = 3, rng, g, gi = 0;
+  let truth, pred, z, post, mine, revealed, epoch, drag = false, done = false;
+  const nextG = () => g[gi++ % g.length];
+  function reset() { rng = mulberry32(seed); g = randn(rng, 200); gi = 0; truth = [0]; pred = [{ m: 0, v: 4 }]; z = []; post = []; mine = []; revealed = false; epoch = 0; done = false; newEpoch(); }
+  function newEpoch() { const t = truth[truth.length - 1] + DRIFT + Math.sqrt(Q) * nextG(); truth.push(t); const last = post.length ? post[post.length - 1] : { m: 0, v: 4 }; const p = { m: last.m + DRIFT, v: last.v + Q }; if (epoch > 0) pred.push(p); else pred[0] = p; z.push(t + Math.sqrt(R) * nextG()); mine.push((p.m + z[z.length - 1]) / 2); revealed = false; epoch++; draw(); }
+  function reveal() { if (revealed) return; const p = pred[epoch - 1], K = p.v / (p.v + R); const zz = z[epoch - 1]; post.push({ m: p.m + K * (zz - p.m), v: (1 - K) * p.v, K }); revealed = true; if (epoch === NE) done = true; draw(); }
+  function bell(x0, m, v, color, px, py, fill) { const ctx = board.ctx; const s = Math.sqrt(v); const pts = []; for (let i = 0; i <= 120; i++) { const x = m - 4 * s + 8 * s * i / 120; pts.push([px(x), py(Math.exp(-0.5 * ((x - m) / s) ** 2) / s)]); } if (fill) { ctx.fillStyle = mix(css("--panel"), color, 0.18); ctx.beginPath(); ctx.moveTo(pts[0][0], py(0)); pts.forEach(p => ctx.lineTo(p[0], p[1])); ctx.lineTo(pts[pts.length - 1][0], py(0)); ctx.closePath(); ctx.fill(); } board.path(pts, color, 2); }
+  function draw() {
+    const p = pred[epoch - 1], zz = z[epoch - 1]; const ctx = board.ctx;
+    board.clear("epoch " + epoch + " of " + NE + ": the prediction (blue), the instrument (orange), and your marker; after reveal, the filter's posterior (green)");
+    const L = 60, Rr = board.W - 40, AX = 262; const c0 = (p.m + zz) / 2, span = 9; const pk = Math.max(1 / Math.sqrt(p.v), 1 / Math.sqrt(R), revealed ? 1 / Math.sqrt(post[epoch - 1].v) : 0); const px = x => L + (x - (c0 - span)) / (2 * span) * (Rr - L), py = d => AX - d / pk * 200;
+    board.line(L, AX, Rr, AX, css("--line"), 1); for (let x = Math.ceil(c0 - span); x <= c0 + span; x++) { board.line(px(x), AX, px(x), AX + 5, css("--line"), 1); if (x % 2 === 0) board.label(x + " mm", px(x), AX + 18, css("--muted"), "center", 10, true); }
+    bell(0, p.m, p.v, css("--blue"), px, py, true); board.label("prediction  " + p.m.toFixed(2) + " mm, variance " + p.v.toFixed(2), px(p.m), py(Math.exp(0) / Math.sqrt(p.v)) - 10, css("--blue"), "center", 11);
+    bell(0, zz, R, css("--orange"), px, py, true); board.label("instrument  " + zz.toFixed(2) + " mm, variance " + R.toFixed(2), px(zz), py(1 / Math.sqrt(R)) - 10, css("--orange"), "center", 11);
+    const K = p.v / (p.v + R);
+    if (revealed) { const q = post[epoch - 1]; bell(0, q.m, q.v, "#2E7D5B", px, py, false); board.line(px(q.m), AX, px(q.m), AX - 40, "#2E7D5B", 2); board.label("filter  " + q.m.toFixed(2) + ", K = " + K.toFixed(2), px(q.m), AX - 46, "#2E7D5B", "center", 11); }
+    const mx = px(mine[epoch - 1]); ctx.fillStyle = css("--ink"); ctx.beginPath(); ctx.moveTo(mx, AX + 2); ctx.lineTo(mx - 9, AX + 22); ctx.lineTo(mx + 9, AX + 22); ctx.closePath(); ctx.fill(); board.label("you: " + mine[epoch - 1].toFixed(2), mx + 14, AX + 18, css("--ink"), "left", 11, true);
+    // gain strip: implied vs computed per epoch
+    const SY0 = 330, SY1 = 440, SX0 = 60, SX1 = 560; board.label("the gain, epoch by epoch: computed (green) and the one your marker implies (black)", SX0, SY0 - 8, css("--ink"), "left", 12);
+    board.line(SX0, SY1, SX1, SY1, css("--line"), 1); board.line(SX0, SY0, SX0, SY1, css("--line"), 1); [0, 0.5, 1].forEach(v => { board.line(SX0, SY1 - v * (SY1 - SY0), SX1, SY1 - v * (SY1 - SY0), css("--line"), 1, [2, 4]); board.label(v.toFixed(1), SX0 - 6, SY1 - v * (SY1 - SY0) + 4, css("--muted"), "right", 10, true); });
+    for (let e = 0; e < epoch; e++) { const x = SX0 + (e + 0.5) / NE * (SX1 - SX0); const pe = pred[e], ze = z[e]; const Ke = pe.v / (pe.v + R); const im = Math.max(-0.15, Math.min(1.1, (mine[e] - pe.m) / ((ze - pe.m) || 1e-9))); if (e < post.length) { board.dot(x, SY1 - post[e].K * (SY1 - SY0), 5, "#2E7D5B"); board.dot(x, SY1 - im * (SY1 - SY0), 4, css("--ink")); } else if (!revealed || e < epoch - 1) board.dot(x, SY1 - im * (SY1 - SY0), 4, css("--grey")); board.label(String(e + 1), x, SY1 + 14, css("--muted"), "center", 10, true); }
+    // track: the record so far
+    const TX0 = 640, TX1 = board.W - 40, TY0 = 330, TY1 = 500; board.label(done ? "the record uncovered: truth (grey), filter (green), you (black), instrument (orange)" : "the record so far: filter (green), you (black), instrument (orange); truth appears after epoch 10", TX0, TY0 - 8, css("--ink"), "left", 12);
+    const tx = e => TX0 + (e + 0.5) / NE * (TX1 - TX0); const allv = z.concat(mine).concat(done ? truth : []); const lo = Math.min.apply(null, allv) - 1, hi = Math.max.apply(null, allv) + 1; const ty = v => TY1 - (v - lo) / (hi - lo) * (TY1 - TY0);
+    board.line(TX0, TY1, TX1, TY1, css("--line"), 1); board.line(TX0, TY0, TX0, TY1, css("--line"), 1);
+    if (done) board.path(truth.slice(1).map((v, e) => [tx(e), ty(v)]), css("--grey"), 2, [5, 4]);
+    z.forEach((v, e) => board.dot(tx(e), ty(v), 4, css("--orange"))); board.path(post.map((q, e) => [tx(e), ty(q.m)]), "#2E7D5B", 2); post.forEach((q, e) => board.dot(tx(e), ty(q.m), 3.5, "#2E7D5B")); const mp = mine.slice(0, post.length); board.path(mp.map((v, e) => [tx(e), ty(v)]), css("--ink"), 1.5); mp.forEach((v, e) => board.dot(tx(e), ty(v), 3, css("--ink")));
+    for (let e = 0; e < NE; e++) board.label(String(e + 1), tx(e), TY1 + 14, css("--muted"), "center", 10, true);
+    document.getElementById("cpEpoch").textContent = String(epoch); document.getElementById("cpK").textContent = revealed ? K.toFixed(2) : "hidden until reveal"; const im = (mine[epoch - 1] - p.m) / ((zz - p.m) || 1e-9); document.getElementById("cpKme").textContent = im.toFixed(2);
+    let score = "-"; if (done) { const r = f => Math.sqrt(mean(f.map((v, e) => (v - truth[e + 1]) ** 2))); score = r(mine).toFixed(2) + " / " + r(post.map(q => q.m)).toFixed(2) + " / " + r(z).toFixed(2) + " mm"; } document.getElementById("cpScore").textContent = score;
+    stepEl.innerHTML = '<span class="k">epoch ' + epoch + (revealed ? ', revealed' : ', place the marker') + '</span>' + (!revealed ? '<p>Where between ' + p.m.toFixed(2) + ' and ' + zz.toFixed(2) + ' does the truth most likely sit? Drag the marker, then reveal.</p>' : (done ? '<div class="ask ' + (Math.abs(im - K) < 0.15 ? 'ok' : '') + '">Ten epochs done. Your track against the filter against the instrument: ' + score + '. The filter beats the raw instrument because it carries the past; whether you beat it depends on how close your marker tracked the computed gain.</div>' : (Math.abs(im - K) < 0.1 ? '<div class="ask ok">Within 0.1 of the computed gain. ' + (K > 0.5 ? 'The prediction is less certain than the instrument, so the answer leans to the orange bell.' : 'The prediction is sharper than the instrument, so the answer leans to the blue bell.') + '</div>' : '<div class="ask">Your implied gain ' + im.toFixed(2) + ' against the computed ' + K.toFixed(2) + '. The posterior sits where the two bells overlap most, which is nearer the narrower one. Next epoch.</div>')));
+  }
+  board.c.addEventListener("mousedown", ev => { if (revealed) return; const [mx, my] = board.pos(ev); const p = pred[epoch - 1], zz = z[epoch - 1]; const c0 = (p.m + zz) / 2, span = 9; const L = 60, Rr = board.W - 40; const px = x => L + (x - (c0 - span)) / (2 * span) * (Rr - L); if (my > 120 && my < 300 && Math.abs(mx - px(mine[epoch - 1])) < 60) drag = true; });
+  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx] = board.pos(ev); const p = pred[epoch - 1], zz = z[epoch - 1]; const c0 = (p.m + zz) / 2, span = 9; const L = 60, Rr = board.W - 40; mine[epoch - 1] = c0 - span + (mx - L) / (Rr - L) * 2 * span; draw(); });
+  window.addEventListener("mouseup", () => { drag = false; });
+  document.getElementById("cpReveal").addEventListener("click", reveal);
+  document.getElementById("cpNext").addEventListener("click", () => { if (!revealed) reveal(); if (!done) newEpoch(); });
+  document.getElementById("cpReset").addEventListener("click", () => { seed++; reset(); });
+  const rEl = document.getElementById("cpR"), qEl = document.getElementById("cpQ");
+  rEl.addEventListener("input", () => { R = Math.pow(10, +rEl.value); document.getElementById("cpROut").textContent = R.toFixed(1); draw(); });
+  qEl.addEventListener("input", () => { Q = Math.pow(10, +qEl.value); document.getElementById("cpQOut").textContent = Q.toFixed(2); draw(); });
+  quiz(document.getElementById("cpQuiz"), { q: "The gain came out as 0.9. What does that say about the two sources at this epoch?", options: ["The instrument is nine times more precise than the prediction, so the estimate moves nine tenths of the way to the measurement", "The model is nine times more precise than the instrument", "The gain was set by hand to favour the sensor"], answer: 0, why: "K is the predicted variance over the predicted variance plus R, so 0.9 means P is nine times R. Nobody chose it: give the filter honest Q and R and the compromise follows, slide 7." });
+  window.addEventListener("themechange", draw);
+  reset();
+})();
+
+/* ================= 2. CUT THE CABLE ================= */
+(function outage() {
+  const board = new Board(document.getElementById("ouPlot"));
+  const stepEl = document.getElementById("ouStep");
+  const N = 200; let q = 0.01, R = 9, seed = 11, truth = [], z = [], out = null, drag = null, res = null;
+  function makeRecord() { const rng = mulberry32(seed), g = randn(rng, 2 * N); truth = []; z = []; let x = 0, v = 0.5; for (let t = 0; t < N; t++) { truth.push(x); z.push(x + Math.sqrt(R) * g[N + t]); v += 0.04 * g[t]; x += v; } }
+  function run(outage) {
+    let m = [0, 0], P = [[100, 0], [0, 1]]; const est = [], W = [], Ks = []; const Qm = [[q / 3, q / 2], [q / 2, q]];
+    for (let t = 0; t < N; t++) {
+      if (t > 0) { m = [m[0] + m[1], m[1]]; const F = [[1, 1], [0, 1]]; const FP = [[F[0][0] * P[0][0] + F[0][1] * P[1][0], F[0][0] * P[0][1] + F[0][1] * P[1][1]], [P[1][0], P[1][1]]]; P = [[FP[0][0] * 1 + FP[0][1] * 1 + Qm[0][0], FP[0][1] + Qm[0][1]], [FP[1][0] + FP[1][1] + Qm[1][0], FP[1][1] + Qm[1][1]]]; }
+      const masked = outage && t >= outage[0] && t <= outage[1];
+      const priorW = 1.96 * Math.sqrt(P[0][0]);
+      if (!masked) { const S = P[0][0] + R; const K = [P[0][0] / S, P[1][0] / S]; const inn = z[t] - m[0]; m = [m[0] + K[0] * inn, m[1] + K[1] * inn]; P = [[(1 - K[0]) * P[0][0], (1 - K[0]) * P[0][1]], [P[1][0] - K[1] * P[0][0], P[1][1] - K[1] * P[0][1]]]; Ks.push(K[0]); } else Ks.push(null);
+      est.push(m[0]); W.push(masked ? priorW : 1.96 * Math.sqrt(P[0][0]));
+    }
+    return { est, W, Ks };
+  }
+  function maxOutage() { const base = run(null); let m = [0, 0], P = [[100, 0], [0, 1]]; const Qm = [[q / 3, q / 2], [q / 2, q]]; for (let t = 0; t < 120; t++) { if (t > 0) { const FP = [[P[0][0] + P[1][0], P[0][1] + P[1][1]], [P[1][0], P[1][1]]]; P = [[FP[0][0] + FP[0][1] + Qm[0][0], FP[0][1] + Qm[0][1]], [FP[1][0] + FP[1][1] + Qm[1][0], FP[1][1] + Qm[1][1]]]; } const S = P[0][0] + R; const K = [P[0][0] / S, P[1][0] / S]; P = [[(1 - K[0]) * P[0][0], (1 - K[0]) * P[0][1]], [P[1][0] - K[1] * P[0][0], P[1][1] - K[1] * P[0][1]]]; } let n = 0; while (n < 400) { const FP = [[P[0][0] + P[1][0], P[0][1] + P[1][1]], [P[1][0], P[1][1]]]; P = [[FP[0][0] + FP[0][1] + Qm[0][0], FP[0][1] + Qm[0][1]], [FP[1][0] + FP[1][1] + Qm[1][0], FP[1][1] + Qm[1][1]]]; if (2 * 1.96 * Math.sqrt(P[0][0]) > 40) break; n++; } return n; }
+  function draw() {
+    res = run(out); const ctx = board.ctx;
+    board.clear("GNSS displacement of a landslide, daily: drag across the timeline to black out an outage");
+    const L = 60, Rr = board.W - 40, T0 = 40, B0 = 330; const lo = Math.min.apply(null, truth) - 15, hi = Math.max.apply(null, truth) + 15; const px = t => L + t / (N - 1) * (Rr - L), py = v => B0 - (v - lo) / (hi - lo) * (B0 - T0);
+    if (out) { ctx.fillStyle = mix(css("--panel"), css("--ink"), 0.08); ctx.fillRect(px(out[0]), T0, px(out[1]) - px(out[0]), B0 - T0); }
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T0, Rr - L, B0 - T0); ctx.clip();
+    ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.2); ctx.beginPath(); res.est.forEach((e, t) => { const y = py(e + res.W[t]); if (t === 0) ctx.moveTo(px(t), y); else ctx.lineTo(px(t), y); }); for (let t = N - 1; t >= 0; t--) ctx.lineTo(px(t), py(res.est[t] - res.W[t])); ctx.closePath(); ctx.fill();
+    board.line(L, B0, Rr, B0, css("--line"), 1); board.line(L, T0, L, B0, css("--line"), 1); for (let t = 0; t < N; t += 50) board.label("day " + t, px(t), B0 + 16, css("--muted"), "center", 10, true); for (let v = Math.ceil(lo / 20) * 20; v <= hi; v += 20) board.label(v + " mm", L - 6, py(v) + 4, css("--muted"), "right", 10, true);
+    board.path(truth.map((v, t) => [px(t), py(v)]), css("--grey"), 1.5, [5, 4]);
+    z.forEach((v, t) => { if (out && t >= out[0] && t <= out[1]) return; board.dot(px(t), py(v), 2.2, css("--orange")); });
+    board.path(res.est.map((e, t) => [px(t), py(e)]), css("--blue"), 2);
+    ctx.restore(); if (out) board.label("outage, " + (out[1] - out[0] + 1) + " days", (px(out[0]) + px(out[1])) / 2, T0 + 14, css("--ink"), "center", 11);
+    board.label("grey dashed: truth   orange: observations   blue: estimate with its 95 % band", L, B0 + 34, css("--muted"), "left", 11);
+    // band width panel
+    const T1 = 390, B1 = 500; board.label("width of the band, mm, with the 40 mm rule", L, T1 - 8, css("--ink"), "left", 12);
+    const wy = w => B1 - Math.min(1, w / 80) * (B1 - T1); board.line(L, B1, Rr, B1, css("--line"), 1); board.line(L, wy(40), Rr, wy(40), css("--red"), 1.5, [5, 4]); board.label("40 mm", Rr + 2, wy(40) + 4, css("--red"), "left", 10, true); [0, 20, 60, 80].forEach(w => board.label(String(w), L - 6, wy(w) + 4, css("--muted"), "right", 10, true));
+    board.path(res.W.map((w, t) => [px(t), wy(2 * w)]), css("--blue"), 2);
+    let wEnd = null, kRe = null; if (out) { wEnd = 2 * res.W[out[1]]; kRe = out[1] + 1 < N ? res.Ks[out[1] + 1] : null; if (kRe !== null) { board.dot(px(out[1] + 1), wy(2 * res.W[out[1] + 1]), 5, "#2E7D5B", "#fff"); board.label("reacquired: K = " + kRe.toFixed(2), px(out[1] + 1) + 8, wy(2 * res.W[out[1] + 1]) - 6, "#2E7D5B", "left", 11); } }
+    const mo = maxOutage();
+    document.getElementById("ouLen").textContent = out ? (out[1] - out[0] + 1) + " days, day " + out[0] + " to " + out[1] : "none"; document.getElementById("ouW").textContent = wEnd === null ? "-" : wEnd.toFixed(1) + " mm"; document.getElementById("ouK").textContent = kRe === null ? "-" : kRe.toFixed(2); document.getElementById("ouMax").textContent = mo + " days";
+    const steady = 2 * res.W[Math.min(N - 1, 60)];
+    stepEl.innerHTML = '<span class="k">' + (out ? (out[1] - out[0] + 1) + '-day outage' : 'no outage') + ', Q ' + q.toFixed(3) + ', R ' + R.toFixed(1) + '</span>' + (!out ? '<p>With every observation present the band settles at about ' + steady.toFixed(1) + ' mm. Drag across the timeline to cut the cable.</p>' : (wEnd > 40 ? '<div class="ask no">The band reached ' + wEnd.toFixed(1) + ' mm before reacquisition, past the 40 mm rule. At this Q the system tolerates ' + mo + ' days without data. Shorten the outage, or lower Q if you can defend a steadier slide.</div>' : '<div class="ask ok">The band stayed inside the rule: ' + wEnd.toFixed(1) + ' mm at the end of the outage, ' + (kRe !== null ? 'and the first measurement back was taken with gain ' + kRe.toFixed(2) + ', so it snapped the band shut' : '') + '. The rule allows up to ' + mo + ' days at this Q.</div>'));
+  }
+  function dayAt(ev) { const [mx] = board.pos(ev); const L = 60, Rr = board.W - 40; return Math.max(0, Math.min(N - 1, Math.round((mx - L) / (Rr - L) * (N - 1)))); }
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (my < 40 || my > 350) return; drag = dayAt(ev); out = [drag, drag]; draw(); });
+  window.addEventListener("mousemove", ev => { if (drag === null) return; const d = dayAt(ev); out = [Math.min(drag, d), Math.max(drag, d)]; draw(); });
+  window.addEventListener("mouseup", () => { drag = null; });
+  document.getElementById("ouClear").addEventListener("click", () => { out = null; draw(); });
+  document.getElementById("ouNew").addEventListener("click", () => { seed++; makeRecord(); draw(); });
+  const qEl = document.getElementById("ouQ"), rEl = document.getElementById("ouR");
+  qEl.addEventListener("input", () => { q = Math.pow(10, +qEl.value); document.getElementById("ouQOut").textContent = q.toFixed(3); draw(); });
+  rEl.addEventListener("input", () => { R = Math.pow(10, +rEl.value); document.getElementById("ouROut").textContent = R.toFixed(1); makeRecord(); draw(); });
+  quiz(document.getElementById("ouQuiz"), { q: "After a 30-day outage the first measurement back moves the estimate almost all the way to itself. Why?", options: ["The filter was reset", "The predicted variance has grown far past R, so the computed gain is near one and the measurement dominates", "Measurements always dominate after an outage by rule"], answer: 1, why: "The gain is P over P plus R, recomputed every epoch. Thirty predict steps with nothing to shrink P leave it far larger than R, so K is near one and the band snaps shut, slide 9." });
+  window.addEventListener("themechange", draw);
+  makeRecord(); draw();
+})();
+
+/* ================= 3. OPTIMALLY WRONG ================= */
+(function wrong() {
+  const board = new Board(document.getElementById("wrPlot"));
+  const stepEl = document.getElementById("wrStep");
+  const N = 120, c = 0.01, EX = 1.8, Rm = 0.5; let Qf = 0.01, mode = "lin";
+  const rng = mulberry32(19), g = randn(rng, 2 * N);
+  const rain = []; for (let t = 0; t < N; t++) { rain.push(rng() < 0.12 ? 4 + 36 * Math.pow(rng(), 2) : 0); }
+  const qT = []; let S = 20; for (let t = 0; t < N; t++) { const qq = c * Math.pow(S, EX); qT.push(qq); S = Math.max(0, S + rain[t] - qq + 0.5 * g[N + t]); }
+  const z = qT.map((v, t) => v + Math.sqrt(Rm) * g[t]);
+  const fTrue = (qq, r) => { const St = Math.pow(Math.max(qq, 1e-6) / c, 1 / EX); return c * Math.pow(Math.max(0, St + r - qq), EX); };
+  const fLin = (qq, r) => 0.85 * qq + 0.15 * r;
+  function run() {
+    let m = qT[0], P = 1; const est = [], inn = [];
+    for (let t = 1; t < N; t++) {
+      let mp, F; if (mode === "lin") { mp = fLin(m, rain[t - 1]); F = 0.85; } else { mp = fTrue(m, rain[t - 1]); const h = 1e-3; F = (fTrue(m + h, rain[t - 1]) - fTrue(m - h, rain[t - 1])) / (2 * h); }
+      let Pp = F * P * F + Qf; const nu = z[t] - mp; inn.push(nu); const K = Pp / (Pp + Rm); m = mp + K * nu; P = (1 - K) * Pp; est.push(m);
+    }
+    return { est: [qT[0]].concat(est), inn };
+  }
+  function acf(x, lag) { const m = mean(x); let num = 0, den = 0; for (let i = 0; i < x.length; i++) { den += (x[i] - m) ** 2; if (i >= lag) num += (x[i] - m) * (x[i - lag] - m); } return num / (den || 1e-9); }
+  function peaks() { const ps = []; for (let t = 1; t < N - 1; t++) if (qT[t] > qT[t - 1] && qT[t] >= qT[t + 1] && qT[t] > 1.0) ps.push(t); ps.sort((a, b) => qT[b] - qT[a]); return ps; }
+  function draw() {
+    const r = run(); const ctx = board.ctx;
+    board.clear("discharge from a catchment: truth (grey), noisy gauge (orange), the filter's estimate (blue); rain as bars at the top");
+    const L = 60, Rr = board.W - 40, T0 = 70, B0 = 300; const hi = Math.max.apply(null, qT) * 1.15; const px = t => L + t / (N - 1) * (Rr - L), py = v => B0 - v / hi * (B0 - T0);
+    rain.forEach((v, t) => { if (v > 0) { ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.35); ctx.fillRect(px(t) - 2, 34, 4, v * 0.8); } }); board.label("rain, mm", L, 44, css("--muted"), "left", 10);
+    board.line(L, B0, Rr, B0, css("--line"), 1); board.line(L, T0, L, B0, css("--line"), 1); for (let t = 0; t < N; t += 20) board.label("day " + t, px(t), B0 + 16, css("--muted"), "center", 10, true); for (let v = 0; v <= hi; v += 5) board.label(v + "", L - 6, py(v) + 4, css("--muted"), "right", 10, true);
+    board.path(qT.map((v, t) => [px(t), py(v)]), css("--grey"), 2); z.forEach((v, t) => board.dot(px(t), py(v), 2, css("--orange"))); board.path(r.est.map((v, t) => [px(t), py(v)]), css("--blue"), 2);
+    const ps = peaks(); const big = ps.slice(0, 3), smalls = ps.slice(-3);
+    big.forEach(t => { board.line(px(t), py(qT[t]), px(t), py(r.est[t]), css("--red"), 2.5); board.dot(px(t), py(qT[t]), 4, css("--grey"), "#fff"); }); smalls.forEach(t => { board.line(px(t), py(qT[t]), px(t), py(r.est[t]), css("--orange"), 2.5); board.dot(px(t), py(qT[t]), 3, css("--grey"), "#fff"); });
+    board.label("ties: estimate minus truth at the three largest peaks (red) and the three smallest (orange)", L, B0 + 34, css("--muted"), "left", 11);
+    // innovations
+    const T1 = 370, B1 = 470, IX1 = 820; board.label("innovations: gauge reading minus predicted reading, the only new information each day", L, T1 - 8, css("--ink"), "left", 12);
+    const imax = Math.max(1, Math.max.apply(null, r.inn.map(Math.abs))); const iy = v => (T1 + B1) / 2 - v / imax * (B1 - T1) / 2; const ix = t => L + t / (N - 1) * (IX1 - L);
+    board.line(L, (T1 + B1) / 2, IX1, (T1 + B1) / 2, css("--line"), 1); r.inn.forEach((v, t) => board.line(ix(t + 1), (T1 + B1) / 2, ix(t + 1), iy(v), v > 0 ? css("--red") : css("--blue"), 1.5));
+    // autocorrelation
+    const AX0 = 880, AX1 = board.W - 40; board.label("autocorrelation of the innovations, lags 1 to 10", AX0, T1 - 8, css("--ink"), "left", 12); const ay = v => (T1 + B1) / 2 - Math.max(-0.6, Math.min(0.6, v)) / 0.6 * (B1 - T1) / 2; const band = 2 / Math.sqrt(r.inn.length);
+    ctx.fillStyle = mix(css("--panel"), "#2E7D5B", 0.15); ctx.fillRect(AX0, ay(band), AX1 - AX0, ay(-band) - ay(band)); board.line(AX0, ay(0), AX1, ay(0), css("--line"), 1); board.label("white noise band", AX1, ay(band) - 3, "#2E7D5B", "right", 10);
+    const acs = []; for (let k = 1; k <= 10; k++) { const a = acf(r.inn, k); acs.push(a); const x = AX0 + (k - 0.5) / 10 * (AX1 - AX0); ctx.fillStyle = Math.abs(a) > band ? css("--red") : css("--ink"); ctx.fillRect(x - 8, Math.min(ay(0), ay(a)), 16, Math.abs(ay(a) - ay(0)) || 1); board.label(String(k), x, B1 + 14, css("--muted"), "center", 10, true); }
+    const biasBig = mean(big.map(t => r.est[t] - qT[t])), biasS = mean(smalls.map(t => r.est[t] - qT[t])); const rmse = Math.sqrt(mean(r.est.map((v, t) => (v - qT[t]) ** 2)));
+    document.getElementById("wrBias").textContent = (biasBig >= 0 ? "+" : "") + biasBig.toFixed(2); document.getElementById("wrBiasS").textContent = (biasS >= 0 ? "+" : "") + biasS.toFixed(2); document.getElementById("wrAC").textContent = acs[0].toFixed(2) + (Math.abs(acs[0]) > band ? ", outside the band" : ", white"); document.getElementById("wrRMSE").textContent = rmse.toFixed(2);
+    const outside = Math.abs(acs[0]) > band;
+    stepEl.innerHTML = '<span class="k">' + (mode === "lin" ? 'linear reservoir' : 'extended filter') + ', Q ' + Qf.toPrecision(2) + '</span>' + (mode === "lin" ? '<div class="ask ' + (outside ? 'no' : '') + '">Big peaks ' + biasBig.toFixed(2) + ', small peaks ' + (biasS >= 0 ? '+' : '') + biasS.toFixed(2) + ', lag-one autocorrelation ' + acs[0].toFixed(2) + ', RMSE ' + rmse.toFixed(2) + '. ' + (Qf <= 0.05 ? 'The filter believes its model: the surprises come in runs of the same sign after every storm, which is the model error showing through as positive autocorrelation.' : (Qf >= 3 ? 'With Q this large the estimate copies the gauge: the bias shrinks only because you are now reading noise, the RMSE says so, and the surprises alternate sign because each one is mostly yesterday\'s noise undone.' : 'In between, measurement noise masks the structure and the autocorrelation can sit inside the band while the big peaks are still ' + Math.abs(biasBig).toFixed(1) + ' low. No Q gives both white innovations and a small RMSE.')) + '</div>' : '<div class="ask ' + (outside ? '' : 'ok') + '">Handed the true dynamics, linearized at each estimate: big peaks ' + biasBig.toFixed(2) + ', lag-one autocorrelation ' + acs[0].toFixed(2) + ', RMSE ' + rmse.toFixed(2) + '. ' + (Qf > 0.3 ? 'Q is larger than the real process noise, so even the right model chases the gauge; turn it down and the innovations whiten.' : 'White innovations with a small RMSE: the model is doing its job, and the honest Q is small because the catchment itself is nearly deterministic.') + '</div>');
+  }
+  const qEl = document.getElementById("wrQ"); qEl.addEventListener("input", () => { Qf = Math.pow(10, +qEl.value); document.getElementById("wrQOut").textContent = Qf.toPrecision(2); draw(); });
+  document.getElementById("wrLin").addEventListener("click", () => { mode = "lin"; pressed(["wrLin", "wrEKF"], "wrLin"); draw(); });
+  document.getElementById("wrEKF").addEventListener("click", () => { mode = "ekf"; pressed(["wrLin", "wrEKF"], "wrEKF"); draw(); });
+  quiz(document.getElementById("wrQuiz"), { q: "The innovations of a running filter are strongly autocorrelated from one day to the next. What does that tell you?", options: ["The measurement noise is too large", "The transition model does not describe the system: a correct filter extracts everything predictable, leaving innovations that are white", "The filter needs a larger Q"], answer: 1, why: "Under the three assumptions of slide 10 the innovations are white. Structure left in them is the predictable part the model failed to predict, and no Q repairs a wrong transition, slide 12." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 4. THE DICTIONARY ================= */
+(function dictionary() {
+  const board = new Board(document.getElementById("dcPlot"));
+  const stepEl = document.getElementById("dcStep");
+  const LEFT = ["state vector x_t", "transition F", "observation H", "measurement z_t", "gain K", "covariance P", "noise terms Q and R", "predict then update, every epoch"];
+  const RIGHT = ["the input x_t, one arrival per step", "the recurrence h_t = tanh(W_hh h_t-1 + W_xh x_t), one cell applied forever", "hidden vector h_t", "dropped: nothing about uncertainty is carried, so there is no band", "recurrent weights W_hh, learned from the record", "never written: the loss and the training record decide what to trust", "output weights W_hy, learned", "input weights W_xh, fixed once trained, the same for every arrival"];
+  const ANSWER = [2, 4, 6, 0, 7, 3, 5, 1];
+  const WHY = ["the carried summary is the hidden vector", "F becomes W_hh, learned rather than written", "H becomes the output weights", "the measurement is now called the input", "the gain is baked into W_xh once; it is not recomputed from P and R each epoch", "P is dropped, which is why there is no band", "Q and R are never written; the record and the loss decide", "the loop is the recurrence itself"];
+  let links = [], sel = null, checked = false;
+  const LX = 40, LW = 380, RX = 720, RW = 440, Y0 = 50, DH = 56;
+  function boxL(i) { return [LX, Y0 + i * DH, LW, 42]; } function boxR(i) { return [RX, Y0 + i * DH, RW, 42]; }
+  function draw() {
+    const ctx = board.ctx; board.clear("the hand-written filter on the left, the learned cell on the right; click a term, then its counterpart");
+    board.label("Kalman filter", LX, Y0 - 8, css("--ink"), "left", 12); board.label("recurrent cell", RX, Y0 - 8, css("--ink"), "left", 12);
+    LEFT.forEach((s, i) => { const b = boxL(i); ctx.fillStyle = sel === i ? css("--blue") : css("--bg"); roundRect(ctx, b[0], b[1], b[2], b[3], 6); ctx.fill(); ctx.strokeStyle = css("--line"); ctx.stroke(); board.label(s, b[0] + 12, b[1] + 26, sel === i ? "#fff" : css("--ink"), "left", 13); });
+    RIGHT.forEach((s, i) => { const b = boxR(i); ctx.fillStyle = css("--bg"); roundRect(ctx, b[0], b[1], b[2], b[3], 6); ctx.fill(); ctx.strokeStyle = css("--line"); ctx.stroke(); if (s.length > 58) { const cut = s.lastIndexOf(" ", 58); board.label(s.slice(0, cut), b[0] + 12, b[1] + 18, css("--ink"), "left", 12); board.label(s.slice(cut + 1), b[0] + 12, b[1] + 34, css("--ink"), "left", 12); } else board.label(s, b[0] + 12, b[1] + 26, css("--ink"), "left", 13); });
+    links.forEach(lk => { const a = boxL(lk[0]), b = boxR(lk[1]); const ok = ANSWER[lk[0]] === lk[1]; const col = checked ? (ok ? "#2E7D5B" : css("--red")) : css("--blue"); board.line(a[0] + a[2], a[1] + 21, b[0], b[1] + 21, col, 2.5); board.dot(a[0] + a[2], a[1] + 21, 4, col); board.dot(b[0], b[1] + 21, 4, col); });
+    const nOk = links.filter(lk => ANSWER[lk[0]] === lk[1]).length;
+    document.getElementById("dcN").textContent = links.length + " of 8"; document.getElementById("dcOk").textContent = checked ? nOk + " of 8" : "-";
+    let msg; if (checked) { const wrong = links.filter(lk => ANSWER[lk[0]] !== lk[1]); msg = '<div class="ask ' + (nOk === 8 ? 'ok' : '') + '">' + nOk + ' of 8 correct.' + (nOk === 8 ? ' <span class="badge done">the dictionary reads both ways</span>' : '') + '</div>' + wrong.map(lk => '<p>' + LEFT[lk[0]] + ': ' + WHY[lk[0]] + '.</p>').join(''); } else msg = sel === null ? '<p>' + (links.length === 0 ? 'Click a filter term on the left to start a link.' : links.length + ' linked. Click a link to remove it, or keep going.') + '</p>' : '<p>Now click what <em>' + LEFT[sel] + '</em> becomes in the cell.</p>';
+    stepEl.innerHTML = '<span class="k">' + links.length + ' of 8 linked</span>' + msg;
+  }
+  function hit(mx, my, boxes) { for (let i = 0; i < 8; i++) { const b = boxes(i); if (mx >= b[0] && mx <= b[0] + b[2] && my >= b[1] && my <= b[1] + b[3]) return i; } return -1; }
+  function segDist(px, py, x1, y1, x2, y2) { const dx = x2 - x1, dy = y2 - y1; const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy))); return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy)); }
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const l = hit(mx, my, boxL), r = hit(mx, my, boxR); checked = false;
+    if (l >= 0) { sel = sel === l ? null : l; draw(); return; }
+    if (r >= 0 && sel !== null) { links = links.filter(lk => lk[0] !== sel && lk[1] !== r); links.push([sel, r]); sel = null; draw(); return; }
+    const k = links.findIndex(lk => { const a = boxL(lk[0]), b = boxR(lk[1]); return segDist(mx, my, a[0] + a[2], a[1] + 21, b[0], b[1] + 21) < 7; }); if (k >= 0) { links.splice(k, 1); } sel = null; draw(); });
+  document.getElementById("dcCheck").addEventListener("click", () => { checked = true; draw(); });
+  document.getElementById("dcClear").addEventListener("click", () => { links = []; sel = null; checked = false; draw(); });
+  quiz(document.getElementById("dcQuiz"), { q: "A plain recurrent cell receives one wildly wrong reading. What does it do that a Kalman filter would not?", options: ["Rejects it, because the input weights act as a gain", "Folds it in with the same weights as every other reading, because its gain was fixed at training time rather than recomputed from the running covariance", "Nothing different"], answer: 1, why: "The filter's gain is P over P plus R at that epoch, so a reading from an instrument it knows to be poor is weighted down. The cell has no P and no R; its input weights are the same at every step, slide 15, unless a gate learns to close." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 5. THE CHAIN OF FACTORS ================= */
+(function reach() {
+  const board = new Board(document.getElementById("rePlot"));
+  const stepEl = document.getElementById("reStep");
+  const T = 40, U = 0.8; let w = 0.9, gate = 0.97, mode = "plain", act = "tanh", clip = false, picked = 1;
+  const rng = mulberry32(23), g = randn(rng, T); const X = []; for (let t = 0; t < T; t++) X.push(t === 2 ? 1.5 : 0.3 * g[t]);
+  function run() {
+    const h = [0]; for (let t = 0; t < T; t++) h.push(act === "tanh" ? Math.tanh(w * h[t] + U * X[t]) : Math.max(-1e6, Math.min(1e6, w * h[t] + U * X[t])));
+    const f = []; for (let t = 1; t <= T; t++) f.push(mode === "plain" ? (act === "tanh" ? w * (1 - h[t] * h[t]) : w) : gate);
+    const G = new Array(T).fill(1); for (let t = T - 2; t >= 0; t--) G[t] = G[t + 1] * f[t + 1];
+    let scale = 1; if (clip) { const mx = Math.max.apply(null, G.map(Math.abs)); if (mx > 5) scale = 5 / mx; }
+    return { h: h.slice(1), f, G: G.map(v => v * scale), Gu: G, scale };
+  }
+  function draw() {
+    const r = run(); const ctx = board.ctx;
+    board.clear("the cell unrolled over forty days, loss at day 40; shading is the gradient that reaches each day (log scale); click a day for its chain");
+    const L = 50, Rr = board.W - 40, CY = 110; const cx = t => L + (t + 0.5) / T * (Rr - L);
+    const lg = v => Math.max(-6, Math.min(1, Math.log10(Math.max(Math.abs(v), 1e-12))));
+    for (let t = 0; t < T - 1; t++) board.line(cx(t) + 11, CY, cx(t + 1) - 11, CY, css("--line"), 1);
+    let reach = 0; for (let t = T - 1; t >= 0; t--) { if (Math.abs(r.Gu[t]) >= 0.01) reach = T - 1 - t; else break; }
+    for (let t = 0; t < T; t++) { const s = (lg(r.G[t]) + 6) / 7; ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.08 + 0.92 * s); ctx.beginPath(); ctx.arc(cx(t), CY, 11, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = t === picked ? css("--orange") : css("--line"); ctx.lineWidth = t === picked ? 3 : 1; ctx.stroke(); if (t % 5 === 0 || t === T - 1) board.label("d" + (t + 1), cx(t), CY + 28, css("--muted"), "center", 10, true); }
+    board.label("loss", cx(T - 1), CY - 20, css("--red"), "center", 11); board.line(cx(T - 1 - reach) - 14, CY - 16, cx(T - 1 - reach) - 14, CY + 16, css("--red"), 2); board.label("reach: " + reach + " steps", cx(T - 1 - reach) - 18, CY - 20, css("--red"), "right", 11);
+    board.label("pulse at day 3", cx(2), CY + 44, css("--orange"), "center", 10);
+    // hidden state trace
+    const HY0 = 186, HY1 = 256; board.label("hidden state h_t along the record", L, HY0 - 6, css("--ink"), "left", 12); const hy = v => (HY0 + HY1) / 2 - Math.max(-1, Math.min(1, v)) * (HY1 - HY0) / 2; board.line(L, hy(0), Rr, hy(0), css("--line"), 1); board.path(r.h.map((v, t) => [cx(t), hy(v)]), css("--ink"), 1.5); r.h.forEach((v, t) => board.dot(cx(t), hy(v), 2.5, css("--ink")));
+    // gradient magnitude bars
+    const GY0 = 290, GY1 = 490; board.label("gradient reaching each day, log scale; the line is one percent", L, GY0 - 6, css("--ink"), "left", 12); const gy = v => GY1 - (lg(v) + 6) / 7 * (GY1 - GY0);
+    [-6, -4, -2, 0].forEach(e => { board.line(L, gy(Math.pow(10, e)), Rr, gy(Math.pow(10, e)), css("--line"), 1, [2, 4]); board.label("1e" + e, L - 6, gy(Math.pow(10, e)) + 4, css("--muted"), "right", 10, true); }); board.line(L, gy(0.01), Rr, gy(0.01), css("--red"), 1.5, [5, 4]);
+    r.G.forEach((v, t) => { ctx.fillStyle = Math.abs(v) >= 0.01 ? css("--blue") : css("--grey"); ctx.fillRect(cx(t) - 7, gy(v), 14, GY1 - gy(v)); });
+    board.label(mode === "plain" ? (act === "tanh" ? "factor per step: w times (1 - h squared), the cell Jacobian; a saturated tanh has slope near zero" : "factor per step: w, the cell Jacobian of a linear cell") : "factor per step on the memory line: the forget gate itself", L, GY1 + 18, css("--muted"), "left", 11);
+    const fmax = Math.max.apply(null, r.f.map(Math.abs));
+    document.getElementById("reReach").textContent = reach + " of 39"; document.getElementById("reG1").textContent = Math.abs(r.G[0]) < 1e-12 ? "0" : r.G[0].toExponential(2); document.getElementById("reMax").textContent = fmax.toFixed(3);
+    const chain = r.f.slice(picked + 1); const head = chain.slice(0, 3).map(v => v.toFixed(2)).join(" x "); document.getElementById("reChain").textContent = chain.length ? "day " + (picked + 1) + ": " + head + (chain.length > 3 ? " x ... " : " ") + "= " + r.G[picked].toExponential(1) : "day 40: the loss, gradient 1";
+    stepEl.innerHTML = '<span class="k">' + (mode === "plain" ? 'plain ' + act + ' cell, w ' + w.toFixed(2) : 'gated line, forget ' + gate.toFixed(2)) + (clip ? ', clipped' : '') + '</span>' + (mode === "plain" ? (fmax < 0.98 ? '<div class="ask no">Every factor is below one, so the product decays geometrically: ' + reach + ' steps back is the reach. ' + (act === "tanh" && w > 1.05 ? 'With w above one the tanh state saturates and its slope collapses, so the product still shrinks: a plain tanh cell loses reach on both sides of one. ' : '') + (reach < 2 ? 'The pulse at day 3 cannot be learned from a loss at day 40: no training signal arrives there.' : 'Days before that receive nothing usable, however long you train.') + '</div>' : (fmax > 1.05 ? '<div class="ask no">The largest factor is ' + fmax.toFixed(2) + ': the product grows, ' + (clip ? 'and clipping rescales the whole chain so the largest gradient is 5; the shape, early days getting the most, is unchanged.' : 'the early days receive a gradient of ' + r.G[0].toExponential(1) + ' and a step on it would wreck the weights. Clip it.') + '</div>' : '<div class="ask">Near the knife edge: factors ' + Math.min.apply(null, r.f).toFixed(2) + ' to ' + fmax.toFixed(2) + ', reach ' + reach + '. ' + (act === "tanh" ? 'The slope of tanh is below one wherever the state is large, so even w near one decays; nothing holds the product at one for long.' : 'A linear cell with w exactly one carries the signal forever, and any drift either way compounds over forty steps.') + '</div>')) : '<div class="ask ok">On the memory line each factor is the gate, ' + gate.toFixed(2) + ', with no matrix and no activation slope in the chain: reach ' + reach + '. A gate near one carries the signal back intact; a gate of 0.5 forgets on purpose. The cell learns which.</div>');
+  }
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const L = 50, Rr = board.W - 40; if (my < 80 || my > 140) return; picked = Math.max(0, Math.min(T - 1, Math.floor((mx - L) / (Rr - L) * T))); draw(); });
+  const wEl = document.getElementById("reW"), gEl = document.getElementById("reG");
+  wEl.addEventListener("input", () => { w = +wEl.value; document.getElementById("reWOut").textContent = w.toFixed(2); draw(); });
+  gEl.addEventListener("input", () => { gate = +gEl.value; document.getElementById("reGOut").textContent = gate.toFixed(2); draw(); });
+  document.getElementById("rePlain").addEventListener("click", () => { mode = "plain"; act = "tanh"; pressed(["rePlain", "reLin", "reGate"], "rePlain"); draw(); });
+  document.getElementById("reLin").addEventListener("click", () => { mode = "plain"; act = "linear"; pressed(["rePlain", "reLin", "reGate"], "reLin"); draw(); });
+  document.getElementById("reGate").addEventListener("click", () => { mode = "gate"; pressed(["rePlain", "reLin", "reGate"], "reGate"); draw(); });
+  document.getElementById("reClip").addEventListener("click", () => { clip = !clip; document.getElementById("reClip").setAttribute("aria-pressed", clip ? "true" : "false"); draw(); });
+  quiz(document.getElementById("reQuiz"), { q: "Gradient clipping is standard practice. Which failure does it fix, and which does it leave?", options: ["It fixes vanishing by scaling small gradients up", "It bounds the exploding case by rescaling the gradient norm, and leaves vanishing untouched, which is why the gated cell was needed", "It fixes both"], answer: 1, why: "Clipping rescales a large gradient; a gradient of 1e-9 rescaled is still useless. Vanishing is repaired architecturally, by a memory path whose factor is a gate near one rather than a repeated matrix product, slides 18 and 19." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 6. VALVES ON A MEMORY LINE ================= */
+(function valves() {
+  const board = new Board(document.getElementById("vaPlot"));
+  const stepEl = document.getElementById("vaStep");
+  const D = 12; let f = 0.8, th = 0.3, od = 1, tie = false, seed = 5, REC = [];
+  function make() { const rng = mulberry32(seed); REC = [[2, 1], [3, 1], [-1, 0], [-1, 0]].map(([fd, tgt]) => { const x = []; for (let t = 0; t < D; t++) x.push(t === fd ? 1 : 0.02 + 0.3 * rng()); return { x, target: tgt, floodDay: fd }; }); }
+  function gated(x) { let c = 0; const cs = [], hs = [], ins = []; for (let t = 0; t < D; t++) { const open = x[t] > th; let keep = f, add = open ? 1 : 0; if (tie && open) { keep = 0; add = 1; } c = Math.min(1, keep * c + add * x[t]); cs.push(c); ins.push(open); hs.push(t + 1 >= od ? c : 0); } return { cs, hs, ins }; }
+  function plain(x) { let h = 0; const hs = []; for (let t = 0; t < D; t++) { h = Math.tanh(0.8 * h + 1.0 * x[t]); hs.push(h); } return hs; }
+  function draw() {
+    const ctx = board.ctx; board.clear("four records: readings as bars above each pipe, the memory level inside it; valves shown where they open");
+    const L = 180, Rr = board.W - 100; const cx = t => L + (t + 0.5) / D * (Rr - L); const cw = (Rr - L) / D;
+    let worst = 0, worstP = 0; const outs = [], outsP = [];
+    REC.forEach((rec, k) => {
+      const y = 60 + k * 100; const r = gated(rec.x); const out = r.hs[D - 1]; const err = Math.abs(out - rec.target); worst = Math.max(worst, err); outs.push(out);
+      const hp = plain(rec.x); const errP = Math.abs(Math.max(0, hp[D - 1]) - rec.target); worstP = Math.max(worstP, errP); outsP.push(hp[D - 1]);
+      board.label((rec.target ? "flood on day " + (rec.floodDay + 1) : "no flood") + ", target " + rec.target, L - 10, y + 30, css("--ink"), "right", 12);
+      // readings
+      rec.x.forEach((v, t) => { ctx.fillStyle = v > th ? css("--orange") : css("--grey"); ctx.fillRect(cx(t) - cw * 0.3, y + 4 - v * 22, cw * 0.6, v * 22); });
+      // pipe
+      ctx.fillStyle = css("--bg"); ctx.fillRect(L, y + 10, Rr - L, 40); ctx.strokeStyle = css("--line"); ctx.strokeRect(L, y + 10, Rr - L, 40);
+      r.cs.forEach((c, t) => { ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.25 + 0.6 * c); ctx.fillRect(cx(t) - cw / 2 + 1, y + 50 - 38 * c, cw - 2, 38 * c); if (r.ins[t]) { ctx.fillStyle = "#2E7D5B"; ctx.beginPath(); ctx.moveTo(cx(t), y + 12); ctx.lineTo(cx(t) - 6, y + 2); ctx.lineTo(cx(t) + 6, y + 2); ctx.closePath(); ctx.fill(); } if (t + 1 >= od) { ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.moveTo(cx(t), y + 50); ctx.lineTo(cx(t) - 5, y + 58); ctx.lineTo(cx(t) + 5, y + 58); ctx.closePath(); ctx.fill(); } });
+      board.label("out " + out.toFixed(2), Rr + 4, y + 34, err < 0.15 ? "#2E7D5B" : css("--red"), "left", 11, true);
+      if (k === 0) { board.label("green: input valve open   orange: output valve open   blue fill: memory level", L, y - 28, css("--muted"), "left", 11); }
+    });
+    for (let t = 0; t < D; t++) board.label("day " + (t + 1), cx(t), 468, css("--muted"), "center", 10, true);
+    // plain cell for record 1
+    const y = 474; board.label("plain cell, record 1", L - 10, y + 24, css("--ink"), "right", 12); const hp = plain(REC[0].x); const hy = v => y + 44 - v * 44; board.line(L, y + 44, Rr, y + 44, css("--line"), 1); board.path(hp.map((v, t) => [cx(t), hy(v)]), css("--ink"), 1.5); hp.forEach((v, t) => board.dot(cx(t), hy(v), 2.5, css("--ink"))); board.label("h_12 = " + hp[D - 1].toFixed(2), Rr + 4, y + 28, css("--muted"), "left", 11, true);
+    board.label("h_t = tanh(0.8 h + x): the flood enters and fades, nothing holds it", L, y + 62, css("--muted"), "left", 11);
+    document.getElementById("vaErr").textContent = worst.toFixed(2); document.getElementById("vaPlain").textContent = worstP.toFixed(2); document.getElementById("vaDecay").textContent = (100 * hp[D - 1] / Math.max(1e-9, hp[2])).toFixed(0) + " % of day 3";
+    stepEl.innerHTML = '<span class="k">keep ' + f.toFixed(2) + ', open above ' + th.toFixed(2) + ', reveal from day ' + od + (tie ? ', tied' : '') + '</span>' + (worst < 0.15 ? '<div class="ask ok">Worst error ' + worst.toFixed(2) + ': the flood is carried nine days and the quiet records stay empty. <span class="badge done">policy holds</span> Try lowering the forget valve and watch the memory leak; lower the threshold and watch noise pour in.</div>' : (th < 0.3 ? '<div class="ask no">The input valve is open to ordinary readings, so the quiet records fill with noise and read as floods. Raise the threshold above the noise.</div>' : (f < 0.95 ? '<div class="ask no">The forget valve leaks: ' + (100 * Math.pow(f, 9)).toFixed(0) + ' % of the flood is left after nine days. Keep nearly everything.</div>' : (od > 12 ? '<div class="ask no">The output valve never opens.</div>' : '<div class="ask">Worst error ' + worst.toFixed(2) + '. Check which record fails: the out column on the right.</div>'))));
+  }
+  const fEl = document.getElementById("vaF"), tEl = document.getElementById("vaT"), oEl = document.getElementById("vaO");
+  fEl.addEventListener("input", () => { f = +fEl.value; document.getElementById("vaFOut").textContent = f.toFixed(2); draw(); });
+  tEl.addEventListener("input", () => { th = +tEl.value; document.getElementById("vaTOut").textContent = th.toFixed(2); draw(); });
+  oEl.addEventListener("input", () => { od = +oEl.value; document.getElementById("vaOOut").textContent = String(od); draw(); });
+  document.getElementById("vaTie").addEventListener("click", () => { tie = !tie; document.getElementById("vaTie").setAttribute("aria-pressed", tie ? "true" : "false"); draw(); });
+  document.getElementById("vaNew").addEventListener("click", () => { seed++; make(); draw(); });
+  quiz(document.getElementById("vaQuiz"), { q: "Why does the gated cell hold the flood reading for nine days when the plain cell cannot?", options: ["It has more parameters", "Its memory line is additive: the forget gate scales the stored value and nothing pushes it through a matrix and an activation each day, so a gate near one leaves it, and its gradient, intact", "It uses a larger learning rate"], answer: 1, why: "Slide 19: the memory path has no repeated matrix product, so the derivative along it is the gate. The plain cell applies tanh of a weighted state every day and the stored value decays toward the fixed point." });
+  window.addEventListener("themechange", draw);
+  make(); draw();
+})();
+
+/* ================= 7. THE TELEGRAM ================= */
+(function telegram() {
+  const board = new Board(document.getElementById("tgPlot"));
+  const stepEl = document.getElementById("tgStep");
+  const LENS = [10, 20, 50, 100, 200]; let Lcur = 50;
+  const NAMES = ["mean", "maximum", "day of the maximum, as a fraction", "last value", "first value", "slope, per day", "number of peaks", "standard deviation"];
+  let chosen = [0, 1, 3]; const corpus = {}, pcaCache = {};
+  function genRecord(rng, L) { const x = []; let q = 1 + rng(); for (let t = 0; t < L; t++) { if (rng() < 0.06) q += 2 + 6 * rng(); q = 0.9 * q + 0.1 + 0.1 * (rng() - 0.5); x.push(q); } return x; }
+  function summaries(x) { const L = x.length; const m = mean(x); let mx = -Infinity, im = 0; x.forEach((v, i) => { if (v > mx) { mx = v; im = i; } }); const tm = (L - 1) / 2; let sxy = 0, sxx = 0; x.forEach((v, i) => { sxy += (i - tm) * (v - m); sxx += (i - tm) * (i - tm); }); let peaks = 0; for (let i = 1; i < L - 1; i++) if (x[i] > x[i - 1] && x[i] >= x[i + 1] && x[i] > m) peaks++; return [m, mx, im / Math.max(1, L - 1), x[L - 1], x[0], sxy / sxx, peaks, sd(x)]; }
+  function getCorpus(L) { if (corpus[L]) return corpus[L]; const rng = mulberry32(100 + L); const train = [], test = []; for (let i = 0; i < 300; i++) train.push(genRecord(rng, L)); for (let i = 0; i < 100; i++) test.push(genRecord(rng, L)); const sTr = train.map(summaries), sTe = test.map(summaries); const all = []; train.forEach(x => x.forEach(v => all.push(v))); corpus[L] = { train, test, sTr, sTe, gsd: sd(all) }; return corpus[L]; }
+  function fitDecoder(C, idx) { const d = idx.length + 1; const F = C.sTr.map(s => [1].concat(idx.map(j => s[j]))); const A = []; for (let a = 0; a < d; a++) { A.push(new Float64Array(d)); } F.forEach(f => { for (let a = 0; a < d; a++) for (let b = 0; b < d; b++) A[a][b] += f[a] * f[b]; }); for (let a = 0; a < d; a++) A[a][a] += 1e-6; const L = C.train[0].length; const B = []; for (let t = 0; t < L; t++) { const rhs = new Float64Array(d); F.forEach((f, i) => { for (let a = 0; a < d; a++) rhs[a] += f[a] * C.train[i][t]; }); B.push(solve(A, Array.from(rhs))); } return s => { const f = [1].concat(idx.map(j => s[j])); return B.map(b => b.reduce((q, v, a) => q + v * f[a], 0)); }; }
+  function nrmse(xh, x, s) { return Math.sqrt(mean(x.map((v, t) => (v - xh[t]) ** 2))) / (s || 1e-9); }
+  function pca(C) { const L = C.train[0].length; if (pcaCache[L]) return pcaCache[L]; const mu = new Float64Array(L); C.train.forEach(x => x.forEach((v, t) => mu[t] += v / C.train.length)); const X = C.train.map(x => x.map((v, t) => v - mu[t])); const cov = []; for (let a = 0; a < L; a++) cov.push(new Float64Array(L)); X.forEach(x => { for (let a = 0; a < L; a++) { const xa = x[a]; const row = cov[a]; for (let b = a; b < L; b++) row[b] += xa * x[b]; } }); for (let a = 0; a < L; a++) for (let b = 0; b < a; b++) cov[a][b] = cov[b][a]; const comps = []; for (let k = 0; k < 3; k++) { let v = new Float64Array(L).fill(1); for (let it = 0; it < 60; it++) { const wv = new Float64Array(L); for (let a = 0; a < L; a++) { let s = 0; const row = cov[a]; for (let b = 0; b < L; b++) s += row[b] * v[b]; wv[a] = s; } comps.forEach(c => { let dpr = 0; for (let a = 0; a < L; a++) dpr += wv[a] * c[a]; for (let a = 0; a < L; a++) wv[a] -= dpr * c[a]; }); const nv = Math.sqrt(wv.reduce((s, q) => s + q * q, 0)) || 1; v = wv.map(q => q / nv); } comps.push(v); } const rec = x => { const out = Array.from(mu); comps.forEach(c => { let dpr = 0; for (let a = 0; a < L; a++) dpr += (x[a] - mu[a]) * c[a]; for (let a = 0; a < L; a++) out[a] += dpr * c[a]; }); return out; }; pcaCache[L] = rec; return rec; }
+  function arFit(C) { const d = 4; const A = []; for (let a = 0; a < d; a++) A.push(new Float64Array(d)); const rhs = new Float64Array(d); C.train.forEach(x => { for (let t = 3; t < x.length; t++) { const f = [1, x[t - 1], x[t - 2], x[t - 3]]; for (let a = 0; a < d; a++) { rhs[a] += f[a] * x[t]; for (let b = 0; b < d; b++) A[a][b] += f[a] * f[b]; } } }); return solve(A, Array.from(rhs)); }
+  function errors(idx) { return LENS.map(L => { const C = getCorpus(L); const dec = fitDecoder(C, idx); return mean(C.test.map((x, i) => nrmse(dec(C.sTe[i]), x, C.gsd))); }); }
+  function errorsPCA() { return LENS.map(L => { const C = getCorpus(L); const rec = pca(C); return mean(C.test.map(x => nrmse(rec(x), x, C.gsd))); }); }
+  let pcaErrs = null;
+  function draw() {
+    const C = getCorpus(Lcur); const dec = fitDecoder(C, chosen); const rec = pca(C); if (!pcaErrs) pcaErrs = errorsPCA(); const errs = errors(chosen);
+    const x = C.test[0]; const xh = dec(C.sTe[0]), xp = rec(x);
+    const ctx = board.ctx; board.clear("one held-out record of " + Lcur + " days, rebuilt from your three-number telegram (blue) and from the learned three-number code (green)");
+    const L0 = 60, R0 = 760, T0 = 50, B0 = 260; const hi = Math.max.apply(null, x.concat(xh)) * 1.1; const px = t => L0 + t / (Lcur - 1) * (R0 - L0), py = v => B0 - Math.max(0, v) / hi * (B0 - T0);
+    board.line(L0, B0, R0, B0, css("--line"), 1); board.line(L0, T0, L0, B0, css("--line"), 1); board.label("day 1", L0, B0 + 14, css("--muted"), "left", 10, true); board.label("day " + Lcur, R0, B0 + 14, css("--muted"), "right", 10, true);
+    board.path(x.map((v, t) => [px(t), py(v)]), css("--grey"), 2.5); board.path(xp.map((v, t) => [px(t), py(v)]), "#2E7D5B", 1.5, [4, 3]); board.path(xh.map((v, t) => [px(t), py(v)]), css("--blue"), 2);
+    board.label("grey: the record   blue: from your telegram, error " + nrmse(xh, x, C.gsd).toFixed(2) + "   green dashed: learned code, error " + nrmse(xp, x, C.gsd).toFixed(2), L0, B0 + 32, css("--muted"), "left", 11);
+    // error vs length
+    const EX0 = 840, EX1 = board.W - 40, EY0 = 50, EY1 = 260; board.label("error against record length, fixed budget of three", EX0, EY0 - 8, css("--ink"), "left", 12);
+    const ex = L => EX0 + (Math.log10(L) - 1) / (Math.log10(200) - 1) * (EX1 - EX0), ey = e => EY1 - Math.min(1.1, e) / 1.1 * (EY1 - EY0);
+    board.line(EX0, EY1, EX1, EY1, css("--line"), 1); board.line(EX0, EY0, EX0, EY1, css("--line"), 1); [0, 0.5, 1].forEach(e => { board.line(EX0, ey(e), EX1, ey(e), css("--line"), 1, [2, 4]); board.label(e.toFixed(1), EX0 - 6, ey(e) + 4, css("--muted"), "right", 10, true); }); LENS.forEach(L => board.label(String(L), ex(L), EY1 + 14, css("--muted"), "center", 10, true));
+    board.path(LENS.map((L, i) => [ex(L), ey(errs[i])]), css("--blue"), 2); LENS.forEach((L, i) => board.dot(ex(L), ey(errs[i]), 4, L === Lcur ? css("--orange") : css("--blue")));
+    board.path(LENS.map((L, i) => [ex(L), ey(pcaErrs[i])]), "#2E7D5B", 2, [4, 3]); LENS.forEach((L, i) => board.dot(ex(L), ey(pcaErrs[i]), 3.5, "#2E7D5B"));
+    board.label("error as a fraction of the spread of all records; 1 is the overall mean", EX0, EY1 + 32, css("--muted"), "left", 10);
+    // teacher forcing vs free run
+    const ar = arFit(C); const forced = x.map((v, t) => t < 3 ? v : ar[0] + ar[1] * x[t - 1] + ar[2] * x[t - 2] + ar[3] * x[t - 3]); const free = x.slice(0, 3); for (let t = 3; t < Lcur; t++) free.push(ar[0] + ar[1] * free[t - 1] + ar[2] * free[t - 2] + ar[3] * free[t - 3]);
+    const T1 = 330, B1 = 500; board.label("a one-step decoder on the same record: fed the true previous values (orange) against fed its own output (red)", L0, T1 - 8, css("--ink"), "left", 12);
+    const py2 = v => B1 - Math.max(0, v) / hi * (B1 - T1); board.line(L0, B1, R0, B1, css("--line"), 1); board.line(L0, T1, L0, B1, css("--line"), 1);
+    board.path(x.map((v, t) => [px(t), py2(v)]), css("--grey"), 2.5); board.path(forced.map((v, t) => [px(t), py2(v)]), css("--orange"), 1.5); board.path(free.map((v, t) => [px(t), py2(v)]), css("--red"), 2);
+    const drift = Math.abs(free[Math.min(Lcur - 1, 12)] - x[Math.min(Lcur - 1, 12)]) / C.gsd;
+    board.label("teacher forcing keeps every step one error deep; free running compounds them, and after the first storm it has nothing true to lean on", L0, B1 + 18, css("--muted"), "left", 11);
+    document.getElementById("tgErr").textContent = errs[LENS.indexOf(Lcur)].toFixed(2); document.getElementById("tgPCA").textContent = pcaErrs[LENS.indexOf(Lcur)].toFixed(2); document.getElementById("tgRatio").textContent = Lcur + " / 3"; document.getElementById("tgDrift").textContent = drift.toFixed(2);
+    document.querySelectorAll("#telegram [data-len]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.len === Lcur ? "true" : "false"));
+    const e = errs[LENS.indexOf(Lcur)], ep = pcaErrs[LENS.indexOf(Lcur)];
+    stepEl.innerHTML = '<span class="k">' + chosen.map(i => NAMES[i].split(",")[0]).join(', ') + '; ' + Lcur + ' days</span><div class="ask ' + (e < ep + 0.05 ? 'ok' : '') + '">Your telegram rebuilds a ' + Lcur + '-day record to within ' + e.toFixed(2) + ' of the spread of records; the best linear three-number code manages ' + ep.toFixed(2) + '. ' + (Lcur >= 100 ? 'At this length even the learned code is near one: three numbers cannot say where a dozen storms fell.' : (Lcur <= 20 ? 'At ten or twenty days three numbers nearly suffice. Lengthen the record and keep the budget.' : 'Lengthen the record and watch both curves climb; the budget does not grow with it.')) + '</div>';
+  }
+  const menu = document.getElementById("tgMenu"); NAMES.forEach((n, i) => { const lab = document.createElement("label"); const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = chosen.indexOf(i) >= 0; cb.addEventListener("change", () => { if (cb.checked) { chosen.push(i); if (chosen.length > 3) chosen.shift(); } else { chosen = chosen.filter(j => j !== i); if (chosen.length < 1) { chosen = [i]; } } menu.querySelectorAll("input").forEach((c, j) => c.checked = chosen.indexOf(j) >= 0); draw(); }); lab.appendChild(cb); lab.appendChild(document.createTextNode(n)); menu.appendChild(lab); });
+  document.querySelectorAll("#telegram [data-len]").forEach(b => b.addEventListener("click", () => { Lcur = +b.dataset.len; draw(); }));
+  quiz(document.getElementById("tgQuiz"), { q: "A sequence-to-sequence model that translates twenty-step records well falls apart on two-thousand-step records, with the same training recipe. What is the structural reason?", options: ["Vanishing gradients in the decoder", "Everything the decoder knows passes through one fixed-size context vector, and that budget does not grow with the record, so longer inputs are compressed harder, slide 23", "Teacher forcing was not used"], answer: 1, why: "Gates bought all the reach they can; the remaining failure is compression into a fixed vector. The repair is to let the decoder reread every encoder step, which is attention, Week 6." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ---------- tabs ---------- */
+const tabs = Array.from(document.querySelectorAll("nav [role=tab]"));
+function show(name, push) {
+  if (!document.getElementById(name)) name = "compromise";
+  tabs.forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll("section.demo").forEach(s => s.classList.toggle("active", s.id === name));
+  if (push) { try { history.replaceState(null, "", "#" + name); } catch (e) {} }
+}
+tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
+show(location.hash.slice(1) || "compromise", false);
+
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
