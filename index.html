@@ -129,6 +129,13 @@ nav button .slide { font-family: var(--sans); font-size: 13px; }
 "use strict";
 // one entry per week page; each demo lists the slide it belongs to and the tab anchor on the week page
 const WEEKS = [
+  { n: 6, title: "Attention and the transformer", dir: "week06/", demos: [
+    { slide: "5, 7", name: "Blend it: drive a softmax blend of six encoder states onto a target", tab: "blend" },
+    { slide: "8", name: "The saturation bench: why the square root of d is in the formula", tab: "scale" },
+    { slide: "10, 14", name: "Read the heads: label four attention maps by the relation each learned", tab: "heads" },
+    { slide: "15", name: "Order blind: shuffle a record and see whether the model notices", tab: "position" },
+    { slide: "17", name: "Build the mask: block cells until every row trains honestly", tab: "mask" },
+    { slide: "11, 21", name: "The bill: the receipt for one attention layer on a record of your length", tab: "cost" } ] },
   { n: 9, title: "Diffusion and physics informed learning", dir: "week09/", demos: [
     { slide: "4", name: "Noise detective: guess how far along the schedule a noised patch is", tab: "forward" },
     { slide: "8", name: "Spend the budget: place a few denoising steps and rank your placement", tab: "steps" },
