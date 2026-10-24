@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Week 9 Demos</title>
-<meta name="description" content="CE 7453 Week 9: interactive demonstrations of the diffusion forward process, reverse step count, classifier-free guidance, and the physics weight in a physics-informed loss.">
+<meta name="description" content="CE 7453 Week 9: estimate the diffusion step from a noised terrain patch, place a budget of denoising steps, guess the guidance weight from the samples, and probe the error map of a physics-informed fit.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -100,167 +100,174 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 </style>
 </head>
 <body>
+<style>
+/* components for the instructional formats */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.step { font-size: 15px; line-height: 1.5; }
+.step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
+.step p { margin: 6px 0; }
+.ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
+.ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
+.ask.no { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ask.ok { background: #1E3A2C; } :root:not([data-theme="light"]) .ask.no { background: #432426; } }
+:root[data-theme="dark"] .ask.ok { background: #1E3A2C; } :root[data-theme="dark"] .ask.no { background: #432426; }
+.quiz { font-size: 15px; }
+.quiz .q { margin: 0 0 8px; font-weight: 500; }
+.quiz .opts { display: grid; gap: 6px; }
+.quiz button { text-align: left; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.quiz button.right { border-color: #2E7D5B; background: #E3F2EA; }
+.quiz button.wrong { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quiz button.right { background: #1E3A2C; } :root:not([data-theme="light"]) .quiz button.wrong { background: #432426; } }
+:root[data-theme="dark"] .quiz button.right { background: #1E3A2C; } :root[data-theme="dark"] .quiz button.wrong { background: #432426; }
+.quiz .why { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { color: #2E7D5B; border-color: #2E7D5B; }
+.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.choice button, .bet button { font: inherit; font-size: 14px; padding: 8px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.choice button[aria-pressed="true"], .bet button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.choice button.right { border-color: #2E7D5B; background: #E3F2EA; color: var(--ink); }
+.choice button.wrong { border-color: var(--red); background: #F9E4E2; color: var(--ink); }
+.bet { display: flex; flex-wrap: wrap; gap: 6px; }
+.board { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-family: var(--mono); font-size: 13px; }
+.board li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.board li.best { border-color: #2E7D5B; }
+.board li.last { background: var(--blue-soft); }
+canvas.hit { cursor: pointer; }
+canvas.grab { cursor: grab; }
+.score { font-family: var(--mono); font-size: 22px; font-weight: 600; }
+</style>
+
 <header>
   <a class="weeks" href="../">All weeks</a>
-  <span class="course">CE 7453 &middot; Week 9 &middot; Diffusion and physics informed learning</span>
+  <span class="course">CE 7453 &middot; Week 9 &middot; Generative models and physics-informed learning</span>
   <h1>Interactive demonstrations</h1>
 </header>
 
 <nav role="tablist" aria-label="Demos">
-  <button role="tab" data-tab="forward" aria-selected="true">Forward process<span class="slide">slide 4</span></button>
-  <button role="tab" data-tab="steps" aria-selected="false">Reverse step count<span class="slide">slide 8</span></button>
-  <button role="tab" data-tab="guidance" aria-selected="false">Guidance weight<span class="slide">slide 9</span></button>
-  <button role="tab" data-tab="physics" aria-selected="false">Physics weight<span class="slide">slide 16</span></button>
+  <button role="tab" data-tab="forward" aria-selected="true">Noise detective<span class="slide">slide 4</span></button>
+  <button role="tab" data-tab="steps" aria-selected="false">Spend the budget<span class="slide">slide 8</span></button>
+  <button role="tab" data-tab="guidance" aria-selected="false">Guess the guidance<span class="slide">slide 9</span></button>
+  <button role="tab" data-tab="physics" aria-selected="false">Reveal the map<span class="slide">slide 16</span></button>
 </nav>
 
 <main>
 
-<!-- ============ 1. FORWARD PROCESS ============ -->
+<!-- ============ 1. FORWARD PROCESS: noise detective ============ -->
 <section class="demo active" id="forward" role="tabpanel">
-  <h2>The forward process: destroy the field on a schedule</h2>
-  <p class="lead">A real 1-D field, Gaussian noise added on a fixed schedule for T = 1000 steps. Scrub t and watch the closed form x_t = sqrt(abar_t) x_0 + sqrt(1 - abar_t) eps.</p>
-  <div class="grid">
-    <div class="plot two">
-      <canvas id="fwdField" width="900" height="420"></canvas>
-      <canvas id="fwdSched" width="450" height="420"></canvas>
+  <h2>Noise detective: how far along the schedule is this image?</h2>
+  <p class="lead">A 32 by 32 elevation patch of a site (a hill, a building pad, a road) has been pushed forward through the diffusion schedule to a hidden step t. Estimate t from what is left of the picture, lock in, and see the whole film strip.</p>
+  <div class="stage">
+    <div class="plot">
+      <canvas id="ndImg" width="1200" height="430"></canvas>
+      <canvas id="ndLine" class="grab" width="1200" height="230"></canvas>
     </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="fwdT">step t <output id="fwdTOut">0</output></label>
-        <input type="range" id="fwdT" min="0" max="1000" step="1" value="0">
-        <div class="hint">drag, or press play to run the chain</div>
+    <div class="side">
+      <div class="panel step" id="ndStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="ndLock">Lock in</button><button id="ndNext" disabled>Next round</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>your estimate of t</dt><dd id="ndGuess">500</dd>
+          <dt>signal kept at your estimate, abar_t</dt><dd id="ndAbar">-</dd>
+          <dt>score so far</dt><dd id="ndScore">0 / 0</dd>
+        </dl>
       </div>
-      <div class="btns">
-        <button class="primary" id="fwdPlay">Play</button>
-        <button id="fwdReset">Reset</button>
-        <button id="fwdNoise">New noise draw</button>
-      </div>
-      <dl class="readout">
-        <dt>abar_t (signal kept)</dt><dd id="fwdAbar">1.000</dd>
-        <dt>noise fraction 1 - abar_t</dt><dd id="fwdNz">0.000</dd>
-        <dt>signal-to-noise ratio</dt><dd id="fwdSnr">inf</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--blue)">clean field x_0</span>
-        <span style="--c: var(--grey)">noised field x_t</span>
-      </div>
+      <div class="panel quiz" id="ndQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>Nothing here is learned. The schedule beta_t rises linearly from 0.0001 to 0.02, so abar_t, the product of (1 - beta), decays as the right panel shows. By about t = 300 the field is hard to see; by t = 1000 the signal fraction is below 0.0001 and what remains is noise.</p>
-    <p>The same noise draw eps is used for every t, which is why the picture changes continuously as you scrub. Training picks a random t and jumps straight to that frame.</p>
+    <p>The picture at step t is x_t = sqrt(abar_t) x_0 + sqrt(1 - abar_t) eps, the closed form on slide 4, with one fixed noise draw per round. The schedule beta_t rises linearly from 0.0001 to 0.02 over T = 1000 steps, so abar_t falls below one half near t = 260 and below 0.02 by t = 600. Past that point every step looks the same, which is why the eye judges signal-to-noise, not t.</p>
   </div>
 </section>
 
-<!-- ============ 2. REVERSE STEP COUNT ============ -->
+<!-- ============ 2. REVERSE STEPS: spend the budget ============ -->
 <section class="demo" id="steps" role="tabpanel">
-  <h2>Samplers: step count is the cost</h2>
-  <p class="lead">The same starting noise walked back to a field with N reverse steps of a deterministic (DDIM) sampler. Each step is one network call.</p>
-  <div class="grid">
+  <h2>Spend the budget: where should a few denoising steps go?</h2>
+  <p class="lead">A deterministic sampler is allowed N network calls to turn pure noise into a terrain patch. You decide at which noise levels those calls are spent: drag the markers on the timeline or start from a preset, run, and read your placement's rank on the board.</p>
+  <div class="stage">
     <div class="plot">
-      <canvas id="stpField" width="1200" height="440"></canvas>
+      <canvas id="sbLine" class="grab" width="1200" height="150"></canvas>
+      <canvas id="sbStrip" width="1200" height="200"></canvas>
+      <canvas id="sbOut" width="1200" height="330"></canvas>
     </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="stpN">reverse steps N <output id="stpNOut">8</output></label>
-        <input type="range" id="stpN" min="0" max="10" step="1" value="3">
-        <div class="hint">1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1000</div>
+    <div class="side">
+      <div class="panel">
+        <h3>budget</h3>
+        <div class="bet"><button id="sbN4" aria-pressed="false">4 steps</button><button id="sbN8" aria-pressed="true">8 steps</button><button id="sbN16" aria-pressed="false">16 steps</button></div>
+        <h3 style="margin-top:12px">presets</h3>
+        <div class="bet"><button id="sbEven">Even</button><button id="sbEarly">Early-heavy</button><button id="sbLate">Late-heavy</button></div>
+        <div class="btns" style="margin-top:12px"><button class="primary" id="sbRun">Run the sampler</button><button id="sbNoise">New noise</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>network calls</dt><dd id="sbCalls">8</dd>
+          <dt>RMS error against the 1000-step result</dt><dd id="sbErr">-</dd>
+          <dt>detail kept (spread relative to the prior)</dt><dd id="sbSpread">-</dd>
+        </dl>
       </div>
-      <div class="btns">
-        <button id="stpNoise">New starting noise</button>
+      <div class="panel">
+        <h3>leaderboard, lowest error first</h3>
+        <ul class="board" id="sbBoard"></ul>
       </div>
-      <dl class="readout">
-        <dt>network calls</dt><dd id="stpCalls">8</dd>
-        <dt>spread of sample vs prior</dt><dd id="stpSpread">0 %</dd>
-        <dt>distance to the 1000-step result</dt><dd id="stpErr">0.000</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--blue)">sample after N steps</span>
-        <span class="dash" style="--c: var(--grey)">same noise, 1000 steps</span>
-        <span style="--c: var(--orange)">prior mean</span>
-      </div>
+      <div class="panel quiz" id="sbQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>To keep this honest the prior over fields is a Gaussian process with a known kernel, so the ideal denoiser E[x_0 | x_t] has a closed form and no network is needed. Every difference between the blue and grey curves is the sampler's own error from taking too few steps.</p>
-    <p>With one step the sampler returns the posterior mean of pure noise, which is the prior mean. With a handful of steps the field is too smooth and its spread is far below the prior's. Past a few dozen steps the sample stops changing, which is the plateau on slide 8.</p>
+    <p>The sampler is DDIM with the exact posterior-mean denoiser of a Gaussian prior over smooth patches (a 10 by 10 cosine basis), so the only approximation is the step placement. Each call does one jump from t to the next marker. The reference is the same noise run with all 1000 steps. Spacing schedules in practice, such as the Karras rho spacing, concentrate steps at low noise for the reason this board shows.</p>
   </div>
 </section>
 
-<!-- ============ 3. GUIDANCE ============ -->
+<!-- ============ 3. GUIDANCE: guess the weight ============ -->
 <section class="demo" id="guidance" role="tabpanel">
-  <h2>Conditioning, and classifier free guidance</h2>
-  <p class="lead">An unconditional model knows three plausible values. The condition c names the right-hand one. Combine the two noise predictions with weight w and sample.</p>
-  <div class="grid">
-    <div class="plot">
-      <canvas id="gdHist" width="1200" height="440"></canvas>
-    </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="gdW">guidance weight w <output id="gdWOut">1.0</output></label>
-        <input type="range" id="gdW" min="0" max="4" step="0.1" value="1">
-        <div class="hint">w = 0 unconditional, w = 1 conditional, w &gt; 1 sharpened</div>
+  <h2>Guess the guidance weight from the samples</h2>
+  <p class="lead">A model has learned three land-cover clusters in a two-band reflectance space. It is asked for one class, roof, and sampled with classifier-free guidance at a hidden weight w. Watch the 300 samples land, then say which w produced them.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="ggPlot" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="ggStep"></div>
+      <div class="panel">
+        <h3>which weight?</h3>
+        <div class="choice" id="ggChoice"><button data-w="0">w = 0</button><button data-w="1">w = 1</button><button data-w="3">w = 3</button><button data-w="10">w = 10</button></div>
+        <div class="btns" style="margin-top:10px"><button id="ggNext" disabled>Next round</button><button id="ggReplay">Replay the landing</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>samples on the roof cluster</dt><dd id="ggOn">-</dd>
+          <dt>spread, relative to the true class</dt><dd id="ggSd">-</dd>
+          <dt>score so far</dt><dd id="ggScore">0 / 0</dd>
+        </dl>
       </div>
-      <div class="btns">
-        <button class="primary" id="gdRun">Sample 3000 draws</button>
-      </div>
-      <dl class="readout">
-        <dt>draws landing on c</dt><dd id="gdFrac">0 %</dd>
-        <dt>spread of those draws</dt><dd id="gdStd">0.00</dd>
-        <dt>network calls per step</dt><dd id="gdCalls">2</dd>
-      </dl>
-      <div class="legend">
-        <span style="--c: var(--grey)">p(x), unconditional</span>
-        <span style="--c: var(--blue)">p(x | c), the true conditional</span>
-        <span style="--c: var(--orange)">samples with weight w</span>
-      </div>
+      <div class="panel quiz" id="ggQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>The combined prediction is eps_hat = eps(x, empty) + w (eps(x, c) - eps(x, empty)), exactly the line on slide 9, run through 1000 ancestral reverse steps with the exact scores of this toy model. At w = 0 the condition is ignored. At w = 1 the histogram matches the true conditional.</p>
-    <p>Push w past 1 and the draws cluster more tightly than p(x | c) allows: the guided sampler is biased toward a sharpened distribution, and the spread readout drops below the true value of 0.35. That is the variety you give up for agreement with the condition.</p>
+    <p>Every sample follows eps_hat = eps_u + w (eps_c - eps_u), the line on slide 9, through 1000 ancestral steps, with exact noise predictions for the two Gaussian mixtures so that nothing is trained. w = 0 ignores the request, w = 1 is plain conditional sampling, and w above one sharpens the class at the price of diversity. Both predictions are needed per step, so guidance doubles the cost of every sample.</p>
   </div>
 </section>
 
-<!-- ============ 4. PHYSICS WEIGHT ============ -->
+<!-- ============ 4. PHYSICS WEIGHT: reveal the map ============ -->
 <section class="demo" id="physics" role="tabpanel">
-  <h2>Weighting the physics term is a stochastic model decision</h2>
-  <p class="lead">Steady heat in a member, three noisy gauges, the governing equation u'' + f(x) = 0 at 40 collocation points, fixed ends. Drag the physics weight and watch the fitted field.</p>
-  <div class="grid">
+  <h2>Reveal the map: find the right physics weight with a few probes</h2>
+  <p class="lead">Three temperature gauges on a member, one heat equation whose source term may be wrong by a percentage you do not control. Every cell of the map is one fit; its colour is the error against the true field. The map starts hidden. Probe it.</p>
+  <div class="stage">
     <div class="plot two">
-      <canvas id="phField" width="900" height="440"></canvas>
-      <canvas id="phSweep" width="450" height="440"></canvas>
+      <canvas id="pmMap" class="hit" width="760" height="520"></canvas>
+      <canvas id="pmBeam" width="440" height="520"></canvas>
     </div>
-    <div class="controls">
-      <div class="ctl">
-        <label for="phLam">physics weight lambda <output id="phLamOut">1e-2</output></label>
-        <input type="range" id="phLam" min="-6" max="2" step="0.1" value="-2">
-        <div class="hint">log scale, 1e-6 to 1e2</div>
+    <div class="side">
+      <div class="panel step" id="pmStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="pmAnswer" disabled>This cell is my answer</button><button id="pmAll">Reveal all</button><button id="pmReset">Start over</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>probes used</dt><dd id="pmUsed">0 / 6</dd>
+          <dt>selected cell</dt><dd id="pmSel">-</dd>
+          <dt>error of the selected fit</dt><dd id="pmRmse">-</dd>
+        </dl>
       </div>
-      <div class="ctl">
-        <label for="phErr">error in the source term <output id="phErrOut">15 %</output></label>
-        <input type="range" id="phErr" min="0" max="40" step="1" value="15">
-        <div class="hint">the equation the model is told to obey is this much wrong</div>
-      </div>
-      <div class="btns">
-        <button id="phNoise">Re-draw gauge noise</button>
-        <button id="phReset">Reset</button>
-      </div>
-      <dl class="readout">
-        <dt>RMSE against the true field</dt><dd id="phRmse">0.000</dd>
-        <dt>data misfit at the gauges</dt><dd id="phLd">0.000</dd>
-        <dt>equation residual</dt><dd id="phLp">0.000</dd>
-      </dl>
-      <div class="legend">
-        <span class="dash" style="--c: var(--grey)">true temperature field</span>
-        <span style="--c: var(--red)">fitted field</span>
-        <span style="--c: var(--blue)">the 3 noisy gauges</span>
-      </div>
+      <div class="panel quiz" id="pmQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>The loss is L = L_data + lambda L_pde + w_bc L_bc, as on slide 14, with w_bc fixed. The function class here is a set of 40 radial basis functions, so the loss is quadratic in the coefficients and the fit is one linear solve per slider move; a network would give the same picture more slowly.</p>
-    <p>At the left end of the slider the equation is ignored: the three gauges are hit and everything between them is invented. At the right end the data is ignored: the model obeys the equation it was given, and if that equation carries a wrong source term the field is confidently wrong. The right panel sweeps the weight and marks where you are.</p>
+    <p>Each fit minimizes L = L_data + lambda L_pde + w_bc L_bc, slide 14, over 40 radial basis functions with w_bc fixed and the PDE residual normalized by the size of the source. Small lambda ignores the equation and interpolates three noisy points; large lambda ignores the gauges and solves an equation whose source is wrong. The valley between them moves as the source error grows, which is the stochastic model decision on slide 16.</p>
   </div>
 </section>
 
@@ -274,64 +281,19 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 /* ---------- utilities ---------- */
 function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-function gaussPair(rng) { const u = 1 - rng(), v = rng(); const r = Math.sqrt(-2 * Math.log(u)); return [r * Math.cos(2 * Math.PI * v), r * Math.sin(2 * Math.PI * v)]; }
-function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const g = gaussPair(rng); out[i] = g[0]; if (i + 1 < n) out[i + 1] = g[1]; } return out; }
+function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const u = 1 - rng(), v = rng(), r = Math.sqrt(-2 * Math.log(u)); out[i] = r * Math.cos(2 * Math.PI * v); if (i + 1 < n) out[i + 1] = r * Math.sin(2 * Math.PI * v); } return out; }
 function linspace(a, b, n) { const out = new Float64Array(n); for (let i = 0; i < n; i++) out[i] = a + (b - a) * i / (n - 1); return out; }
-function fmt(x, d) { return (Math.abs(x) >= 1e5 || (Math.abs(x) < 1e-3 && x !== 0)) ? x.toExponential(1) : x.toFixed(d); }
-
-/* ---------- plotting on canvas ---------- */
-function Plot(canvas, opts) {
-  this.c = canvas; this.ctx = canvas.getContext("2d"); this.o = opts;
-  const dpr = window.devicePixelRatio || 1;
-  this.W = canvas.width; this.H = canvas.height;
-  canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr);
-  this.m = { l: 58, r: 14, t: 28, b: 44 };
+function hexToRgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
+function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
+Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
+Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+Board.prototype.label = function (s, x, y, color, align, size) { const ctx = this.ctx; ctx.fillStyle = color || css("--muted"); ctx.font = (size || 13) + "px " + css("--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(s, x, y); };
+function quiz(el, spec) {
+  el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
+  const opts = el.querySelector(".opts"), why = el.querySelector(".why");
+  spec.options.forEach((o, i) => { const b = document.createElement("button"); b.textContent = o; b.addEventListener("click", () => { Array.from(opts.children).forEach(c => c.classList.remove("right", "wrong")); b.classList.add(i === spec.answer ? "right" : "wrong"); if (i !== spec.answer) opts.children[spec.answer].classList.add("right"); why.textContent = (i === spec.answer ? "Right. " : "No. ") + spec.why; }); opts.appendChild(b); });
 }
-Plot.prototype.begin = function (xlim, ylim) {
-  const ctx = this.ctx, o = this.o; this.xl = xlim; this.yl = ylim;
-  ctx.clearRect(0, 0, this.W, this.H);
-  ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H);
-  const ink = css("--ink"), muted = css("--muted"), line = css("--line");
-  ctx.font = "13px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "top";
-  // grid and ticks
-  const nx = 5, ny = 5;
-  ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.fillStyle = muted;
-  for (let i = 0; i <= nx; i++) {
-    const v = xlim[0] + (xlim[1] - xlim[0]) * i / nx, px = this.x(v);
-    ctx.beginPath(); ctx.moveTo(px, this.m.t); ctx.lineTo(px, this.H - this.m.b); ctx.stroke();
-    ctx.fillText(o.xfmt ? o.xfmt(v) : fmt(v, 2), px, this.H - this.m.b + 6);
-  }
-  ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (let i = 0; i <= ny; i++) {
-    const v = ylim[0] + (ylim[1] - ylim[0]) * i / ny, py = this.y(v);
-    ctx.beginPath(); ctx.moveTo(this.m.l, py); ctx.lineTo(this.W - this.m.r, py); ctx.stroke();
-    ctx.fillText(o.yfmt ? o.yfmt(v) : fmt(v, 1), this.m.l - 8, py);
-  }
-  ctx.font = "13px " + css("--sans"); ctx.fillStyle = ink;
-  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  if (o.xlabel) ctx.fillText(o.xlabel, (this.m.l + this.W - this.m.r) / 2, this.H - 8);
-  if (o.ylabel) { ctx.save(); ctx.translate(14, (this.m.t + this.H - this.m.b) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(o.ylabel, 0, 0); ctx.restore(); }
-  if (o.title) { ctx.textAlign = "left"; ctx.font = "500 14px " + css("--sans"); ctx.fillText(o.title, this.m.l, 18); }
-  ctx.save(); ctx.beginPath(); ctx.rect(this.m.l, this.m.t, this.W - this.m.l - this.m.r, this.H - this.m.t - this.m.b); ctx.clip();
-};
-Plot.prototype.end = function () { this.ctx.restore(); };
-Plot.prototype.x = function (v) { return this.m.l + (v - this.xl[0]) / (this.xl[1] - this.xl[0]) * (this.W - this.m.l - this.m.r); };
-Plot.prototype.y = function (v) { return this.H - this.m.b - (v - this.yl[0]) / (this.yl[1] - this.yl[0]) * (this.H - this.m.t - this.m.b); };
-Plot.prototype.line = function (xs, ys, color, width, dash) {
-  const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 2; ctx.setLineDash(dash || []);
-  ctx.beginPath(); for (let i = 0; i < xs.length; i++) { const px = this.x(xs[i]), py = this.y(ys[i]); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
-  ctx.stroke(); ctx.setLineDash([]);
-};
-Plot.prototype.dots = function (xs, ys, color, r) {
-  const ctx = this.ctx; ctx.fillStyle = color;
-  for (let i = 0; i < xs.length; i++) { ctx.beginPath(); ctx.arc(this.x(xs[i]), this.y(ys[i]), r || 5, 0, 2 * Math.PI); ctx.fill(); }
-};
-Plot.prototype.bars = function (edges, counts, color) {
-  const ctx = this.ctx; ctx.fillStyle = color;
-  for (let i = 0; i < counts.length; i++) { const x0 = this.x(edges[i]), x1 = this.x(edges[i + 1]); ctx.fillRect(x0, this.y(counts[i]), Math.max(1, x1 - x0 - 1), this.y(0) - this.y(counts[i])); }
-};
-Plot.prototype.vline = function (v, color) { const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(this.x(v), this.m.t); ctx.lineTo(this.x(v), this.H - this.m.b); ctx.stroke(); ctx.setLineDash([]); };
-Plot.prototype.text = function (s, vx, vy, color, align) { const ctx = this.ctx; ctx.fillStyle = color; ctx.font = "13px " + css("--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "middle"; ctx.fillText(s, this.x(vx), this.y(vy)); };
 
 /* ---------- shared diffusion schedule ---------- */
 const T = 1000;
@@ -339,152 +301,194 @@ const beta = new Float64Array(T + 1), alpha = new Float64Array(T + 1), abar = ne
 abar[0] = 1; alpha[0] = 1; beta[0] = 0;
 for (let t = 1; t <= T; t++) { beta[t] = 1e-4 + (0.02 - 1e-4) * (t - 1) / (T - 1); alpha[t] = 1 - beta[t]; abar[t] = abar[t - 1] * alpha[t]; }
 
-/* ---------- a 1-D field used by demos 1 and 2 ---------- */
-const NX = 200, XS = linspace(0, 1, NX);
-function bump(x, c, w) { return Math.exp(-0.5 * ((x - c) / w) ** 2); }
-const FIELD = new Float64Array(NX);
-for (let i = 0; i < NX; i++) FIELD[i] = 1.2 * bump(XS[i], 0.28, 0.06) + 0.8 * bump(XS[i], 0.55, 0.045) + 1.0 * bump(XS[i], 0.78, 0.07) - 0.4;
+/* ---------- the site patch, 32 by 32, used by demos 1 and 2 ---------- */
+const S = 32, SITE = new Float64Array(S * S);
+for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const u = x / (S - 1), v = y / (S - 1); let z = 0.9 * Math.exp(-0.5 * (((u - 0.35) / 0.18) ** 2 + ((v - 0.4) / 0.15) ** 2)) - 0.3; if (u > 0.6 && u < 0.8 && v > 0.55 && v < 0.8) z = 0.8; if (Math.abs(v - (0.2 + 0.6 * u)) < 0.04) z = -0.7; SITE[y * S + x] = z; }
+function drawPatch(ctx, img, x0, y0, size, lo, hi) {
+  const p = size / S; lo = lo === undefined ? -1.2 : lo; hi = hi === undefined ? 1.2 : hi;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { let t = (img[y * S + x] - lo) / (hi - lo); t = Math.max(0, Math.min(1, t)); const g = Math.round(20 + 220 * t); ctx.fillStyle = "rgb(" + g + "," + g + "," + g + ")"; ctx.fillRect(x0 + x * p, y0 + y * p, p + 0.5, p + 0.5); }
+  ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(x0, y0, size, size);
+}
 
-/* ================= 1. FORWARD PROCESS ================= */
-(function forward() {
-  const pField = new Plot(document.getElementById("fwdField"), { xlabel: "position", ylabel: "field value", title: "the field at step t" });
-  const pSched = new Plot(document.getElementById("fwdSched"), { xlabel: "step t", ylabel: "abar_t", title: "the schedule", xfmt: v => v.toFixed(0) });
-  const slider = document.getElementById("fwdT"), out = document.getElementById("fwdTOut");
-  let seed = 7, eps = randn(mulberry32(seed), NX), playing = false, raf = null;
-  const tAxis = linspace(0, T, 101), abarCurve = tAxis.map(t => abar[Math.round(t)]);
-  function draw() {
-    const t = +slider.value, a = abar[t], s = Math.sqrt(a), n = Math.sqrt(1 - a);
-    out.textContent = t;
-    document.getElementById("fwdAbar").textContent = a.toFixed(4);
-    document.getElementById("fwdNz").textContent = (1 - a).toFixed(4);
-    document.getElementById("fwdSnr").textContent = a >= 0.99995 ? "inf" : fmt(a / (1 - a), 2);
-    const xt = new Float64Array(NX); for (let i = 0; i < NX; i++) xt[i] = s * FIELD[i] + n * eps[i];
-    pField.begin([0, 1], [-3.5, 3.5]);
-    pField.line(XS, xt, css("--grey"), 1.6);
-    pField.line(XS, FIELD, css("--blue"), 2.2);
-    pField.end();
-    pSched.begin([0, T], [0, 1]);
-    pSched.line(tAxis, abarCurve, css("--ink"), 2);
-    pSched.vline(t, css("--red"));
-    pSched.dots([t], [a], css("--red"), 6);
-    pSched.end();
+/* ================= 1. NOISE DETECTIVE ================= */
+(function detective() {
+  const img = new Board(document.getElementById("ndImg")), line = new Board(document.getElementById("ndLine"));
+  const ROUNDS = [150, 420, 60, 800, 300];
+  let round = 0, guess = 500, locked = false, eps = null, score = 0, played = 0, dragging = false;
+  const L = 60, R = line.W - 30, TOP = 120, BOT = line.H - 40;
+  const tx = t => L + (R - L) * t / T, xt = x => Math.round(Math.max(0, Math.min(T, (x - L) / (R - L) * T)));
+  function noised(t) { const a = abar[t], s = Math.sqrt(a), n = Math.sqrt(1 - a), out = new Float64Array(S * S); for (let i = 0; i < S * S; i++) out[i] = s * SITE[i] + n * eps[i]; return out; }
+  const stepEl = document.getElementById("ndStep");
+  function text() {
+    if (!locked) stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>The large image is the site after a hidden number of forward steps. The small one is the clean site for reference.</p><p>Drag the marker on the schedule to your estimate of t, then press Lock in.</p>';
   }
-  function step() { if (!playing) return; let t = +slider.value + 4; if (t > T) { t = T; playing = false; document.getElementById("fwdPlay").textContent = "Play"; } slider.value = t; draw(); if (playing) raf = requestAnimationFrame(step); }
-  slider.addEventListener("input", draw);
-  document.getElementById("fwdPlay").addEventListener("click", function () {
-    playing = !playing; this.textContent = playing ? "Pause" : "Play";
-    if (playing) { if (+slider.value >= T) slider.value = 0; raf = requestAnimationFrame(step); } else if (raf) cancelAnimationFrame(raf);
-  });
-  document.getElementById("fwdReset").addEventListener("click", function () { playing = false; document.getElementById("fwdPlay").textContent = "Play"; slider.value = 0; draw(); });
-  document.getElementById("fwdNoise").addEventListener("click", function () { seed += 1; eps = randn(mulberry32(seed), NX); draw(); });
+  function draw() {
+    const t = ROUNDS[round];
+    img.clear(""); const ctx = img.ctx, big = 380, ox = (img.W - big - 200) / 2;
+    drawPatch(ctx, noised(t), ox, 26, big);
+    img.label(locked ? "the site after t = " + t : "the site after a hidden t", ox, 18, css("--ink"), "left", 14);
+    drawPatch(ctx, SITE, ox + big + 40, 26, 160);
+    img.label("clean site, t = 0", ox + big + 40, 18, css("--muted"), "left", 13);
+    img.label("hill, building pad, road; grey level is elevation", ox + big + 40, 210, css("--muted"), "left", 12);
+    line.clear(""); const c = line.ctx;
+    c.strokeStyle = css("--line"); c.beginPath(); c.moveTo(L, TOP); c.lineTo(L, BOT); c.lineTo(R, BOT); c.stroke();
+    c.font = "12px " + css("--mono"); c.fillStyle = css("--muted"); c.textAlign = "center"; c.textBaseline = "top";
+    for (let k = 0; k <= 10; k++) c.fillText(String(k * 100), tx(k * 100), BOT + 6);
+    line.label("step t", (L + R) / 2, line.H - 6, css("--muted"), "center", 12);
+    c.textAlign = "right"; c.textBaseline = "middle"; c.fillText("abar 1", L - 6, TOP); c.fillText("0", L - 6, BOT);
+    c.strokeStyle = css("--ink"); c.lineWidth = 2; c.beginPath(); for (let t2 = 0; t2 <= T; t2 += 5) { const x = tx(t2), y = BOT - (BOT - TOP) * abar[t2]; if (t2 === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke();
+    if (locked) {
+      // film strip above the axis
+      for (let k = 0; k <= 10; k++) { const tt = k * 100, sz = 60; drawPatch(c, noised(tt), tx(tt) - sz / 2, 30, sz); }
+      line.label("the whole film, every 100 steps", L, 20, css("--muted"), "left", 12);
+      c.strokeStyle = "#2E7D5B"; c.lineWidth = 3; c.beginPath(); c.moveTo(tx(t), 28); c.lineTo(tx(t), BOT); c.stroke();
+      line.label("truth " + t, tx(t), BOT - (BOT - TOP) * abar[t] - 10, "#2E7D5B", "center", 12);
+    } else line.label("drag the marker to your estimate", L, 40, css("--muted"), "left", 13);
+    c.strokeStyle = css("--orange"); c.lineWidth = 3; c.beginPath(); c.moveTo(tx(guess), locked ? 28 : 50); c.lineTo(tx(guess), BOT); c.stroke();
+    c.fillStyle = css("--orange"); c.beginPath(); c.arc(tx(guess), BOT, 8, 0, 2 * Math.PI); c.fill();
+    document.getElementById("ndGuess").textContent = guess;
+    document.getElementById("ndAbar").textContent = abar[guess].toFixed(3) + "  (" + (100 * abar[guess]).toFixed(0) + " % signal)";
+    document.getElementById("ndScore").textContent = score + " / " + played;
+  }
+  function lock() {
+    if (locked) return; locked = true; played++;
+    const t = ROUNDS[round], dA = Math.abs(abar[guess] - abar[t]), dT = Math.abs(guess - t);
+    const pts = dA < 0.08 ? 1 : 0; score += pts;
+    let why;
+    if (abar[t] < 0.05 && abar[guess] < 0.05) why = "Both your guess and the truth are past the point where the picture is gone: abar is under 5 % for every t beyond about 540, so the eye cannot tell t = 600 from t = 1000. A point here counts whenever the signal level matches.";
+    else if (dT < 60) why = "Close. This is the part of the schedule where abar moves fastest, so the picture changes quickly and small errors in t are visible.";
+    else if (guess < t) why = "You guessed earlier than the truth: the picture kept " + (100 * abar[t]).toFixed(0) + " % of its signal, less than the " + (100 * abar[guess]).toFixed(0) + " % at your estimate. Compare the building pad in the strip, it is the first feature to disappear.";
+    else why = "You guessed later than the truth: the picture kept " + (100 * abar[t]).toFixed(0) + " % of its signal, more than the " + (100 * abar[guess]).toFixed(0) + " % at your estimate. The hill survives long after the road, since it is a large low-frequency feature.";
+    stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><div class="ask ' + (pts ? 'ok' : 'no') + '">' + (pts ? 'Point. ' : 'No point. ') + 'The truth is t = ' + t + ' (' + (100 * abar[t]).toFixed(0) + ' % signal); you said ' + guess + ' (' + (100 * abar[guess]).toFixed(0) + ' %).</div><p>' + why + '</p>' + (round === ROUNDS.length - 1 ? '<p>Final score ' + score + ' of ' + ROUNDS.length + '. Press Next round to play the set again with new noise.</p>' : '');
+    document.getElementById("ndNext").disabled = false; document.getElementById("ndLock").disabled = true; draw();
+  }
+  function next() { round = (round + 1) % ROUNDS.length; if (round === 0) { score = 0; played = 0; } eps = randn(mulberry32(101 + round + 7 * played), S * S); locked = false; guess = 500; document.getElementById("ndNext").disabled = true; document.getElementById("ndLock").disabled = false; text(); draw(); }
+  line.c.addEventListener("mousedown", ev => { if (locked) return; dragging = true; guess = xt(line.pos(ev)[0]); draw(); });
+  window.addEventListener("mousemove", ev => { if (!dragging) return; guess = xt(line.pos(ev)[0]); draw(); });
+  window.addEventListener("mouseup", () => { dragging = false; });
+  document.getElementById("ndLock").addEventListener("click", lock);
+  document.getElementById("ndNext").addEventListener("click", next);
+  quiz(document.getElementById("ndQuiz"), { q: "With this linear beta schedule, where along t does the picture change fastest to the eye?", options: ["In the first 100 steps", "Around t = 200 to 400, where abar crosses one half", "Near t = 1000"], answer: 1, why: "abar falls from 0.8 to 0.2 between roughly t = 150 and t = 400, so that is where features appear and vanish. The first steps barely touch the image and the last 400 are noise reshuffling noise, which is why cosine schedules were later proposed to spend the steps more evenly." });
   window.addEventListener("themechange", draw);
-  draw();
+  eps = randn(mulberry32(101), S * S); text(); draw();
 })();
 
-/* ================= 2. REVERSE STEP COUNT ================= */
-(function steps() {
-  // Gaussian-process prior over fields in a cosine basis: c_k ~ N(mu_k, lam_k), field = sum_k c_k phi_k(x)
-  const K = 40, ell = 0.07;
-  const PHI = []; for (let k = 0; k < K; k++) { const row = new Float64Array(NX); for (let i = 0; i < NX; i++) row[i] = (k === 0 ? 1 : Math.SQRT2 * Math.cos(Math.PI * k * XS[i])); PHI.push(row); }
-  const lam = new Float64Array(K); for (let k = 0; k < K; k++) lam[k] = 0.9 * Math.exp(-0.5 * (Math.PI * k * ell) ** 2);
-  const mu = new Float64Array(K); for (let k = 0; k < K; k++) { let s = 0; for (let i = 0; i < NX; i++) s += FIELD[i] * PHI[k][i]; mu[k] = s / NX; }
+/* ================= 2. SPEND THE BUDGET ================= */
+(function budget() {
+  // Gaussian prior over smooth patches: coefficients on a 10 by 10 cosine basis, mean = the site
+  const KM = 10, ell = 0.12, modes = []; for (let a = 0; a < KM; a++) for (let b = 0; b < KM; b++) modes.push([a, b]);
+  const K = modes.length, lam = modes.map(([a, b]) => 0.05 * Math.exp(-0.5 * ((Math.PI * ell) ** 2) * (a * a + b * b)));
+  const basis = modes.map(([a, b]) => { const r = new Float64Array(S * S); for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) r[y * S + x] = (a === 0 ? 1 : Math.SQRT2 * Math.cos(Math.PI * a * (x + 0.5) / S)) * (b === 0 ? 1 : Math.SQRT2 * Math.cos(Math.PI * b * (y + 0.5) / S)); return r; });
+  const mu = modes.map((m, k) => { let s = 0; for (let i = 0; i < S * S; i++) s += SITE[i] * basis[k][i]; return s / (S * S); });
   const priorStd = Math.sqrt(lam.reduce((a, b) => a + b, 0));
-  function synth(c) { const f = new Float64Array(NX); for (let k = 0; k < K; k++) for (let i = 0; i < NX; i++) f[i] += c[k] * PHI[k][i]; return f; }
-  const MEAN = synth(mu);
-  function ddim(z, N) {
-    // deterministic sampler with the exact posterior-mean denoiser of this Gaussian prior
-    const ts = []; for (let j = 0; j <= N; j++) ts.push(Math.round(T - T * j / N));
-    const c = Float64Array.from(z); let calls = 0;
-    for (let j = 0; j < N; j++) {
-      const t = ts[j], tn = ts[j + 1], a = abar[t], an = abar[tn]; calls++;
-      for (let k = 0; k < K; k++) {
-        const c0 = mu[k] + Math.sqrt(a) * lam[k] * (c[k] - Math.sqrt(a) * mu[k]) / (a * lam[k] + 1 - a);
-        const e = (c[k] - Math.sqrt(a) * c0) / Math.sqrt(1 - a);
-        c[k] = Math.sqrt(an) * c0 + Math.sqrt(1 - an) * e;
-      }
+  function synth(c) { const f = new Float64Array(S * S); for (let k = 0; k < K; k++) { const ck = c[k]; if (ck === 0) continue; const bk = basis[k]; for (let i = 0; i < S * S; i++) f[i] += ck * bk[i]; } return f; }
+  function ddim(z, ts, keep) {
+    const c = Float64Array.from(z), frames = keep ? [synth(c)] : null;
+    for (let j = 0; j < ts.length - 1; j++) {
+      const a = abar[ts[j]], an = abar[ts[j + 1]];
+      for (let k = 0; k < K; k++) { const c0 = mu[k] + Math.sqrt(a) * lam[k] * (c[k] - Math.sqrt(a) * mu[k]) / (a * lam[k] + 1 - a); const e = (c[k] - Math.sqrt(a) * c0) / Math.sqrt(1 - a); c[k] = Math.sqrt(an) * c0 + Math.sqrt(1 - an) * e; }
+      if (keep) frames.push(synth(c));
     }
-    return { field: synth(c), c: c, calls: calls };
+    return { c: c, frames: frames };
   }
-  const Ns = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1000];
-  const plot = new Plot(document.getElementById("stpField"), { xlabel: "position", ylabel: "field value", title: "one field, sampled from the same noise with N steps" });
-  const slider = document.getElementById("stpN"), out = document.getElementById("stpNOut");
-  let seed = 11, z = randn(mulberry32(seed), K), ref = null;
+  const line = new Board(document.getElementById("sbLine")), strip = new Board(document.getElementById("sbStrip")), out = new Board(document.getElementById("sbOut"));
+  const L = 60, R = line.W - 30, AX = line.H - 45;
+  const tx = t => L + (R - L) * (T - t) / T, xt = x => Math.round(Math.max(0, Math.min(T, T - (x - L) / (R - L) * T)));
+  let N = 8, inner = [], seed = 5, z = null, ref = null, result = null, board = [], dragIdx = -1, animTimer = null, shown = 0, label = "even";
+  function preset(p, name) { inner = []; for (let j = 1; j < N; j++) inner.push(Math.round(T * (1 - Math.pow(j / N, p)))); inner.sort((a, b) => b - a); label = name; result = null; shown = 0; draw(); }
+  function times() { return [T].concat(inner).concat([0]); }
+  function newNoise() { seed += 1; z = randn(mulberry32(seed), K); for (let k = 0; k < K; k++) z[k] *= 1; ref = null; result = null; board = []; shown = 0; draw(); }
+  function reference() { if (!ref) { const all = []; for (let j = 0; j <= T; j++) all.push(T - j); ref = ddim(z, all, false); ref.img = synth(ref.c); } return ref; }
+  function run() {
+    if (animTimer) clearTimeout(animTimer);
+    const r = ddim(z, times(), true), rf = reference(); let d = 0; for (let i = 0; i < S * S; i++) d += (r.frames[r.frames.length - 1][i] - rf.img[i]) ** 2; r.err = Math.sqrt(d / (S * S));
+    let v = 0; for (let k = 0; k < K; k++) v += (r.c[k] - mu[k]) ** 2; r.spread = Math.sqrt(v) / priorStd;
+    result = r; shown = 0;
+    const entry = { name: label + ", " + N + " steps", N: N, err: r.err, ts: inner.slice() }; board.push(entry); board.sort((a, b) => a.err - b.err); board.forEach(b => b.last = b === entry);
+    (function reveal() { shown++; draw(); if (shown < result.frames.length) animTimer = setTimeout(reveal, 160); })();
+  }
   function draw() {
-    const N = Ns[+slider.value]; out.textContent = N;
-    if (!ref) ref = ddim(z, 1000);
-    const r = ddim(z, N);
-    let v = 0, d = 0; for (let k = 0; k < K; k++) { v += (r.c[k] - mu[k]) ** 2; } for (let i = 0; i < NX; i++) d += (r.field[i] - ref.field[i]) ** 2;
-    document.getElementById("stpCalls").textContent = r.calls;
-    document.getElementById("stpSpread").textContent = (100 * Math.sqrt(v) / priorStd).toFixed(0) + " %";
-    document.getElementById("stpErr").textContent = Math.sqrt(d / NX).toFixed(3);
-    plot.begin([0, 1], [-3, 3]);
-    plot.line(XS, MEAN, css("--orange"), 1.5);
-    plot.line(XS, ref.field, css("--grey"), 2, [6, 5]);
-    plot.line(XS, r.field, css("--blue"), 2.4);
-    plot.end();
+    const ts = times();
+    document.getElementById("sbCalls").textContent = N;
+    document.getElementById("sbErr").textContent = result ? result.err.toFixed(3) : "-";
+    document.getElementById("sbSpread").textContent = result ? (100 * result.spread).toFixed(0) + " %" : "-";
+    line.clear("noise level along the sampler's path (left: pure noise, right: clean); drag a marker to move a step");
+    const c = line.ctx; c.strokeStyle = css("--line"); c.lineWidth = 1; c.beginPath(); c.moveTo(L, AX); c.lineTo(R, AX); c.stroke();
+    c.font = "12px " + css("--mono"); c.fillStyle = css("--muted"); c.textAlign = "center"; c.textBaseline = "top"; for (let k = 0; k <= 10; k++) c.fillText("t=" + (T - k * 100), tx(T - k * 100), AX + 8);
+    // abar as a thin curve for orientation
+    c.strokeStyle = css("--grey"); c.lineWidth = 1.2; c.beginPath(); for (let t2 = 0; t2 <= T; t2 += 5) { const x = tx(t2), y = AX - 60 * abar[t2]; if (t2 === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke(); line.label("abar", R + 4, AX - 58, css("--grey"), "left", 11);
+    for (let j = 0; j < ts.length - 1; j++) { c.strokeStyle = css("--blue"); c.lineWidth = 2; c.beginPath(); c.moveTo(tx(ts[j]), AX - 20); c.lineTo(tx(ts[j + 1]), AX - 20); c.stroke(); const mx = (tx(ts[j]) + tx(ts[j + 1])) / 2; c.fillStyle = css("--blue"); c.beginPath(); c.moveTo(mx + 5, AX - 20); c.lineTo(mx - 3, AX - 25); c.lineTo(mx - 3, AX - 15); c.closePath(); c.fill(); }
+    ts.forEach((t, j) => { const fixed = j === 0 || j === ts.length - 1; c.fillStyle = fixed ? css("--grey") : css("--orange"); c.beginPath(); c.arc(tx(t), AX - 20, fixed ? 6 : 9, 0, 2 * Math.PI); c.fill(); });
+    strip.clear(result ? "what the sampler holds after each call" : "run the sampler to see the picture form call by call");
+    if (result) { const n = result.frames.length, sz = Math.min(120, (strip.W - 40) / n - 6); for (let j = 0; j < Math.min(shown, n); j++) { const x0 = 20 + j * (sz + 6); drawPatch(strip.ctx, result.frames[j], x0, 36, sz, -1.5, 1.5); strip.label("t=" + ts[j], x0, 36 + sz + 14, css("--muted"), "left", 11); } }
+    out.clear(""); const sz = 260, gap = 60, x0 = (out.W - 3 * sz - 2 * gap) / 2;
+    if (result && shown >= result.frames.length) { drawPatch(out.ctx, result.frames[result.frames.length - 1], x0, 40, sz, -1.5, 1.5); out.label("yours, " + N + " calls (error " + result.err.toFixed(3) + ")", x0, 30, css("--ink"), "left", 14); }
+    else { out.ctx.strokeStyle = css("--line"); out.ctx.strokeRect(x0, 40, sz, sz); out.label("yours", x0, 30, css("--muted"), "left", 14); }
+    drawPatch(out.ctx, reference().img, x0 + sz + gap, 40, sz, -1.5, 1.5); out.label("reference, 1000 calls from the same noise", x0 + sz + gap, 30, css("--ink"), "left", 14);
+    drawPatch(out.ctx, SITE, x0 + 2 * (sz + gap), 40, sz, -1.5, 1.5); out.label("the prior mean", x0 + 2 * (sz + gap), 30, css("--muted"), "left", 14);
+    const ul = document.getElementById("sbBoard"); ul.innerHTML = "";
+    board.slice(0, 8).forEach((b, i) => { const li = document.createElement("li"); li.className = (i === 0 ? "best " : "") + (b.last ? "last" : ""); li.innerHTML = "<span>" + (i + 1) + ". " + b.name + "</span><span>" + b.err.toFixed(3) + "</span>"; ul.appendChild(li); });
+    if (!board.length) ul.innerHTML = '<li><span>no runs yet</span><span></span></li>';
   }
-  slider.addEventListener("input", draw);
-  document.getElementById("stpNoise").addEventListener("click", function () { seed += 1; z = randn(mulberry32(seed), K); ref = null; draw(); });
+  line.c.addEventListener("mousedown", ev => { const [mx] = line.pos(ev); let bd = 1e9; dragIdx = -1; inner.forEach((t, j) => { const d = Math.abs(mx - tx(t)); if (d < bd) { bd = d; dragIdx = j; } }); if (bd > 14) dragIdx = -1; });
+  window.addEventListener("mousemove", ev => { if (dragIdx < 0) return; let t = xt(line.pos(ev)[0]); const hi = dragIdx === 0 ? T - 1 : inner[dragIdx - 1] - 1, lo = dragIdx === inner.length - 1 ? 1 : inner[dragIdx + 1] + 1; t = Math.max(lo, Math.min(hi, t)); inner[dragIdx] = t; label = "custom"; result = null; shown = 0; draw(); });
+  window.addEventListener("mouseup", () => { dragIdx = -1; });
+  [["sbN4", 4], ["sbN8", 8], ["sbN16", 16]].forEach(([id, n]) => document.getElementById(id).addEventListener("click", () => { N = n; ["sbN4", "sbN8", "sbN16"].forEach(j => document.getElementById(j).setAttribute("aria-pressed", j === id ? "true" : "false")); preset(1, "even"); }));
+  document.getElementById("sbEven").addEventListener("click", () => preset(1, "even"));
+  document.getElementById("sbEarly").addEventListener("click", () => preset(3, "early-heavy"));
+  document.getElementById("sbLate").addEventListener("click", () => preset(0.5, "late-heavy"));
+  document.getElementById("sbRun").addEventListener("click", run);
+  document.getElementById("sbNoise").addEventListener("click", newNoise);
+  quiz(document.getElementById("sbQuiz"), { q: "You are allowed eight denoising calls. Where should most of them go?", options: ["At high noise, near t = 1000, where there is the most noise to remove", "Spread evenly over t", "At low noise, near t = 0, where the structure is being resolved"], answer: 2, why: "At high noise the denoiser can only return something close to the prior mean, so a few coarse jumps lose little. The fine structure is decided late, and a jump there skips detail that no later call can recover. Practical spacings (DDIM quadratic, Karras rho) crowd the steps at low noise for the same reason." });
   window.addEventListener("themechange", draw);
-  draw();
+  z = randn(mulberry32(seed), K); preset(1, "even");
 })();
 
-/* ================= 3. GUIDANCE ================= */
+/* ================= 3. GUESS THE GUIDANCE ================= */
 (function guidance() {
-  const comps = [{ m: -2.0, w: 0.3, s: 0.35 }, { m: 0.5, w: 0.4, s: 0.35 }, { m: 2.5, w: 0.3, s: 0.5 }];
-  const condIdx = 2;
-  function epsPred(x, a, mix) {
-    // exact noise prediction for a Gaussian mixture diffused to signal level a
-    let num = 0, den = 0;
-    for (const c of mix) { const v = a * c.s * c.s + 1 - a, d = x - Math.sqrt(a) * c.m; const p = c.w * Math.exp(-0.5 * d * d / v) / Math.sqrt(v); num += p * (-d / v); den += p; }
-    const score = num / den; return -Math.sqrt(1 - a) * score;
-  }
-  const condMix = [{ m: 2.6, w: 1, s: 0.35 }];
-  function sample(w, n, seed) {
-    const rng = mulberry32(seed), x = randn(rng, n);
-    for (let t = T; t >= 1; t--) {
-      const a = abar[t], at = alpha[t], bt = beta[t], noise = t > 1 ? randn(rng, n) : null;
-      const sb = Math.sqrt(bt), c1 = 1 / Math.sqrt(at), c2 = bt / Math.sqrt(1 - a);
-      for (let i = 0; i < n; i++) {
-        const eu = epsPred(x[i], a, comps), ec = epsPred(x[i], a, condMix), e = eu + w * (ec - eu);
-        x[i] = c1 * (x[i] - c2 * e) + (noise ? sb * noise[i] : 0);
-      }
-    }
-    return x;
-  }
-  function pdf(x, mix) { let p = 0; for (const c of mix) p += c.w * Math.exp(-0.5 * (x - c.m) ** 2 / (c.s * c.s)) / Math.sqrt(2 * Math.PI * c.s * c.s); return p; }
-  const plot = new Plot(document.getElementById("gdHist"), { xlabel: "field value", ylabel: "density", title: "where the samples land" });
-  const slider = document.getElementById("gdW"), out = document.getElementById("gdWOut");
-  const grid = linspace(-4, 4.5, 300), pu = grid.map(v => pdf(v, comps)), pc = grid.map(v => pdf(v, condMix));
-  let draws = null, drawnW = null;
+  const U = [{ m: [-2, -1.5], s: 0.5, w: 0.35, name: "water" }, { m: [0.5, 1.5], s: 0.5, w: 0.35, name: "vegetation" }, { m: [2.5, -0.5], s: 0.6, w: 0.3, name: "roof" }], C = [{ m: [2.6, -0.4], s: 0.4, w: 1 }];
+  function eps(x, y, a, mixc) { let nx = 0, ny = 0, den = 0; for (const c of mixc) { const v = a * c.s * c.s + 1 - a, dx = x - Math.sqrt(a) * c.m[0], dy = y - Math.sqrt(a) * c.m[1]; const p = c.w * Math.exp(-0.5 * (dx * dx + dy * dy) / v) / v; nx += p * (-dx / v); ny += p * (-dy / v); den += p; } return [-Math.sqrt(1 - a) * nx / den, -Math.sqrt(1 - a) * ny / den]; }
+  function sample(w, n, seed) { const rng = mulberry32(seed), X = randn(rng, n), Y = randn(rng, n); for (let t = T; t >= 1; t--) { const a = abar[t], at = alpha[t], bt = beta[t], nz = t > 1 ? randn(rng, 2 * n) : null, sb = Math.sqrt(bt), c1 = 1 / Math.sqrt(at), c2 = bt / Math.sqrt(1 - a); for (let i = 0; i < n; i++) { const eu = eps(X[i], Y[i], a, U), ec = eps(X[i], Y[i], a, C); const ex = eu[0] + w * (ec[0] - eu[0]), ey = eu[1] + w * (ec[1] - eu[1]); X[i] = c1 * (X[i] - c2 * ex) + (nz ? sb * nz[2 * i] : 0); Y[i] = c1 * (Y[i] - c2 * ey) + (nz ? sb * nz[2 * i + 1] : 0); } } return [X, Y]; }
+  const board = new Board(document.getElementById("ggPlot"));
+  const ROUNDS = [3, 0, 10, 1, 3], NS = 300;
+  let round = 0, pts = null, shown = 0, answered = false, score = 0, played = 0, timer = null;
+  const px = v => 80 + (v + 4) / 9 * (board.W - 120), py = v => board.H - 50 - (v + 3.5) / 7 * (board.H - 90);
+  const stepEl = document.getElementById("ggStep");
+  function text() { stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>The sampler was asked for <b>roof</b> and run at a hidden guidance weight. The 300 samples are landing now.</p><p>Judge two things: did they all reach the roof cluster, and how wide is the cloud compared with the true roof class (the blue ring)?</p>'; }
+  function ellipse(ctx, c, color, dash, lab) { ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.ellipse(px(c.m[0]), py(c.m[1]), 2 * c.s / 9 * (board.W - 120), 2 * c.s / 7 * (board.H - 90), 0, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]); if (lab) board.label(lab, px(c.m[0]), py(c.m[1] + 2 * c.s) - 8, color, "center", 13); }
   function draw() {
-    const w = +slider.value; out.textContent = w.toFixed(1);
-    plot.begin([-4, 4.5], [0, 1.6]);
-    if (draws) {
-      const nb = 90, edges = linspace(-4, 4.5, nb + 1), counts = new Float64Array(nb), bw = edges[1] - edges[0];
-      let onC = 0, m = 0, m2 = 0, nC = 0;
-      for (const v of draws) { const b = Math.floor((v - edges[0]) / bw); if (b >= 0 && b < nb) counts[b] += 1 / (draws.length * bw); if (v > 1.5) { onC++; m += v; m2 += v * v; nC++; } }
-      plot.bars(edges, counts, css("--orange") + "99");
-      const mean = m / Math.max(1, nC), sd = Math.sqrt(Math.max(0, m2 / Math.max(1, nC) - mean * mean));
-      document.getElementById("gdFrac").textContent = (100 * onC / draws.length).toFixed(0) + " %";
-      document.getElementById("gdStd").textContent = sd.toFixed(2) + (nC > 10 ? "  (true 0.35)" : "");
-      plot.text("sampled at w = " + drawnW.toFixed(1), -3.9, 1.5, css("--orange"), "left");
-    }
-    plot.line(grid, pu, css("--grey"), 2);
-    plot.line(grid, pc, css("--blue"), 2.2);
-    plot.end();
-    document.getElementById("gdCalls").textContent = w === 0 ? "1" : "2";
+    board.clear(""); const ctx = board.ctx;
+    ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(px(-4), py(-3.5)); ctx.lineTo(px(-4), py(3.5)); ctx.lineTo(px(5), py(3.5)); ctx.moveTo(px(-4), py(-3.5)); ctx.lineTo(px(5), py(-3.5)); ctx.stroke();
+    board.label("band 1 reflectance (standardized)", (px(-4) + px(5)) / 2, board.H - 12, css("--muted"), "center", 13);
+    ctx.save(); ctx.translate(26, (py(-3.5) + py(3.5)) / 2); ctx.rotate(-Math.PI / 2); board.label("band 2 reflectance", 0, 0, css("--muted"), "center", 13); ctx.restore();
+    U.forEach(c => ellipse(ctx, c, css("--grey"), [5, 4], c.name + " (what the model learned)"));
+    ellipse(ctx, C[0], css("--blue"), [], "");
+    board.label("roof, the class requested", px(C[0].m[0]), py(C[0].m[1] - 2 * C[0].s) + 18, css("--blue"), "center", 13);
+    if (pts) { ctx.fillStyle = css("--orange"); for (let i = 0; i < shown; i++) { ctx.globalAlpha = 0.75; ctx.beginPath(); ctx.arc(px(pts[0][i]), py(pts[1][i]), 4, 0, 2 * Math.PI); ctx.fill(); } ctx.globalAlpha = 1; }
+    board.label(answered ? "sampled at w = " + ROUNDS[round] : "sampled at a hidden w", px(-3.9), py(3.3), css("--orange"), "left", 14);
+    document.getElementById("ggScore").textContent = score + " / " + played;
   }
-  function run() { const w = +slider.value; draws = sample(w, 3000, 23); drawnW = w; draw(); }
-  slider.addEventListener("input", draw);
-  slider.addEventListener("change", run);
-  document.getElementById("gdRun").addEventListener("click", run);
+  function stats() { let on = 0, mx = 0, my = 0; for (let i = 0; i < NS; i++) if (pts[0][i] > 1.4 && pts[1][i] < 0.8) { on++; mx += pts[0][i]; my += pts[1][i]; } mx /= Math.max(1, on); my /= Math.max(1, on); let v = 0; for (let i = 0; i < NS; i++) if (pts[0][i] > 1.4 && pts[1][i] < 0.8) v += (pts[0][i] - mx) ** 2 + (pts[1][i] - my) ** 2; return { on: on / NS, sd: Math.sqrt(v / Math.max(1, on) / 2) }; }
+  function land() { if (timer) clearTimeout(timer); shown = 0; (function f() { shown = Math.min(NS, shown + 6); draw(); if (shown < NS) timer = setTimeout(f, 24); })(); }
+  function start() { pts = sample(ROUNDS[round], NS, 40 + round + 11 * played); answered = false; Array.from(document.querySelectorAll("#ggChoice button")).forEach(b => { b.className = ""; b.disabled = false; }); document.getElementById("ggNext").disabled = true; document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; text(); land(); }
+  function answer(w) {
+    if (answered) return; answered = true; played++; const truth = ROUNDS[round], ok = w === truth; if (ok) score++;
+    Array.from(document.querySelectorAll("#ggChoice button")).forEach(b => { const bw = +b.dataset.w; if (bw === truth) b.classList.add("right"); else if (bw === w) b.classList.add("wrong"); b.disabled = true; });
+    const st = stats(); document.getElementById("ggOn").textContent = (100 * st.on).toFixed(0) + " %"; document.getElementById("ggSd").textContent = (st.sd / 0.4).toFixed(2) + " x";
+    const why = { 0: "At w = 0 the condition is ignored and the samples fall on all three clusters in their learned proportions, about a third on roof.", 1: "At w = 1 the samples are plain conditional draws: all on roof, with the spread of the true class, so the cloud fills the blue ring.", 3: "At w = 3 every sample is on roof but the cloud is clearly tighter than the blue ring, roughly 0.6 of the true spread. The sampler is pushed toward the densest part of the class.", 10: "At w = 10 the cloud has collapsed to a dot near the class mean, about a quarter of the true spread. Every sample is a roof, and they are nearly the same roof." }[truth];
+    stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Correct, ' : 'No, ') + 'this cloud was sampled at w = ' + truth + '.</div><p>' + why + '</p>' + (round === ROUNDS.length - 1 ? '<p>Final score ' + score + ' of ' + ROUNDS.length + '. Next round starts the set again with new draws.</p>' : '');
+    document.getElementById("ggNext").disabled = false; draw();
+  }
+  document.querySelectorAll("#ggChoice button").forEach(b => b.addEventListener("click", () => answer(+b.dataset.w)));
+  document.getElementById("ggNext").addEventListener("click", () => { round = (round + 1) % ROUNDS.length; if (round === 0) { score = 0; played = 0; } start(); });
+  document.getElementById("ggReplay").addEventListener("click", land);
+  quiz(document.getElementById("ggQuiz"), { q: "At w = 10 every sample lands on the requested class and the cloud is far tighter than the class itself. What has been lost?", options: ["Nothing, every sample is correct", "Diversity: the sampler covers only the densest part of the class", "Accuracy: the samples drift away from the class"], answer: 1, why: "Guidance above one multiplies the conditional likelihood term, which sharpens the distribution around its mode. Image generators show this as saturated, repetitive outputs at high guidance scales; a map generator would produce one typical roof instead of the range of roofs in the data." });
   window.addEventListener("themechange", draw);
-  run();
+  start();
 })();
 
-/* ================= 4. PHYSICS WEIGHT ================= */
-(function physics() {
+/* ================= 4. REVEAL THE MAP ================= */
+(function map() {
   const PI = Math.PI;
   function uTrue(x) { return 1.2 * Math.sin(PI * x) + 0.5 * Math.sin(4 * PI * x); }
   function fTrue(x) { return 1.2 * PI * PI * Math.sin(PI * x) + 0.5 * 16 * PI * PI * Math.sin(4 * PI * x); }
@@ -494,62 +498,71 @@ for (let i = 0; i < NX; i++) FIELD[i] = 1.2 * bump(XS[i], 0.28, 0.06) + 0.8 * bu
   const xg = [0.15, 0.5, 0.85], xc = linspace(0.02, 0.98, 40), xb = [0, 1], wbc = 50, ridge = 1e-3;
   const fscale = Math.sqrt(Array.from(xc, fTrue).reduce((a, v) => a + v * v, 0) / xc.length);
   const xs = linspace(0, 1, 201), uT = xs.map(uTrue);
-  let seed = 3, yg = null;
-  function drawNoise() { const g = randn(mulberry32(seed), 4); yg = xg.map((x, i) => uTrue(x) + 0.08 * g[i]); }
+  const g = randn(mulberry32(3), 4), yg = xg.map((x, i) => uTrue(x) + 0.08 * g[i]);
+  const PHIg = xg.map(x => Array.from(centers, (c, j) => phi(x, j))), PHIc = Array.from(xc, x => Array.from(centers, (c, j) => phi2(x, j) / fscale)), PHIb = xb.map(x => Array.from(centers, (c, j) => phi(x, j)));
   function solve(lam, err) {
     const A = []; for (let i = 0; i < M; i++) A.push(new Float64Array(M + 1));
-    function add(rows, rhs, wgt) {
-      for (let r = 0; r < rows.length; r++) { const row = rows[r]; for (let i = 0; i < M; i++) { if (row[i] === 0) continue; for (let j = 0; j < M; j++) A[i][j] += wgt * row[i] * row[j]; A[i][M] += wgt * row[i] * rhs[r]; } }
-    }
-    add(xg.map(x => Array.from(centers, (c, j) => phi(x, j))), yg, 1);
-    add(Array.from(xc, x => Array.from(centers, (c, j) => phi2(x, j) / fscale)), Array.from(xc, x => -(1 + err) * fTrue(x) / fscale), lam / xc.length);
-    add(xb.map(x => Array.from(centers, (c, j) => phi(x, j))), [0, 0], wbc);
+    function add(rows, rhs, wgt) { for (let r = 0; r < rows.length; r++) { const row = rows[r]; for (let i = 0; i < M; i++) { if (row[i] === 0) continue; for (let j = 0; j < M; j++) A[i][j] += wgt * row[i] * row[j]; A[i][M] += wgt * row[i] * rhs[r]; } } }
+    add(PHIg, yg, 1); add(PHIc, Array.from(xc, x => -(1 + err) * fTrue(x) / fscale), lam / xc.length); add(PHIb, [0, 0], wbc);
     for (let i = 0; i < M; i++) A[i][i] += ridge;
-    // gaussian elimination with partial pivoting
-    for (let p = 0; p < M; p++) {
-      let best = p; for (let r = p + 1; r < M; r++) if (Math.abs(A[r][p]) > Math.abs(A[best][p])) best = r;
-      const tmp = A[p]; A[p] = A[best]; A[best] = tmp;
-      for (let r = p + 1; r < M; r++) { const f = A[r][p] / A[p][p]; if (f === 0) continue; for (let j = p; j <= M; j++) A[r][j] -= f * A[p][j]; }
-    }
-    const a = new Float64Array(M);
-    for (let p = M - 1; p >= 0; p--) { let s = A[p][M]; for (let j = p + 1; j < M; j++) s -= A[p][j] * a[j]; a[p] = s / A[p][p]; }
+    for (let p = 0; p < M; p++) { let best = p; for (let r = p + 1; r < M; r++) if (Math.abs(A[r][p]) > Math.abs(A[best][p])) best = r; const tmp = A[p]; A[p] = A[best]; A[best] = tmp; for (let r = p + 1; r < M; r++) { const f = A[r][p] / A[p][p]; if (f === 0) continue; for (let j = p; j <= M; j++) A[r][j] -= f * A[p][j]; } }
+    const a = new Float64Array(M); for (let p = M - 1; p >= 0; p--) { let s = A[p][M]; for (let j = p + 1; j < M; j++) s -= A[p][j] * a[j]; a[p] = s / A[p][p]; }
     const u = xs.map(x => { let s = 0; for (let j = 0; j < M; j++) s += a[j] * phi(x, j); return s; });
-    let rm = 0; for (let i = 0; i < xs.length; i++) rm += (u[i] - uT[i]) ** 2; rm = Math.sqrt(rm / xs.length);
-    let ld = 0; xg.forEach((x, i) => { let s = 0; for (let j = 0; j < M; j++) s += a[j] * phi(x, j); ld += (s - yg[i]) ** 2; });
-    let lp = 0; xc.forEach(x => { let s = 0; for (let j = 0; j < M; j++) s += a[j] * phi2(x, j); lp += ((s + (1 + err) * fTrue(x)) / fscale) ** 2; }); lp /= xc.length;
-    return { u: u, rmse: rm, ld: ld, lp: lp };
+    let rm = 0; for (let i = 0; i < xs.length; i++) rm += (u[i] - uT[i]) ** 2; return { u: u, rmse: Math.sqrt(rm / xs.length) };
   }
-  const pF = new Plot(document.getElementById("phField"), { xlabel: "position along the member x", ylabel: "temperature u(x)", title: "three gauges and one equation" });
-  const pS = new Plot(document.getElementById("phSweep"), { xlabel: "log10 lambda", ylabel: "RMSE against the true field", title: "the sweep", xfmt: v => v.toFixed(0), yfmt: v => v.toFixed(2) });
-  const sl = document.getElementById("phLam"), se = document.getElementById("phErr");
+  const LG = [-6, -5, -4, -3, -2, -1, 0, 1, 2], ERR = [0, 5, 10, 15, 20, 30, 40], TARGET = 3, BUDGET = 6;
+  const cells = ERR.map(e => LG.map(lg => solve(Math.pow(10, lg), e / 100)));
+  const rowBest = cells.map(r => r.reduce((b, c, i) => c.rmse < r[b].rmse ? i : b, 0));
+  const mapB = new Board(document.getElementById("pmMap")), beam = new Board(document.getElementById("pmBeam"));
+  const ox = 90, oy = 50, cw = (mapB.W - ox - 20) / LG.length, ch = (mapB.H - oy - 60) / ERR.length;
+  let revealed = [], sel = null, used = 0, answered = false, all = false;
+  const stepEl = document.getElementById("pmStep");
+  function text() { stepEl.innerHTML = '<span class="k">the challenge</span><p>Click cells to reveal the error of that fit. You have ' + BUDGET + ' probes.</p><p>Your task: find the cell with the <b>lowest error in the 15 % row</b>, the source error you will actually face, and submit it. Think before each probe about which way the valley runs.</p>'; }
+  function color(r) { return mix(css("--panel"), css("--blue"), Math.min(1, r / 0.7)); }
   function draw() {
-    const lg = +sl.value, lam = Math.pow(10, lg), err = +se.value / 100;
-    document.getElementById("phLamOut").textContent = "1e" + lg.toFixed(1).replace(/\.0$/, "");
-    document.getElementById("phErrOut").textContent = se.value + " %";
-    const r = solve(lam, err);
-    document.getElementById("phRmse").textContent = r.rmse.toFixed(3);
-    document.getElementById("phLd").textContent = r.ld.toFixed(4);
-    document.getElementById("phLp").textContent = fmt(r.lp, 2);
-    pF.begin([0, 1], [-1, 2]);
-    pF.line(xs, uT, css("--grey"), 2, [6, 5]);
-    pF.line(xs, r.u, css("--red"), 2.4);
-    pF.dots(xg, yg, css("--blue"), 6);
-    pF.end();
-    const lgs = linspace(-6, 2, 41), rs = lgs.map(v => solve(Math.pow(10, v), err).rmse);
-    const ymax = Math.max(0.5, Math.ceil(Math.max.apply(null, rs) * 10) / 10);
-    pS.begin([-6, 2], [0, ymax]);
-    pS.line(lgs, rs, css("--ink"), 2);
-    pS.dots([lg], [r.rmse], css("--red"), 6);
-    pS.text("physics ignored", -3.7, ymax * 0.93, css("--muted"), "left");
-    pS.text("data ignored", 1.8, ymax * 0.93, css("--muted"), "right");
-    pS.end();
+    mapB.clear("error of the fit, by physics weight (columns) and source error (rows)"); const ctx = mapB.ctx;
+    ERR.forEach((e, i) => LG.forEach((lg, j) => {
+      const X = ox + j * cw, Y = oy + i * ch, c = cells[i][j], vis = all || revealed.some(r => r[0] === i && r[1] === j);
+      ctx.fillStyle = vis ? color(c.rmse) : css("--bg"); ctx.fillRect(X, Y, cw, ch); ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(X, Y, cw, ch);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "13px " + css("--mono");
+      if (vis) { ctx.fillStyle = c.rmse / 0.7 > 0.55 ? "#fff" : css("--ink"); ctx.fillText(c.rmse.toFixed(3), X + cw / 2, Y + ch / 2); } else { ctx.fillStyle = css("--muted"); ctx.fillText("?", X + cw / 2, Y + ch / 2); }
+      if (all && rowBest[i] === j) { ctx.strokeStyle = "#2E7D5B"; ctx.lineWidth = 3; ctx.strokeRect(X + 2, Y + 2, cw - 4, ch - 4); }
+      if (sel && sel[0] === i && sel[1] === j) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.strokeRect(X + 3, Y + 3, cw - 6, ch - 6); }
+    }));
+    ctx.fillStyle = css("--muted"); ctx.font = "12px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "top";
+    LG.forEach((lg, j) => ctx.fillText("1e" + lg, ox + j * cw + cw / 2, oy + ERR.length * ch + 6));
+    mapB.label("lambda, weight on the physics term", ox + LG.length * cw / 2, mapB.H - 12, css("--muted"), "center", 12);
+    ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.font = "12px " + css("--mono"); ERR.forEach((e, i) => { ctx.fillStyle = i === TARGET ? css("--ink") : css("--muted"); ctx.fillText(e + " %" + (i === TARGET ? " <" : ""), ox - 6, oy + i * ch + ch / 2); });
+    ctx.save(); ctx.translate(18, oy + ERR.length * ch / 2); ctx.rotate(-Math.PI / 2); mapB.label("error in the source term", 0, 0, css("--muted"), "center", 12); ctx.restore();
+    beam.clear(sel ? "the fit at lambda = 1e" + LG[sel[1]] + ", source error " + ERR[sel[0]] + " %" : "probe a cell to see its fit");
+    const bc = beam.ctx, L = 50, R = beam.W - 16, Tp = 40, B = beam.H - 40, X = v => L + (R - L) * v, Y = v => B - (B - Tp) * (v + 1) / 3;
+    bc.strokeStyle = css("--line"); bc.beginPath(); bc.moveTo(L, Tp); bc.lineTo(L, B); bc.lineTo(R, B); bc.stroke();
+    beam.label("position along the member", (L + R) / 2, beam.H - 10, css("--muted"), "center", 12);
+    bc.strokeStyle = css("--grey"); bc.lineWidth = 2; bc.setLineDash([6, 5]); bc.beginPath(); xs.forEach((x, i) => { if (i === 0) bc.moveTo(X(x), Y(uT[i])); else bc.lineTo(X(x), Y(uT[i])); }); bc.stroke(); bc.setLineDash([]);
+    if (sel) { const u = cells[sel[0]][sel[1]].u; bc.strokeStyle = css("--red"); bc.lineWidth = 2.4; bc.beginPath(); xs.forEach((x, i) => { if (i === 0) bc.moveTo(X(x), Y(u[i])); else bc.lineTo(X(x), Y(u[i])); }); bc.stroke(); }
+    xg.forEach((x, i) => { bc.fillStyle = css("--blue"); bc.beginPath(); bc.arc(X(x), Y(yg[i]), 6, 0, 2 * Math.PI); bc.fill(); });
+    beam.label("dashed: true field; dots: the gauges; red: the fit", L + 4, Tp - 6, css("--muted"), "left", 12);
+    document.getElementById("pmUsed").textContent = used + " / " + BUDGET;
+    document.getElementById("pmSel").textContent = sel ? "1e" + LG[sel[1]] + " at " + ERR[sel[0]] + " %" : "-";
+    document.getElementById("pmRmse").textContent = sel ? cells[sel[0]][sel[1]].rmse.toFixed(3) : "-";
+    document.getElementById("pmAnswer").disabled = !(sel && sel[0] === TARGET && !answered);
   }
-  drawNoise();
-  sl.addEventListener("input", draw); se.addEventListener("input", draw);
-  document.getElementById("phNoise").addEventListener("click", function () { seed += 1; drawNoise(); draw(); });
-  document.getElementById("phReset").addEventListener("click", function () { sl.value = -2; se.value = 15; seed = 3; drawNoise(); draw(); });
+  mapB.c.addEventListener("click", ev => {
+    const [mx, my] = mapB.pos(ev), j = Math.floor((mx - ox) / cw), i = Math.floor((my - oy) / ch); if (i < 0 || j < 0 || i >= ERR.length || j >= LG.length) return;
+    const vis = all || revealed.some(r => r[0] === i && r[1] === j);
+    if (!vis) { if (used >= BUDGET) { stepEl.innerHTML = '<span class="k">out of probes</span><p>All ' + BUDGET + ' probes are spent. Select one of the revealed cells in the 15 % row and submit it, or press Reveal all.</p>'; return; } used++; revealed.push([i, j]); }
+    sel = [i, j]; draw();
+  });
+  document.getElementById("pmAnswer").addEventListener("click", () => {
+    if (!sel || sel[0] !== TARGET) return; answered = true; const best = rowBest[TARGET], ok = sel[1] === best, near = Math.abs(sel[1] - best) === 1;
+    stepEl.innerHTML = '<span class="k">result</span><div class="ask ' + (ok ? 'ok' : (near ? '' : 'no')) + '">' + (ok ? 'Found it. ' : (near ? 'One cell off. ' : 'Not the valley floor. ')) + 'At 15 % source error the lowest error, ' + cells[TARGET][best].rmse.toFixed(3) + ', is at lambda = 1e' + LG[best] + '; your cell has ' + cells[TARGET][sel[1]].rmse.toFixed(3) + '.</div><p>Now press Reveal all and look at the green cells: the valley floor shifts to smaller lambda as the source error grows. The weight is not a property of the equation, it is a statement about how far you trust the equation against the gauges.</p>';
+    draw();
+  });
+  document.getElementById("pmAll").addEventListener("click", () => { all = true; draw(); if (!answered) stepEl.innerHTML = '<span class="k">the whole map</span><p>Green outlines mark the best lambda in each row. With a correct source term the physics can carry almost all the weight, lambda = 100. Once the source error passes about 5 % the valley floor jumps four orders of magnitude down to lambda = 0.01, and even there the error at 40 % is five times what a correct equation achieves.</p>'; });
+  document.getElementById("pmReset").addEventListener("click", () => { revealed = []; sel = null; used = 0; answered = false; all = false; text(); draw(); });
+  quiz(document.getElementById("pmQuiz"), { q: "As the error in the source term grows, the best physics weight", options: ["Falls: trust the equation less when the equation is wrong", "Rises: more physics is needed to overcome the bad data", "Stays the same: the weight only depends on the units"], answer: 0, why: "The PDE residual is a model of the world, and its weight expresses the variance you assign to that model's error. A wrong source means a larger model error, hence a smaller weight, exactly as a noisier instrument gets a smaller weight in least squares." });
   window.addEventListener("themechange", draw);
-  draw();
+  text(); draw();
 })();
 
 /* ---------- tabs ---------- */
@@ -564,7 +577,6 @@ tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
 window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
 show(location.hash.slice(1) || "forward", false);
 
-/* redraw plots when the theme flips */
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
 if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
 new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
