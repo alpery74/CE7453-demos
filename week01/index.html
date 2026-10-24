@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week 1 Demos</title>
+<meta name="description" content="CE 7453 Week 1: recover Ceres from 24 noisy nights, route a leveling run and watch the design matrix build, move a lamp to see the estimate as a weighted shadow, set spring stiffnesses on a settlement line, drag the knee of a robust loss, shrink a prior circle in a collinear valley, and bet on the frame that wins on held-out data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-line course header with a tab strip, then one demo at a time:
+   a wide plot on the left, a narrow control column on the right, a caption underneath.
+   Colors follow the lecture deck (dark body text, one blue, red for the figure's "wrong" curve). */
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --ink: #2B2B2B;
+  --muted: #6B7280;
+  --line: #D9DDE3;
+  --blue: #1F5C99;
+  --blue-soft: #D6E3F2;
+  --red: #B3261E;
+  --orange: #C9731F;
+  --grey: #8A8F98;
+  --focus: #1F5C99;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+    --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+  --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  padding-block: 14px 8px; border-bottom: 1px solid var(--line);
+}
+header .weeks { font-size: 13px; color: var(--blue); text-decoration: none; border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px; }
+header .weeks:hover { background: var(--blue-soft); }
+header .course { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+nav button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+nav button[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+nav button:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+nav button .slide { font-family: var(--mono); font-size: 12px; opacity: 0.8; margin-left: 6px; }
+main { padding-block: 4px 24px; }
+section.demo { display: none; }
+section.demo.active { display: block; }
+.demo h2 { font-size: 22px; font-weight: 600; margin: 6px 0 2px; text-wrap: balance; }
+.demo .lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.plot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-width: 0; }
+.plot canvas { width: 100%; height: auto; display: block; max-width: 100%; }
+.plot.two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 860px) { .plot.two { grid-template-columns: 1fr; } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctl label output { font-family: var(--mono); font-weight: 400; color: var(--blue); }
+.ctl input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--blue); }
+.ctl .hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; background: var(--c); }
+.legend span.dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.caption { margin: 12px 0 0; max-width: 90ch; font-size: 15px; }
+.caption p { margin: 0 0 6px; }
+footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<style>
+/* components for the instructional formats */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.step { font-size: 15px; line-height: 1.5; }
+.step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
+.step p { margin: 6px 0; }
+.ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
+.ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
+.ask.no { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ask.ok { background: #1E3A2C; } :root:not([data-theme="light"]) .ask.no { background: #432426; } }
+:root[data-theme="dark"] .ask.ok { background: #1E3A2C; } :root[data-theme="dark"] .ask.no { background: #432426; }
+.quiz { font-size: 15px; }
+.quiz .q { margin: 0 0 8px; font-weight: 500; }
+.quiz .opts { display: grid; gap: 6px; }
+.quiz button { text-align: left; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.quiz button.right { border-color: #2E7D5B; background: #E3F2EA; }
+.quiz button.wrong { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quiz button.right { background: #1E3A2C; } :root:not([data-theme="light"]) .quiz button.wrong { background: #432426; } }
+:root[data-theme="dark"] .quiz button.right { background: #1E3A2C; } :root[data-theme="dark"] .quiz button.wrong { background: #432426; }
+.quiz .why { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { color: #2E7D5B; border-color: #2E7D5B; }
+.badge.fail { color: var(--red); border-color: var(--red); }
+canvas.hit { cursor: pointer; }
+canvas.grab { cursor: grab; }
+.code { font-family: var(--mono); font-size: 12.5px; line-height: 1.6; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; white-space: pre; overflow-x: auto; }
+.code .hl { color: var(--blue); }
+</style>
+
+<header>
+  <a class="weeks" href="../">All weeks</a>
+  <span class="course">CE 7453 &middot; Week 1 &middot; What learning is, and what your field already knows</span>
+  <h1>Interactive demonstrations</h1>
+</header>
+
+<nav role="tablist" aria-label="Demos">
+  <button role="tab" data-tab="ceres" aria-selected="true">Recover Ceres<span class="slide">slide 7</span></button>
+  <button role="tab" data-tab="survey" aria-selected="false">Route the leveling run<span class="slide">slides 9, 11, 14</span></button>
+  <button role="tab" data-tab="shadow" aria-selected="false">The estimate is a shadow<span class="slide">slides 10, 12, 18</span></button>
+  <button role="tab" data-tab="springs" aria-selected="false">Springs on the line<span class="slide">slide 12</span></button>
+  <button role="tab" data-tab="blunder" aria-selected="false">Drag the knee<span class="slide">slides 19, 20, 21</span></button>
+  <button role="tab" data-tab="valley" aria-selected="false">The valley and the prior<span class="slide">slide 23</span></button>
+  <button role="tab" data-tab="filmstrip" aria-selected="false">Bet on a frame<span class="slide">slide 24</span></button>
+</nav>
+
+<main>
+
+<!-- ============ 0. CERES: the 1801 recovery ============ -->
+<section class="demo active" id="ceres" role="tabpanel">
+  <h2>Recover Ceres: fit an orbit to 24 noisy nights and say where to look in December</h2>
+  <p class="lead">January 1801. Piazzi has 24 directions to a moving point of light, taken over 41 days, before the Sun swallows it. You are Gauss. The orbit is a circle round the Sun with two unknowns: its radius, which fixes the speed by Kepler's third law, and where Ceres was on 1 January. Drag the orbit to resize it and drag Ceres along it. The strip below the sky is the residual of each night. When you are satisfied, predict the direction for 31 December and see how far off you are.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="ceSky" class="grab" width="1200" height="600"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="ceStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="cePredict">Predict 31 December</button><button id="ceSolve">Let least squares solve it</button><button id="ceReset">Start over</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>orbit radius (AU)</dt><dd id="ceA">-</dd>
+          <dt>period (years)</dt><dd id="ceP">-</dd>
+          <dt>sum of squared residuals (deg^2)</dt><dd id="ceSSE">-</dd>
+          <dt>largest residual (arcmin)</dt><dd id="ceMax">-</dd>
+          <dt>prediction error, 31 December</dt><dd id="ceErr">-</dd>
+        </dl>
+        <div class="ask" id="ceTask">Task: a prediction within half a degree is the one Zach and Olbers would have recovered. <span class="badge" id="ceBadge">not yet</span></div>
+      </div>
+      <div class="panel quiz" id="ceQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The toy keeps both orbits circular and in one plane; Gauss had an ellipse in three dimensions and invented much of his method on the way. The structure is the same: a model with a few unknowns, observations with noise, a fit by least squares, and a prediction judged by whether the planet is there. The 41-day arc is short, so the sum of squares has a long valley: many radius-and-phase pairs fit January almost equally well and disagree by degrees in December. That sensitivity is why the recovery, within half a degree, made Gauss famous at 24.</p>
+  </div>
+</section>
+
+<!-- ============ 1. SURVEY: route the leveling run ============ -->
+<section class="demo" id="survey" role="tabpanel">
+  <h2>Route the leveling run and watch the dataset build itself</h2>
+  <p class="lead">Five benchmarks on a site. A is a known height; B to E are the unknowns. Click a dashed sight line to level along it: the instrument returns the height difference with 2 mm of noise, and one row appears in the design matrix on the right. Make the network solvable, then give it enough redundancy to catch a blunder.</p>
+  <div class="stage">
+    <div class="plot two">
+      <canvas id="svMap" class="hit" width="800" height="520"></canvas>
+      <canvas id="svMat" width="400" height="520"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="svStep"></div>
+      <div class="panel">
+        <div class="btns"><button id="svBlunder">Slip a blunder into one sight</button><button id="svClear">Clear the run</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>observations m</dt><dd id="svM">0</dd>
+          <dt>unknowns n</dt><dd id="svN">4</dd>
+          <dt>redundancy m - n</dt><dd id="svR">-</dd>
+          <dt>normal matrix</dt><dd id="svRank">not yet solvable</dd>
+          <dt>sigma0 (mm) from the residuals</dt><dd id="svS0">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="svQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Each observed difference y = h_to - h_from + e is one row of A with a +1 under the destination and a -1 under the origin; the known benchmark A has no column, so its height moves to the right-hand side. The six lines on slide 11 run unchanged: N = A'A, u = A'y, x = N^-1 u, v = y - A x, sigma0^2 = v'v / (m - n). With m = n there are no residuals and nothing can be checked; the redundancy is what buys Baarda's data snooping on slide 14.</p>
+  </div>
+</section>
+
+<!-- ============ 2. SHADOW: the estimate is a projection ============ -->
+<section class="demo" id="shadow" role="tabpanel">
+  <h2>The estimate is a shadow, and the weights set where the light comes from</h2>
+  <p class="lead">Two readings of the same bench height make one point y = (y1, y2) in the plane of observations. Every candidate estimate x lies on the diagonal line, because the model says both readings should equal x. Drag the reading to move y. Drag the lamp along its arc to change the weight ratio: the estimate is where y's shadow lands on the line.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="shPlane" class="grab" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="shStep"></div>
+      <div class="panel">
+        <dl class="readout">
+          <dt>readings y1, y2 (m)</dt><dd id="shY">-</dd>
+          <dt>weight ratio w1 / w2</dt><dd id="shW">1.00</dd>
+          <dt>implied sigma1 / sigma2</dt><dd id="shS">1.00</dd>
+          <dt>estimate x</dt><dd id="shX">-</dd>
+          <dt>residuals v1, v2 (mm)</dt><dd id="shV">-</dd>
+        </dl>
+        <div class="ask" id="shTask">Task: reading 1 is from a digital level (sigma 1 mm), reading 2 from a hand level (sigma 2 mm). Put the lamp where Gauss-Markov says it belongs. <span class="badge" id="shBadge">not yet</span></div>
+      </div>
+      <div class="panel quiz" id="shQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>With equal weights the light is perpendicular to the line and the shadow is the orthogonal projection, which is the picture on slide 10. With W = diag(w1, w2) the normal equations A'W(y - Ax) = 0 say the residual is W-orthogonal to the model line: w1 v1 + w2 v2 = 0. Seen in ordinary coordinates that is an oblique shadow, tilted toward the reading you trust more, and the estimate is the weighted mean (w1 y1 + w2 y2) / (w1 + w2). Gauss-Markov on slide 18 says this is the minimum-variance linear unbiased estimate exactly when the weights are the inverse variances.</p>
+  </div>
+</section>
+
+<!-- ============ 3. SPRINGS: weights as stiffness ============ -->
+<section class="demo" id="springs" role="tabpanel">
+  <h2>Springs on the line: every observation pulls with a stiffness you set</h2>
+  <p class="lead">Settlement of a footing, read eight times over twelve months. Each reading holds the fitted line with a spring whose stiffness is its weight, 1 / sigma^2. Drag the end of a reading's error bar to change its sigma: a long bar is a soft spring. The grey line is the equal-weights fit; the blue line is yours.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="spPlot" class="grab" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="spStep"></div>
+      <div class="panel">
+        <div class="btns"><button id="spEqual">Equal bars</button><button id="spSpec">Instrument spec</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>rate, weighted fit (mm / month)</dt><dd id="spRate">-</dd>
+          <dt>rate, equal weights</dt><dd id="spRate0">-</dd>
+          <dt>share of total weight, months 1-5</dt><dd id="spShare">-</dd>
+          <dt>predicted settlement at month 24 (mm)</dt><dd id="spPred">-</dd>
+        </dl>
+        <div class="ask" id="spTask">Task: months 1 to 5 were read with a dial gauge (sigma 0.5 mm), months 7 to 12 with a tape (sigma 3 mm). Set the bars to the spec, by hand or with the button, and read the rate. <span class="badge" id="spBadge">not yet</span></div>
+      </div>
+      <div class="panel quiz" id="spQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Weighted least squares minimizes the sum of w_i v_i^2, which is the elastic energy of springs with stiffness w_i stretched by v_i; the fitted line is the rest position. Slide 12's point is that the stiffnesses are a statement about the instruments, not about the data values: the same eight readings give a different rate when the tape readings are trusted as much as the gauge readings. The spec button sets the bars to the manufacturers' numbers, which is where a weight matrix comes from in practice.</p>
+  </div>
+</section>
+
+<!-- ============ 4. BLUNDER: drag the knee ============ -->
+<section class="demo" id="blunder" role="tabpanel">
+  <h2>Drag the knee of the loss and watch one blunder lose its grip</h2>
+  <p class="lead">Compressive strength of twelve concrete mixes against their water-cement ratio, with one transcription slip in orange that you can drag anywhere. The loss on the right has a knee at delta: quadratic inside, linear outside. Drag the knee far right and the loss is squared error; drag it toward zero and every residual pulls with the same bounded force. The arrows on the left are the pull of each point.</p>
+  <div class="stage">
+    <div class="plot two">
+      <canvas id="blFit" class="grab" width="800" height="520"></canvas>
+      <canvas id="blLoss" class="grab" width="400" height="520"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="blStep"></div>
+      <div class="panel">
+        <dl class="readout">
+          <dt>knee delta (MPa)</dt><dd id="blDelta">-</dd>
+          <dt>loss in use</dt><dd id="blKind">-</dd>
+          <dt>slope, this fit (MPa per 0.1 w/c)</dt><dd id="blSlope">-</dd>
+          <dt>slope, clean data</dt><dd id="blClean">-</dd>
+          <dt>pull of the blunder / pull of a typical point</dt><dd id="blPull">-</dd>
+        </dl>
+        <div class="ask" id="blTask">Task: drag the blunder 25 MPa off the line, then find the largest delta at which the fitted slope stays within 5 % of the clean slope. <span class="badge" id="blBadge">not yet</span></div>
+      </div>
+      <div class="panel quiz" id="blQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The fit minimizes the sum of rho(v_i) with rho the Huber loss of slide 19, by iteratively reweighted least squares. The arrows draw psi(v) = rho'(v), the influence function of slide 20: unbounded for squared error, so the blunder pulls in proportion to how far off it is, and capped at delta beyond the knee, so the blunder can never pull harder than a point at the knee. Slide 21's three answers are the two ends and the middle of this one drag: delta large is squared error, delta small is absolute error, delta near the noise level is Huber's compromise.</p>
+  </div>
+</section>
+
+<!-- ============ 5. VALLEY: ridge as a prior ============ -->
+<section class="demo" id="valley" role="tabpanel">
+  <h2>The valley and the prior: shrink the circle and watch the solution walk</h2>
+  <p class="lead">Two predictors of a mix's strength, cement content and total binder content, nearly the same column. The contours are the squared error over the two coefficients: a long, thin valley, so the least squares solution is sure along one direction and almost unknown along the other. The circle is a Gaussian prior on the coefficients. Drag its rim to shrink it: the solution is where the valley first touches the circle.</p>
+  <div class="stage">
+    <div class="plot two">
+      <canvas id="vaMap" class="grab" width="800" height="520"></canvas>
+      <canvas id="vaMat" width="400" height="520"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="vaStep"></div>
+      <div class="panel">
+        <div class="btns"><button id="vaResample">Redraw the noise, 40 times</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>radius of the prior circle</dt><dd id="vaR">-</dd>
+          <dt>implied lambda</dt><dd id="vaLam">-</dd>
+          <dt>coefficients w1, w2</dt><dd id="vaW">-</dd>
+          <dt>spread of 40 refits, least squares</dt><dd id="vaSdLS">-</dd>
+          <dt>spread of 40 refits, with this prior</dt><dd id="vaSdR">-</dd>
+          <dt>distance of the mean refit from the truth</dt><dd id="vaBias">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="vaQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Minimizing |y - Aw|^2 + lambda |w|^2 is the same as least squares on A with two pseudo observations appended, each saying one coefficient is zero with weight lambda, which is the right-hand panel; it is also the maximum a posteriori estimate under a Gaussian prior w ~ N(0, sigma^2 / lambda), which is the circle. Slide 23's "normal matrix misbehaves" is the valley: N = A'A has one eigenvalue close to zero, and adding lambda to the diagonal lifts it. The grey dots are what least squares would have returned on forty other draws of the noise; the blue dots are the ridge answers. Shrinking the circle trades that scatter for a bias toward the origin.</p>
+  </div>
+</section>
+
+<!-- ============ 6. FILMSTRIP: bet on a frame ============ -->
+<section class="demo" id="filmstrip" role="tabpanel">
+  <h2>Bet on a frame: pick the fit that will score best on data it has never seen</h2>
+  <p class="lead">A bridge deck's deflection along its span, measured at twelve stations. Eight frames fit the same degree-11 polynomial to those twelve points with a penalty that grows from frame to frame. Click the frame you bet will have the lowest error on the eight stations held back, then reveal them. Then press the redraw button and watch which frames flicker.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="fsStrip" class="hit" width="1200" height="620"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="fsStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="fsReveal" disabled>Reveal the held-out stations</button><button id="fsRedraw">Redraw the training noise</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>your frame</dt><dd id="fsPick">-</dd>
+          <dt>its training error (rms mm)</dt><dd id="fsTr">-</dd>
+          <dt>its held-out error (rms mm)</dt><dd id="fsTe">-</dd>
+          <dt>best frame on held-out data</dt><dd id="fsBest">-</dd>
+          <dt>bets won / placed</dt><dd id="fsScore">0 / 0</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="fsQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Every frame is ridge regression on a degree-11 polynomial basis with lambda from 1e-6 (frame 1) to 1e2 (frame 8), so frame 1 is interpolation through the twelve stations and frame 8 is almost a straight line. Training error falls monotonically from right to left, so it would always choose frame 1; held-out error traces the U of slide 24. Redrawing the noise shows the two terms of the bias-variance decomposition directly: the left frames change shape from draw to draw (variance), the right frames keep the same wrong shape every time (bias).</p>
+  </div>
+</section>
+
+</main>
+<footer>CE 7453 Machine Learning for Civil, Environmental and Geodetic Engineering. Each demo is a small closed-form toy chosen so that the effect on the slide is visible without a trained network.</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- utilities ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const u = 1 - rng(), v = rng(), r = Math.sqrt(-2 * Math.log(u)); out[i] = r * Math.cos(2 * Math.PI * v); if (i + 1 < n) out[i + 1] = r * Math.sin(2 * Math.PI * v); } return out; }
+function hexToRgb(h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
+function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
+Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
+Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+Board.prototype.label = function (s, x, y, color, align, size, mono) { const ctx = this.ctx; ctx.fillStyle = color || css("--muted"); ctx.font = (size || 13) + "px " + css(mono ? "--mono" : "--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(s, x, y); };
+Board.prototype.line = function (x1, y1, x2, y2, color, width, dash) { const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 1; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); };
+Board.prototype.dot = function (x, y, r, color, stroke) { const ctx = this.ctx; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); } };
+function quiz(el, spec) {
+  el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
+  const opts = el.querySelector(".opts"), why = el.querySelector(".why");
+  spec.options.forEach((o, i) => { const b = document.createElement("button"); b.textContent = o; b.addEventListener("click", () => { Array.from(opts.children).forEach(c => c.classList.remove("right", "wrong")); b.classList.add(i === spec.answer ? "right" : "wrong"); if (i !== spec.answer) opts.children[spec.answer].classList.add("right"); why.textContent = (i === spec.answer ? "Right. " : "No. ") + spec.why; }); opts.appendChild(b); });
+}
+function solveLinear(Mtx, rhs) { const n = rhs.length, A = Mtx.map((r, i) => Array.from(r).concat([rhs[i]])); for (let p = 0; p < n; p++) { let best = p; for (let r = p + 1; r < n; r++) if (Math.abs(A[r][p]) > Math.abs(A[best][p])) best = r; const tmp = A[p]; A[p] = A[best]; A[best] = tmp; if (Math.abs(A[p][p]) < 1e-12) return null; for (let r = p + 1; r < n; r++) { const f = A[r][p] / A[p][p]; if (f === 0) continue; for (let j = p; j <= n; j++) A[r][j] -= f * A[p][j]; } } const out = new Array(n).fill(0); for (let p = n - 1; p >= 0; p--) { let s = A[p][n]; for (let j = p + 1; j < n; j++) s -= A[p][j] * out[j]; out[p] = s / A[p][p]; } return out; }
+/* weighted least squares: rows of A, vector y, weights w; returns x or null */
+function wls(A, y, w) { const n = A[0].length, N = [], u = new Array(n).fill(0); for (let i = 0; i < n; i++) N.push(new Array(n).fill(0)); for (let k = 0; k < A.length; k++) { const wk = w ? w[k] : 1; for (let i = 0; i < n; i++) { u[i] += wk * A[k][i] * y[k]; for (let j = 0; j < n; j++) N[i][j] += wk * A[k][i] * A[k][j]; } } return solveLinear(N, u); }
+function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - y1, x2 - x1), L = Math.hypot(x2 - x1, y2 - y1); if (L < 1) return; ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width || 2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); const h = Math.min(9, L); ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - h * Math.cos(ang - 0.45), y2 - h * Math.sin(ang - 0.45)); ctx.lineTo(x2 - h * Math.cos(ang + 0.45), y2 - h * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill(); }
+
+/* ================= 0. RECOVER CERES ================= */
+(function ceres() {
+  const D2R = Math.PI / 180, AT = 2.767, PHIT = 60, THE0 = 100, NOISE = 0.008, TPRED = 364;
+  const nOf = a => 360 / (365.25 * Math.pow(a, 1.5));
+  const earth = t => { const th = (THE0 + t * 360 / 365.25) * D2R; return [Math.cos(th), Math.sin(th)]; };
+  const ceresAt = (a, phi, t) => { const th = (phi + nOf(a) * t) * D2R; return [a * Math.cos(th), a * Math.sin(th)]; };
+  const dirTo = (a, phi, t) => { const E = earth(t), C = ceresAt(a, phi, t); return Math.atan2(C[1] - E[1], C[0] - E[0]) / D2R; };
+  const wrap = d => { while (d > 180) d -= 360; while (d < -180) d += 360; return d; };
+  const TS = []; for (let k = 0; k < 24; k++) TS.push(k * 41 / 23);
+  const g = randn(mulberry32(1801), 24), OBS = TS.map((t, k) => dirTo(AT, PHIT, t) + NOISE * g[k]);
+  let a = 2.0, phi = 30, drag = null, predicted = false, solved = false;
+  const board = new Board(document.getElementById("ceSky"));
+  const SX = 540, SY = 300, S = 70; const px = x => SX + x * S, py = y => SY - y * S;
+  const stepEl = document.getElementById("ceStep");
+  function resid(aa, pp) { return OBS.map((o, k) => wrap(o - dirTo(aa, pp, TS[k]))); }
+  function sse(aa, pp) { return resid(aa, pp).reduce((s, r) => s + r * r, 0); }
+  function draw() {
+    const r = resid(a, phi), S2 = sse(a, phi), rmax = Math.max.apply(null, r.map(Math.abs));
+    board.clear("the plane of the orbits, seen from above the Sun: drag the orbit's rim to resize it, drag Ceres to move it along"); const ctx = board.ctx;
+    board.dot(px(0), py(0), 9, css("--orange")); board.label("Sun", px(0) + 12, py(0) + 4, css("--muted"), "left", 12);
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(px(0), py(0), S, 0, 2 * Math.PI); ctx.stroke(); board.label("Earth, 1 AU", px(0.72), py(-0.78), css("--muted"), "left", 11);
+    // scale ring at 3 AU
+    ctx.setLineDash([2, 6]); ctx.beginPath(); ctx.arc(px(0), py(0), 3 * S, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]); board.label("3 AU", px(0) + 3 * S + 4, py(0) + 4, css("--muted"), "left", 10, true);
+    // model orbit
+    ctx.strokeStyle = css("--blue"); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(px(0), py(0), a * S, 0, 2 * Math.PI); ctx.stroke();
+    // observation rays from Earth through the observed direction
+    TS.forEach((t, k) => { const E = earth(t), d = OBS[k] * D2R; const L = 4.2; ctx.strokeStyle = mix(css("--panel"), css("--red"), 0.45); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px(E[0]), py(E[1])); ctx.lineTo(px(E[0] + L * Math.cos(d)), py(E[1] + L * Math.sin(d))); ctx.stroke(); board.dot(px(E[0]), py(E[1]), 2.5, css("--ink")); });
+    // model positions of Ceres on the observation nights
+    TS.forEach((t, k) => { const C = ceresAt(a, phi, t); board.dot(px(C[0]), py(C[1]), 3, Math.abs(r[k]) < 0.1 ? "#2E7D5B" : css("--blue")); });
+    const C0 = ceresAt(a, phi, 0); board.dot(px(C0[0]), py(C0[1]), 9, css("--blue"), "#fff"); board.label("Ceres on 1 Jan (drag)", px(C0[0]) + 12, py(C0[1]) - 8, css("--blue"), "left", 12);
+    const E0 = earth(0); board.label("Earth, 1 Jan to 11 Feb", px(E0[0]) + 10, py(E0[1]) + 16, css("--ink"), "left", 11);
+    board.label("red rays: the 24 observed directions; blue dots: where your orbit puts Ceres on those nights; the dots should sit on the rays", 16, board.H - 14, css("--muted"), "left", 12);
+    if (predicted) { const E = earth(TPRED), dm = dirTo(a, phi, TPRED) * D2R, dt = dirTo(AT, PHIT, TPRED) * D2R, L = 4.5; board.dot(px(E[0]), py(E[1]), 5, css("--ink")); board.label("Earth, 31 Dec", px(E[0]) + 10, py(E[1]) - 8, css("--ink"), "left", 11);
+      board.line(px(E[0]), py(E[1]), px(E[0] + L * Math.cos(dm)), py(E[1] + L * Math.sin(dm)), css("--orange"), 2.5); board.line(px(E[0]), py(E[1]), px(E[0] + L * Math.cos(dt)), py(E[1] + L * Math.sin(dt)), css("--ink"), 2, [6, 4]);
+      const CT = ceresAt(AT, PHIT, TPRED); board.dot(px(CT[0]), py(CT[1]), 7, css("--ink")); board.label("Ceres, really, 31 Dec", px(CT[0]) + 10, py(CT[1]) + 16, css("--ink"), "left", 11); board.label("your telescope points here", px(E[0] + 3.6 * Math.cos(dm)), py(E[1] + 3.6 * Math.sin(dm)) - 10, css("--orange"), "center", 11); }
+    // residual strip
+    const sx0 = 760, sw = 420, sy0 = 440, sh = 110; ctx.fillStyle = css("--bg"); ctx.fillRect(sx0, sy0, sw, sh); ctx.strokeStyle = css("--line"); ctx.strokeRect(sx0, sy0, sw, sh);
+    board.label("residual per night, observed minus model direction (scale: 1 degree)", sx0, sy0 - 8, css("--ink"), "left", 12); board.line(sx0, sy0 + sh / 2, sx0 + sw, sy0 + sh / 2, css("--line"), 1);
+    r.forEach((v, k) => { const x = sx0 + 10 + k * (sw - 20) / 24, h = Math.max(-sh / 2 + 2, Math.min(sh / 2 - 2, v / 1.0 * (sh / 2))); ctx.fillStyle = Math.abs(v) < 0.1 ? "#2E7D5B" : css("--red"); ctx.fillRect(x, sy0 + sh / 2 - Math.max(0, h), 10, Math.abs(h) || 1); });
+    board.label("1 Jan", sx0 + 10, sy0 + sh + 14, css("--muted"), "left", 10); board.label("11 Feb", sx0 + sw - 10, sy0 + sh + 14, css("--muted"), "right", 10);
+    const P = Math.pow(a, 1.5);
+    document.getElementById("ceA").textContent = a.toFixed(2); document.getElementById("ceP").textContent = P.toFixed(2); document.getElementById("ceSSE").textContent = S2 < 0.01 ? S2.toExponential(2) : S2.toFixed(3); document.getElementById("ceMax").textContent = (rmax * 60).toFixed(1);
+    const err = predicted ? Math.abs(wrap(dirTo(a, phi, TPRED) - dirTo(AT, PHIT, TPRED))) : null; document.getElementById("ceErr").textContent = predicted ? err.toFixed(2) + " deg" : "-";
+    const ok = predicted && err <= 0.5; document.getElementById("ceBadge").textContent = ok ? "recovered, " + err.toFixed(2) + " deg off" : (predicted ? "missed by " + err.toFixed(1) + " deg" : "not yet"); document.getElementById("ceBadge").className = "badge" + (ok ? " done" : (predicted ? " fail" : "")); document.getElementById("ceTask").className = "ask" + (ok ? " ok" : (predicted ? " no" : ""));
+    let html = '<span class="k">' + (predicted ? '31 December 1801' : (rmax < 0.1 ? 'the nights agree' : 'fitting January')) + '</span>';
+    if (!predicted) html += '<p>' + (rmax > 1 ? 'Residuals of degrees: the blue dots are nowhere near the red rays. Move Ceres along the orbit first, then adjust the radius; the radius changes the speed as well as the distance.' : (rmax > 0.1 ? 'Close. The residuals are now ' + (rmax * 60).toFixed(0) + ' arcminutes at worst; the noise in the data is about 1 arcminute. Keep going, or predict now and see what a near fit buys you.' : 'Every night within a tenth of a degree. Predict.')) + '</p>';
+    else html += '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Recovered. Your December direction is ' + err.toFixed(2) + ' degrees from where Ceres really is; on 31 December 1801 Zach found it within half a degree of Gauss\'s prediction.' : 'Missed by ' + err.toFixed(1) + ' degrees. January looked fine, but a radius slightly wrong changes the speed, and over 320 unobserved days the error grows into a different patch of sky.') + '</div><p>' + (solved ? 'This is the least squares orbit: the best fit to the 24 nights. Even it is not perfect, because the arc is short and the noise is real; it is good enough to find the planet.' : 'Press the least squares button to see what the best possible fit to these 24 nights predicts, and compare its radius with yours.') + '</p>';
+    stepEl.innerHTML = html;
+  }
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const C0 = ceresAt(a, phi, 0); if (Math.hypot(mx - px(C0[0]), my - py(C0[1])) < 18) { drag = "phi"; return; } const d = Math.hypot(mx - px(0), my - py(0)); if (Math.abs(d - a * S) < 16) drag = "a"; });
+  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); if (drag === "phi") { phi = Math.atan2(-(my - py(0)), mx - px(0)) / D2R; } else { a = Math.max(0.6, Math.min(3.9, Math.hypot(mx - px(0), my - py(0)) / S)); } predicted = false; solved = false; draw(); });
+  window.addEventListener("mouseup", () => { drag = null; });
+  document.getElementById("cePredict").addEventListener("click", () => { predicted = true; draw(); });
+  document.getElementById("ceSolve").addEventListener("click", () => { let best = [1e9, a, phi]; for (let aa = 0.6; aa <= 3.9; aa += 0.02) for (let pp = 0; pp < 360; pp += 1) { const s = sse(aa, pp); if (s < best[0]) best = [s, aa, pp]; } for (let aa = best[1] - 0.03; aa <= best[1] + 0.03; aa += 0.002) for (let pp = best[2] - 1.5; pp <= best[2] + 1.5; pp += 0.05) { const s = sse(aa, pp); if (s < best[0]) best = [s, aa, pp]; } a = best[1]; phi = best[2]; solved = true; predicted = true; draw(); });
+  document.getElementById("ceReset").addEventListener("click", () => { a = 2.0; phi = 30; predicted = false; solved = false; draw(); });
+  quiz(document.getElementById("ceQuiz"), { q: "Gauss's 1801 orbit fit counts as machine learning on slide 7 because", options: ["He used a computer", "He chose a model class, fit its parameters to noisy data by minimizing squared residuals, and was judged on a prediction for data he did not have", "The orbit was an ellipse"], answer: 1, why: "Strip the vocabulary and that is the whole of supervised learning: model class, fit, held-out judgment. The vocabulary changed; the procedure did not." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 1. ROUTE THE LEVELING RUN ================= */
+(function survey() {
+  const NODES = [{ n: "A", x: 120, y: 410, h: 100.000, known: true }, { n: "B", x: 290, y: 120, h: 101.235 }, { n: "C", x: 530, y: 90, h: 99.870 }, { n: "D", x: 690, y: 330, h: 102.410 }, { n: "E", x: 420, y: 400, h: 100.655 }];
+  const EDGES = [[0, 1], [0, 4], [1, 2], [1, 4], [2, 4], [2, 3], [3, 4], [1, 3]];
+  const SIG = 2; // mm
+  const map = new Board(document.getElementById("svMap")), mat = new Board(document.getElementById("svMat"));
+  let obs = [], clicks = 0, blunderAt = null, snooping = false, verdict = null, found = false;
+  const stepEl = document.getElementById("svStep");
+  function observe(e) { clicks++; const rng = mulberry32(1000 * e + clicks), g = randn(rng, 2); return (NODES[EDGES[e][1]].h - NODES[EDGES[e][0]].h) * 1000 + SIG * g[0]; }
+  function solve() {
+    const A = [], y = [];
+    obs.forEach(o => { const [f, t] = EDGES[o.e]; const row = [0, 0, 0, 0]; let rhs = o.y + (o.bl ? 15 : 0); if (NODES[t].known) rhs -= NODES[t].h * 1000; else row[t - 1] = 1; if (NODES[f].known) rhs += NODES[f].h * 1000; else row[f - 1] = -1; A.push(row); y.push(rhs); });
+    if (obs.length < 4) return { x: null, A, y };
+    const x = wls(A, y, null); if (!x) return { x: null, A, y };
+    const v = y.map((yy, k) => yy - A[k].reduce((s, a, j) => s + a * x[j], 0));
+    const dof = obs.length - 4, s0 = dof > 0 ? Math.sqrt(v.reduce((s, q) => s + q * q, 0) / dof) : null;
+    return { x, A, y, v, s0, dof };
+  }
+  function reach() { const seen = new Set([0]); let grew = true; while (grew) { grew = false; obs.forEach(o => { const [f, t] = EDGES[o.e]; if (seen.has(f) && !seen.has(t)) { seen.add(t); grew = true; } if (seen.has(t) && !seen.has(f)) { seen.add(f); grew = true; } }); } return seen; }
+  function draw() {
+    const sol = solve();
+    map.clear("the site plan: click a dashed sight to level along it, click again to drop it"); const ctx = map.ctx;
+    EDGES.forEach((ed, e) => { const a = NODES[ed[0]], b = NODES[ed[1]], o = obs.find(q => q.e === e); const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      if (!o) { map.line(a.x, a.y, b.x, b.y, css("--line"), 2, [6, 6]); return; }
+      const bad = sol.v && sol.s0 && Math.abs(sol.v[obs.indexOf(o)]) > 2.0 * Math.max(sol.s0, 0.5);
+      map.line(a.x, a.y, b.x, b.y, bad ? css("--red") : css("--blue"), 3.5);
+      // direction tick
+      const ang = Math.atan2(b.y - a.y, b.x - a.x), tx = a.x + (b.x - a.x) * 0.62, ty = a.y + (b.y - a.y) * 0.62; ctx.fillStyle = bad ? css("--red") : css("--blue"); ctx.beginPath(); ctx.moveTo(tx + 9 * Math.cos(ang), ty + 9 * Math.sin(ang)); ctx.lineTo(tx - 6 * Math.cos(ang) + 6 * Math.sin(ang), ty - 6 * Math.sin(ang) - 6 * Math.cos(ang)); ctx.lineTo(tx - 6 * Math.cos(ang) - 6 * Math.sin(ang), ty - 6 * Math.sin(ang) + 6 * Math.cos(ang)); ctx.closePath(); ctx.fill();
+      const lab = "dh " + ((o.y + (o.bl ? 15 : 0)) / 1000).toFixed(3) + " m" + (sol.v ? "  v " + sol.v[obs.indexOf(o)].toFixed(1) + " mm" : ""); const nx = -Math.sin(ang) * 18, ny = Math.cos(ang) * 18;
+      ctx.fillStyle = css("--panel"); ctx.globalAlpha = 0.85; ctx.fillRect(mx + nx - 62, my + ny - 9, 124, 16); ctx.globalAlpha = 1; map.label(lab, mx + nx, my + ny + 4, bad ? css("--red") : css("--ink"), "center", 11, true);
+    });
+    const seen = reach();
+    NODES.forEach((nd, i) => { map.dot(nd.x, nd.y, 16, nd.known ? css("--ink") : (seen.has(i) ? css("--panel") : css("--bg")), nd.known ? css("--ink") : (seen.has(i) ? css("--blue") : css("--grey"))); map.label(nd.n, nd.x, nd.y + 5, nd.known ? "#fff" : css("--ink"), "center", 14, true);
+      const t = nd.known ? nd.h.toFixed(3) + " m known" : (sol.x ? (sol.x[i - 1] / 1000).toFixed(3) + " m" : "unknown"); map.label(t, nd.x, nd.y + 34, nd.known ? css("--ink") : (sol.x ? css("--blue") : css("--muted")), "center", 12, true); });
+    map.label("solid: observed, with the direction of the sight; red: residual over 2 sigma0", 16, map.H - 14, css("--muted"), "left", 12);
+    // the design matrix as a punch card
+    mat.clear("the dataset: one row per sight"); const m = mat.ctx, x0 = 70, y0 = 60, cw = 48, rh = 40;
+    ["h_B", "h_C", "h_D", "h_E"].forEach((c, j) => mat.label(c, x0 + j * cw + cw / 2, y0 - 10, css("--muted"), "center", 12, true)); mat.label("y (mm)", x0 + 4 * cw + 40, y0 - 10, css("--muted"), "center", 12, true);
+    mat.label("A", x0 + 2 * cw, y0 - 30, css("--ink"), "center", 14, true); mat.label("x", x0 + 4 * cw + 40, y0 - 30, css("--ink"), "center", 14, true);
+    obs.forEach((o, k) => { const row = sol.A[k], y = y0 + k * rh; mat.label(NODES[EDGES[o.e][0]].n + " to " + NODES[EDGES[o.e][1]].n, x0 - 8, y + rh / 2 + 4, css("--muted"), "right", 11, true);
+      row.forEach((a, j) => { m.fillStyle = a > 0 ? css("--blue") : (a < 0 ? css("--red") : css("--bg")); m.fillRect(x0 + j * cw + 3, y + 3, cw - 6, rh - 6); if (a !== 0) mat.label(a > 0 ? "+1" : "-1", x0 + j * cw + cw / 2, y + rh / 2 + 5, "#fff", "center", 13, true); });
+      m.fillStyle = css("--bg"); m.fillRect(x0 + 4 * cw + 6, y + 3, 72, rh - 6); mat.label(sol.y[k].toFixed(1), x0 + 4 * cw + 42, y + rh / 2 + 5, o.bl && found ? css("--red") : css("--ink"), "center", 12, true); });
+    for (let k = obs.length; k < 8; k++) { const y = y0 + k * rh; m.strokeStyle = css("--line"); m.setLineDash([3, 3]); m.strokeRect(x0 + 3, y + 3, 4 * cw - 6, rh - 6); m.strokeRect(x0 + 4 * cw + 6, y + 3, 72, rh - 6); m.setLineDash([]); }
+    mat.label("m = " + obs.length + " rows, n = 4 columns" + (sol.dof !== undefined ? ", m - n = " + sol.dof : ""), 16, y0 + 8 * rh + 30, css("--ink"), "left", 13);
+    mat.label("blue +1 under the far benchmark, red -1 under the near one;", 16, y0 + 8 * rh + 52, css("--muted"), "left", 11); mat.label("the known height of A has moved into y", 16, y0 + 8 * rh + 68, css("--muted"), "left", 11);
+    document.getElementById("svM").textContent = obs.length; document.getElementById("svR").textContent = obs.length >= 4 ? String(obs.length - 4) : "-";
+    document.getElementById("svRank").textContent = sol.x ? "solvable (rank 4)" : (obs.length >= 4 ? "singular: a benchmark is not tied in" : "not yet solvable");
+    document.getElementById("svS0").textContent = sol.s0 ? sol.s0.toFixed(2) : "-";
+    // guidance
+    const unreached = NODES.filter((nd, i) => !seen.has(i)).map(nd => nd.n);
+    let html = "";
+    if (snooping) html = '<span class="k">data snooping</span><p>A 15 mm blunder is now in one of your sights. The residuals have changed; click the sight you suspect.</p>';
+    else if (verdict) html = verdict;
+    else if (obs.length === 0) html = '<span class="k">step 1</span><p>Nothing observed. Click a dashed line to run the level along it. Each click is one row of the dataset.</p>';
+    else if (!sol.x) html = '<span class="k">step 1</span><p>' + (unreached.length ? 'Benchmark' + (unreached.length > 1 ? 's ' : ' ') + unreached.join(", ") + (unreached.length > 1 ? ' are' : ' is') + ' not tied to anything known yet, so the normal matrix is singular: a column of A with no path back to A.' : 'Four unknowns need at least four independent sights.') + '</p>';
+    else if (sol.dof === 0) html = '<span class="k">step 2</span><p>Solvable, with m = n. Every residual is exactly zero, not because the sights were perfect but because there was nothing left over to disagree. Add more sights.</p>';
+    else html = '<span class="k">step 3</span><div class="ask ' + (sol.dof >= 3 ? 'ok' : '') + '">Redundancy ' + sol.dof + '. sigma0 = ' + sol.s0.toFixed(2) + ' mm against the 2 mm the instrument promised.' + (sol.dof >= 3 ? ' Enough redundancy to check every sight. Now slip a blunder in and find it.' : ' One or two checks is thin; a blunder could hide. Aim for redundancy 3 or more.') + '</div>';
+    html += '<p><span class="badge ' + (sol.x ? 'done' : '') + '">solvable</span> <span class="badge ' + (sol.dof >= 3 ? 'done' : '') + '">redundancy 3+</span> <span class="badge ' + (found ? 'done' : '') + '">blunder found</span></p>';
+    stepEl.innerHTML = html;
+  }
+  map.c.addEventListener("click", ev => { const [mx, my] = map.pos(ev); let best = -1, bd = 1e9; EDGES.forEach((ed, e) => { const a = NODES[ed[0]], b = NODES[ed[1]]; const L2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2, t = Math.max(0.1, Math.min(0.9, ((mx - a.x) * (b.x - a.x) + (my - a.y) * (b.y - a.y)) / L2)); const d = Math.hypot(mx - a.x - t * (b.x - a.x), my - a.y - t * (b.y - a.y)); if (d < bd) { bd = d; best = e; } }); if (bd > 16) return;
+    const k = obs.findIndex(o => o.e === best);
+    if (snooping) { if (k < 0) return; snooping = false; const ok = obs[k].e === blunderAt; found = ok; const sol = solve(); const worst = sol.v ? obs[sol.v.map(Math.abs).indexOf(Math.max.apply(null, sol.v.map(Math.abs)))] : null; verdict = '<span class="k">the verdict</span><div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Found it. ' : 'Not that one. ') + 'The blunder was in ' + NODES[EDGES[blunderAt][0]].n + ' to ' + NODES[EDGES[blunderAt][1]].n + '.' + (worst ? ' The largest residual sits on ' + NODES[EDGES[worst.e][0]].n + ' to ' + NODES[EDGES[worst.e][1]].n + (worst.e === blunderAt ? ', which is the right one: with enough redundancy the residual points at the culprit.' : ', not the culprit: a blunder spreads over the loop it sits in, and a thin network cannot localize it.') : '') + '</div><p>Click the sight to drop it and re-level, or clear and build a different network.</p>'; draw(); return; }
+    verdict = null; if (k >= 0) obs.splice(k, 1); else obs.push({ e: best, y: observe(best), bl: false }); found = false; blunderAt = null; obs.forEach(o => o.bl = false); draw(); });
+  document.getElementById("svBlunder").addEventListener("click", () => { if (obs.length < 5) { verdict = '<span class="k">not yet</span><p>Level at least five sights first; with no redundancy a blunder is invisible.</p>'; draw(); return; } const rng = mulberry32(77 + clicks); const k = Math.floor(rng() * obs.length); obs.forEach(o => o.bl = false); obs[k].bl = true; blunderAt = obs[k].e; snooping = true; found = false; verdict = null; draw(); });
+  document.getElementById("svClear").addEventListener("click", () => { obs = []; snooping = false; verdict = null; found = false; blunderAt = null; draw(); });
+  quiz(document.getElementById("svQuiz"), { q: "A leveling network with 7 sights and 4 unknown benchmarks is adjusted. One sight carries a 15 mm blunder. Which statement is right?", options: ["The adjustment removes the blunder automatically", "The blunder shows up as residuals spread over the loop it closes, largest on itself if the redundancy is high enough", "The blunder cannot be detected because squared error is used"], answer: 1, why: "Least squares spreads a blunder over the redundant observations; with redundancy 3 the standardized residual usually points at the culprit, which is Baarda's data snooping on slide 14. With m = n there are no residuals at all and nothing can be seen." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 2. THE ESTIMATE IS A SHADOW ================= */
+(function shadow() {
+  const board = new Board(document.getElementById("shPlane"));
+  const CX = 430, CY = 300, S = 24; // px per mm, origin at 100.000 m
+  let y = [-3.0, 3.5], theta = 135 * Math.PI / 180, drag = null;
+  const px = v => CX + v * S, py = v => CY - v * S;
+  function estimate() { const c = Math.cos(theta), s = Math.sin(theta); return (y[0] * s - y[1] * c) / (s - c); }
+  const stepEl = document.getElementById("shStep");
+  function draw() {
+    const x = estimate(), ratio = -Math.tan(theta), c = Math.cos(theta), s = Math.sin(theta);
+    const v = [y[0] - x, y[1] - x]; const a = v[0] / c; const dir = a >= 0 ? [c, s] : [-c, -s];
+    board.clear("the plane of observations: reading 1 across, reading 2 up, in mm above 100.000 m"); const ctx = board.ctx;
+    for (let g = -10; g <= 10; g += 2) { board.line(px(g), py(-10.5), px(g), py(10.5), css("--line"), 1); board.line(px(-10.5), py(g), px(10.5), py(g), css("--line"), 1); }
+    board.label("y1", px(10.5) + 10, py(0) + 4, css("--muted"), "left", 12, true); board.label("y2", px(0), py(10.5) - 10, css("--muted"), "center", 12, true);
+    // the model line y1 = y2 = x
+    board.line(px(-10.5), py(-10.5), px(10.5), py(10.5), css("--ink"), 2); board.label("every estimate x lives here: (x, x)", px(7.8), py(7.8) + 22, css("--ink"), "center", 12);
+    // light rays
+    const L = 150; const lamp = [px(x) + dir[0] * (Math.abs(a) * S + L), py(x) - dir[1] * (Math.abs(a) * S + L)];
+    for (let k = -3; k <= 3; k++) { const ox = k * 18 * (-dir[1]) , oy = k * 18 * (-dir[0]); const sx = lamp[0] + ox, sy = lamp[1] - oy; const t = ((sx - CX) / S + (CY - sy) / S) / 2; const ex = px(t), ey = py(t);
+      // ray from lamp (offset) toward the line along -dir; find where it meets the line y1 = y2
+      const d1 = -dir[0], d2 = dir[1]; const u1 = (sx - CX) / S, u2 = (CY - sy) / S; const tt = (u2 - u1) / (d1 - (-d2)); const hx = u1 + d1 * tt; board.line(sx, sy, px(hx), py(hx), mix(css("--panel"), css("--orange"), 0.35), 1); }
+    // the shadow of y
+    board.line(lamp[0], lamp[1], px(y[0]), py(y[1]), css("--orange"), 1.5, [4, 4]); board.line(px(y[0]), py(y[1]), px(x), py(x), css("--orange"), 3);
+    // the W-ellipse around y, tangent at the shadow point
+    const w1 = Math.max(ratio, 1e-6), w2 = 1; const q = w1 * v[0] * v[0] + w2 * v[1] * v[1]; ctx.strokeStyle = css("--blue"); ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); for (let k = 0; k <= 72; k++) { const th = 2 * Math.PI * k / 72, ex = Math.sqrt(q / w1) * Math.cos(th), ey = Math.sqrt(q / w2) * Math.sin(th); if (k === 0) ctx.moveTo(px(y[0] + ex), py(y[1] + ey)); else ctx.lineTo(px(y[0] + ex), py(y[1] + ey)); } ctx.stroke(); ctx.setLineDash([]);
+    board.dot(px(x), py(x), 8, css("--orange"), "#fff"); board.label("x = " + (100 + x / 1000).toFixed(4) + " m", px(x) + 14, py(x) - 10, css("--orange"), "left", 13, true);
+    board.dot(px(y[0]), py(y[1]), 9, css("--blue"), "#fff"); board.label("y (drag)", px(y[0]) + 14, py(y[1]) + 5, css("--blue"), "left", 13);
+    // lamp
+    ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(lamp[0], lamp[1], 16, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2; ctx.stroke(); for (let k = 0; k < 8; k++) { const an = k * Math.PI / 4; board.line(lamp[0] + 20 * Math.cos(an), lamp[1] + 20 * Math.sin(an), lamp[0] + 27 * Math.cos(an), lamp[1] + 27 * Math.sin(an), css("--orange"), 2); }
+    board.label("lamp (drag along the arc)", lamp[0], lamp[1] - 34, css("--orange"), "center", 12);
+    // arc
+    ctx.strokeStyle = css("--line"); ctx.setLineDash([2, 6]); ctx.beginPath(); for (let k = 0; k <= 40; k++) { const t = (95 + 80 * k / 40) * Math.PI / 180; const dd = a >= 0 ? [Math.cos(t), Math.sin(t)] : [-Math.cos(t), -Math.sin(t)]; const lx = px(x) + dd[0] * (Math.abs(a) * S + L), ly = py(x) - dd[1] * (Math.abs(a) * S + L); if (k === 0) ctx.moveTo(lx, ly); else ctx.lineTo(lx, ly); } ctx.stroke(); ctx.setLineDash([]);
+    // side panel on the right: the weighted mean as a balance
+    const bx = 900, by = 120; board.label("the same estimate as arithmetic", bx, by, css("--ink"), "left", 13);
+    board.label("x = (w1 y1 + w2 y2) / (w1 + w2)", bx, by + 24, css("--muted"), "left", 12, true);
+    board.label("w1 / w2 = " + ratio.toFixed(2) + "   so   x = " + (100 + x / 1000).toFixed(4), bx, by + 46, css("--ink"), "left", 12, true);
+    board.label("residual rule from the normal equations", bx, by + 90, css("--ink"), "left", 13); board.label("w1 v1 + w2 v2 = 0", bx, by + 112, css("--muted"), "left", 12, true);
+    board.label((ratio).toFixed(2) + " x (" + v[0].toFixed(2) + ") + 1 x (" + v[1].toFixed(2) + ") = " + (ratio * v[0] + v[1]).toFixed(2), bx, by + 134, css("--ink"), "left", 12, true);
+    board.label("the dashed ellipse is a circle in the lamp's metric:", bx, by + 180, css("--muted"), "left", 12); board.label("the smallest one around y that touches the line", bx, by + 198, css("--muted"), "left", 12); board.label("touches it at the estimate", bx, by + 216, css("--muted"), "left", 12);
+    board.label("Gauss-Markov: use w = 1 / sigma^2 and no linear", bx, by + 262, css("--muted"), "left", 12); board.label("unbiased estimate has a smaller variance", bx, by + 280, css("--muted"), "left", 12);
+    document.getElementById("shY").textContent = (100 + y[0] / 1000).toFixed(4) + ", " + (100 + y[1] / 1000).toFixed(4); document.getElementById("shW").textContent = ratio.toFixed(2); document.getElementById("shS").textContent = Math.sqrt(1 / ratio).toFixed(2); document.getElementById("shX").textContent = (100 + x / 1000).toFixed(4) + " m"; document.getElementById("shV").textContent = v[0].toFixed(2) + ", " + v[1].toFixed(2);
+    const ok = ratio >= 3.3 && ratio <= 4.8; document.getElementById("shBadge").textContent = ok ? "done: w1 / w2 near 4" : "not yet"; document.getElementById("shBadge").className = "badge" + (ok ? " done" : ""); document.getElementById("shTask").className = "ask" + (ok ? " ok" : "");
+    stepEl.innerHTML = '<span class="k">' + (Math.abs(ratio - 1) < 0.08 ? 'equal weights' : (ratio > 1 ? 'reading 1 trusted more' : 'reading 2 trusted more')) + '</span><p>' + (Math.abs(ratio - 1) < 0.08 ? 'The light falls perpendicular to the line and the shadow is the ordinary projection: the estimate is the plain mean of the two readings.' : 'The light is tilted, so the shadow lands closer to the reading with the larger weight: the estimate is a weighted mean. The residual on the trusted reading is the smaller one.') + '</p><p>sigma1 / sigma2 = 1 / 2 means w1 / w2 = 4. Find the lamp position that gives that ratio and the badge turns green.</p>';
+  }
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const x = estimate(); if (Math.hypot(mx - px(y[0]), my - py(y[1])) < 16) { drag = "y"; return; } drag = "lamp"; });
+  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); if (drag === "y") { y = [Math.max(-9.5, Math.min(9.5, (mx - CX) / S)), Math.max(-9.5, Math.min(9.5, (CY - my) / S))]; draw(); return; } const x = estimate(); let phi = Math.atan2(-(my - py(x)), mx - px(x)) * 180 / Math.PI; phi = ((phi % 180) + 180) % 180; theta = Math.max(95, Math.min(175, phi)) * Math.PI / 180; draw(); });
+  window.addEventListener("mouseup", () => { drag = null; });
+  quiz(document.getElementById("shQuiz"), { q: "Two readings of one height have sigma 1 mm and 3 mm. The right weights are", options: ["3 and 1, proportional to the sigmas", "9 and 1, inverse to the variances", "1 and 1, because weights are a matter of taste"], answer: 1, why: "Weights are inverse variances: 1 / 1^2 = 1 and 1 / 3^2 = 1 / 9, so a ratio of 9 to 1. That is the maximum likelihood weighting for Gaussian noise of unequal spread, and Gauss-Markov makes it the minimum-variance linear unbiased choice even without the Gaussian assumption." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 3. SPRINGS ON THE LINE ================= */
+(function springs() {
+  const T = [1, 2, 3, 4, 5, 7, 9, 12], RATE = 1.8;
+  const rng = mulberry32(12), g = randn(rng, 8);
+  const Y = T.map((t, i) => RATE * t + 1.0 + (i < 5 ? 0.5 : 3.0) * g[i] + (i === 6 ? 6 : 0));
+  let sig = T.map(() => 1.5), drag = -1;
+  const board = new Board(document.getElementById("spPlot"));
+  const L = 90, R = board.W - 300, TOP = 60, BOT = board.H - 60;
+  const px = t => L + (t / 13) * (R - L), py = s => TOP + (s / 36) * (BOT - TOP);
+  const stepEl = document.getElementById("spStep");
+  function fit(w) { return wls(T.map(t => [1, t]), Y, w); }
+  function spring(ctx, x, y1, y2, w) { const k = Math.min(1, w / 4), coils = 3 + Math.round(7 * k), amp = 7, width = 0.8 + 2.4 * k; ctx.strokeStyle = mix(css("--grey"), css("--blue"), k); ctx.lineWidth = width; ctx.beginPath(); ctx.moveTo(x, y1); const n = coils * 2; for (let i = 1; i < n; i++) { const yy = y1 + (y2 - y1) * i / n; ctx.lineTo(x + (i % 2 ? amp : -amp), yy); } ctx.lineTo(x, y2); ctx.stroke(); }
+  function draw() {
+    const w = sig.map(s => 1 / (s * s)), b = fit(w), b0 = fit(null);
+    board.clear("settlement against time: drag the end of an error bar to set that reading's sigma"); const ctx = board.ctx;
+    board.line(L, TOP, L, BOT, css("--line"), 1); board.line(L, TOP, R, TOP, css("--line"), 1);
+    for (let s = 0; s <= 36; s += 6) { board.label(s + " mm", L - 8, py(s) + 4, css("--muted"), "right", 11, true); board.line(L, py(s), R, py(s), css("--line"), 0.5); }
+    for (let t = 0; t <= 13; t++) { board.label(t ? "month " + t : "", px(t), TOP - 8, css("--muted"), "center", 10); }
+    // lines
+    board.line(px(0), py(b0[0]), px(13), py(b0[0] + 13 * b0[1]), css("--grey"), 2, [6, 5]);
+    board.line(px(0), py(b[0]), px(13), py(b[0] + 13 * b[1]), css("--blue"), 3);
+    T.forEach((t, i) => { const yl = b[0] + b[1] * t; spring(ctx, px(t), py(Y[i]), py(yl), w[i]);
+      board.line(px(t), py(Y[i] - sig[i]), px(t), py(Y[i] + sig[i]), css("--ink"), 2); board.line(px(t) - 8, py(Y[i] - sig[i]), px(t) + 8, py(Y[i] - sig[i]), css("--ink"), 2); board.line(px(t) - 8, py(Y[i] + sig[i]), px(t) + 8, py(Y[i] + sig[i]), css("--ink"), 2);
+      board.dot(px(t), py(Y[i]), 6, css("--ink")); board.label("sigma " + sig[i].toFixed(1), px(t) + 12, py(Y[i]) + 4, css("--muted"), "left", 10, true); });
+    board.label("grey dashed: equal weights; blue: your springs", L, BOT + 36, css("--muted"), "left", 12);
+    // legend of stiffness at right
+    const lx = R + 40; board.label("spring stiffness = weight = 1 / sigma^2", lx, TOP + 10, css("--ink"), "left", 13);
+    [[0.5, "sigma 0.5 mm, w = 4"], [1.5, "sigma 1.5 mm, w = 0.44"], [3, "sigma 3 mm, w = 0.11"]].forEach((row, k) => { spring(ctx, lx + 20, TOP + 40 + k * 70, TOP + 90 + k * 70, 1 / (row[0] * row[0])); board.label(row[1], lx + 40, TOP + 70 + k * 70, css("--muted"), "left", 12, true); });
+    board.label("a short bar is a stiff spring:", lx, TOP + 270, css("--muted"), "left", 12); board.label("the line cannot leave that reading", lx, TOP + 288, css("--muted"), "left", 12);
+    board.label("the sum of w v^2 is the energy", lx, TOP + 320, css("--muted"), "left", 12); board.label("stored in the springs; the fit", lx, TOP + 338, css("--muted"), "left", 12); board.label("is their rest position", lx, TOP + 356, css("--muted"), "left", 12);
+    const share = w.slice(0, 5).reduce((s, q) => s + q, 0) / w.reduce((s, q) => s + q, 0);
+    document.getElementById("spRate").textContent = b[1].toFixed(2); document.getElementById("spRate0").textContent = b0[1].toFixed(2); document.getElementById("spShare").textContent = (100 * share).toFixed(0) + " %"; document.getElementById("spPred").textContent = (b[0] + 24 * b[1]).toFixed(1);
+    const spec = sig.slice(0, 5).every(s => s >= 0.35 && s <= 0.7) && sig.slice(5).every(s => s >= 2.2 && s <= 4.0);
+    document.getElementById("spBadge").textContent = spec ? "done: rate " + b[1].toFixed(2) + " mm / month" : "not yet"; document.getElementById("spBadge").className = "badge" + (spec ? " done" : ""); document.getElementById("spTask").className = "ask" + (spec ? " ok" : "");
+    stepEl.innerHTML = '<span class="k">' + (sig.every(s => Math.abs(s - sig[0]) < 1e-9) ? 'equal weights' : 'weighted') + '</span><p>' + (sig.every(s => Math.abs(s - sig[0]) < 1e-9) ? 'All bars the same length, so the blue line sits on the grey one: ordinary least squares. The month-9 tape reading is pulling the rate up to ' + b[1].toFixed(2) + ' mm / month.' : 'The springs differ. Months 1 to 5 carry ' + (100 * share).toFixed(0) + ' % of the total weight, and the rate is ' + b[1].toFixed(2) + ' mm / month against ' + b0[1].toFixed(2) + ' with equal weights.') + '</p><p>The true rate that generated the data was 1.80 mm / month. Weights are not a way to get the answer you want; they are what the instruments actually promised.</p>';
+  }
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); drag = -1; let bd = 1e9; T.forEach((t, i) => { const d = Math.hypot(mx - px(t), Math.min(Math.abs(my - py(Y[i] - sig[i])), Math.abs(my - py(Y[i] + sig[i])))); if (d < bd) { bd = d; drag = i; } }); if (bd > 18) drag = -1; });
+  window.addEventListener("mousemove", ev => { if (drag < 0) return; const [, my] = board.pos(ev); const s = Math.abs(my - py(Y[drag])) / ((BOT - TOP) / 36); sig[drag] = Math.max(0.2, Math.min(6, s)); draw(); });
+  window.addEventListener("mouseup", () => { drag = -1; });
+  document.getElementById("spEqual").addEventListener("click", () => { sig = T.map(() => 1.5); draw(); });
+  document.getElementById("spSpec").addEventListener("click", () => { sig = T.map((t, i) => i < 5 ? 0.5 : 3.0); draw(); });
+  quiz(document.getElementById("spQuiz"), { q: "A reading's weight is doubled. In the spring picture this", options: ["Moves the reading closer to the line", "Makes its spring twice as stiff, so the line moves toward the reading", "Halves its residual exactly"], answer: 1, why: "The data do not move; the stiffness does. A stiffer spring pulls the rest position of the line toward that reading, and its residual shrinks, but not by an exact factor, because every other spring is pulling too. The weight matrix on slide 12 is the set of stiffnesses." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 4. DRAG THE KNEE ================= */
+(function blunder() {
+  const n = 12, rng = mulberry32(5), g = randn(rng, n);
+  const X = [], Y = []; for (let i = 0; i < n; i++) { const x = 0.35 + 0.30 * i / (n - 1); X.push(x); Y.push(75 - 90 * (x - 0.35) + 2.0 * g[i]); }
+  const BL = 7; const clean = [X.slice(), Y.slice()]; let bx = X[BL], by = Y[BL];
+  let delta = 30, drag = null;
+  const fitB = new Board(document.getElementById("blFit")), lossB = new Board(document.getElementById("blLoss"));
+  const L = 70, R = fitB.W - 30, TOP = 50, BOT = fitB.H - 50;
+  const px = x => L + (x - 0.30) / 0.40 * (R - L), py = y => BOT - (y - 20) / 90 * (BOT - TOP);
+  const stepEl = document.getElementById("blStep");
+  function data() { const xs = X.slice(), ys = Y.slice(); xs[BL] = bx; ys[BL] = by; return [xs, ys]; }
+  function psi(r, d) { return Math.abs(r) <= d ? r : d * Math.sign(r); }
+  function huberFit(xs, ys, d) { let b = wls(xs.map(x => [1, x]), ys, null); for (let it = 0; it < 40; it++) { const r = ys.map((y, i) => y - b[0] - b[1] * xs[i]); const w = r.map(v => Math.abs(v) <= d ? 1 : d / Math.abs(v)); b = wls(xs.map(x => [1, x]), ys, w); } return b; }
+  const bClean = wls(clean[0].map(x => [1, x]), clean[1], null);
+  function draw() {
+    const [xs, ys] = data(), b = huberFit(xs, ys, delta), r = ys.map((y, i) => y - b[0] - b[1] * xs[i]);
+    const bSq = wls(xs.map(x => [1, x]), ys, null), bL1 = huberFit(xs, ys, 0.3);
+    fitB.clear("strength against water-cement ratio: drag the orange point anywhere"); const ctx = fitB.ctx;
+    fitB.line(L, TOP, L, BOT, css("--line"), 1); fitB.line(L, BOT, R, BOT, css("--line"), 1);
+    for (let y = 20; y <= 110; y += 20) fitB.label(y + " MPa", L - 8, py(y) + 4, css("--muted"), "right", 11, true);
+    for (let x = 0.3; x <= 0.701; x += 0.1) fitB.label("w/c " + x.toFixed(1), px(x), BOT + 18, css("--muted"), "center", 11, true);
+    fitB.line(px(0.3), py(bSq[0] + 0.3 * bSq[1]), px(0.7), py(bSq[0] + 0.7 * bSq[1]), css("--grey"), 1.5, [7, 5]);
+    fitB.line(px(0.3), py(bL1[0] + 0.3 * bL1[1]), px(0.7), py(bL1[0] + 0.7 * bL1[1]), css("--grey"), 1.5, [2, 4]);
+    fitB.line(px(0.3), py(b[0] + 0.3 * b[1]), px(0.7), py(b[0] + 0.7 * b[1]), css("--blue"), 3);
+    const typical = r.filter((v, i) => i !== BL).map(v => Math.abs(psi(v, delta))).sort((a, c) => a - c)[Math.floor(n / 2)];
+    xs.forEach((x, i) => { const yl = b[0] + b[1] * x; const p = psi(r[i], delta); arrow(ctx, px(x), py(ys[i]), px(x), py(ys[i]) + (ys[i] > yl ? 1 : -1) * Math.min(220, 3.2 * Math.abs(p)), i === BL ? css("--orange") : css("--red"), i === BL ? 3 : 2); fitB.dot(px(x), py(ys[i]), i === BL ? 9 : 5, i === BL ? css("--orange") : css("--ink"), i === BL ? "#fff" : null); });
+    fitB.label("arrows: the pull psi(v) of each point on the line, 3.2 px per MPa", L, TOP - 20, css("--muted"), "left", 12);
+    fitB.label("dashed grey: squared error   dotted grey: absolute error   blue: the knee you set", L, fitB.H - 14, css("--muted"), "left", 12);
+    // loss panel
+    lossB.clear("the loss and its derivative: drag the knee"); const lc = lossB.ctx, LX = 50, LR = lossB.W - 20, T1 = 60, B1 = 250, T2 = 300, B2 = 480, RM = 30;
+    const rx = v => LX + (v + RM) / (2 * RM) * (LR - LX), rho = v => Math.abs(v) <= delta ? v * v / 2 : delta * (Math.abs(v) - delta / 2), rmax = rho(RM) * 1.05;
+    const ry = v => B1 - rho(v) / rmax * (B1 - T1);
+    lossB.line(LX, B1, LR, B1, css("--line"), 1); lossB.line(rx(0), T1, rx(0), B1, css("--line"), 1);
+    lc.strokeStyle = css("--grey"); lc.setLineDash([4, 4]); lc.lineWidth = 1.5; lc.beginPath(); for (let k = 0; k <= 100; k++) { const v = -RM + 2 * RM * k / 100; const yy = B1 - (v * v / 2) / rmax * (B1 - T1); if (k === 0) lc.moveTo(rx(v), Math.max(T1 - 10, yy)); else lc.lineTo(rx(v), Math.max(T1 - 10, yy)); } lc.stroke(); lc.setLineDash([]);
+    lc.strokeStyle = css("--blue"); lc.lineWidth = 2.5; lc.beginPath(); for (let k = 0; k <= 100; k++) { const v = -RM + 2 * RM * k / 100; if (k === 0) lc.moveTo(rx(v), ry(v)); else lc.lineTo(rx(v), ry(v)); } lc.stroke();
+    lossB.dot(rx(delta), ry(delta), 9, css("--orange"), "#fff"); lossB.dot(rx(-delta), ry(-delta), 5, css("--orange"));
+    lossB.label("rho(v)", LX, T1 - 8, css("--ink"), "left", 12, true); lossB.label("knee at delta = " + (delta >= 29 ? "infinity (squared error)" : delta.toFixed(1) + " MPa"), rx(0), B1 + 16, css("--orange"), "center", 11, true);
+    lossB.label("-30", rx(-RM), B1 + 30, css("--muted"), "center", 10, true); lossB.label("+30", rx(RM), B1 + 30, css("--muted"), "center", 10, true); lossB.label("residual v (MPa)", rx(0), B1 + 30, css("--muted"), "center", 10);
+    lossB.line(LX, (T2 + B2) / 2, LR, (T2 + B2) / 2, css("--line"), 1); lossB.line(rx(0), T2, rx(0), B2, css("--line"), 1);
+    const py2 = p => (T2 + B2) / 2 - p / RM * (B2 - T2) / 2;
+    lc.strokeStyle = css("--grey"); lc.setLineDash([4, 4]); lc.lineWidth = 1.5; lc.beginPath(); lc.moveTo(rx(-RM), py2(-RM)); lc.lineTo(rx(RM), py2(RM)); lc.stroke(); lc.setLineDash([]);
+    lc.strokeStyle = css("--red"); lc.lineWidth = 2.5; lc.beginPath(); for (let k = 0; k <= 100; k++) { const v = -RM + 2 * RM * k / 100; if (k === 0) lc.moveTo(rx(v), py2(psi(v, delta))); else lc.lineTo(rx(v), py2(psi(v, delta))); } lc.stroke();
+    r.forEach((v, i) => lossB.dot(rx(Math.max(-RM, Math.min(RM, v))), py2(psi(v, delta)), i === BL ? 7 : 4, i === BL ? css("--orange") : css("--ink")));
+    lossB.label("psi(v) = rho'(v), the pull", LX, T2 - 8, css("--ink"), "left", 12, true); lossB.label(delta >= 29 ? "unbounded: a point 10 times further pulls 10 times harder" : "bounded at " + delta.toFixed(1) + ": no point pulls harder than that", LX, B2 + 22, css("--muted"), "left", 11);
+    // readouts
+    const slope = b[1] / 10, cleanSlope = bClean[1] / 10, off = Math.abs(by - (bClean[0] + bClean[1] * bx));
+    document.getElementById("blDelta").textContent = delta >= 29 ? "infinity" : delta.toFixed(1); document.getElementById("blKind").textContent = delta >= 29 ? "squared error" : (delta <= 0.6 ? "absolute error, nearly" : "Huber");
+    document.getElementById("blSlope").textContent = slope.toFixed(2); document.getElementById("blClean").textContent = cleanSlope.toFixed(2); document.getElementById("blPull").textContent = typical > 0 ? (Math.abs(psi(r[BL], delta)) / typical).toFixed(1) + " x" : "-";
+    const ok = off >= 20 && Math.abs(slope - cleanSlope) <= 0.05 * Math.abs(cleanSlope);
+    let best = null; if (off >= 20) { for (let d = 29; d >= 0.3; d -= 0.1) { const bb = huberFit(xs, ys, d); if (Math.abs(bb[1] / 10 - cleanSlope) <= 0.05 * Math.abs(cleanSlope)) { best = d; break; } } }
+    document.getElementById("blBadge").textContent = ok ? "done" + (best !== null ? ": any delta up to about " + best.toFixed(1) + " works here" : "") : (off < 20 ? "blunder is only " + off.toFixed(0) + " MPa off" : "slope still off by " + (100 * Math.abs(slope - cleanSlope) / Math.abs(cleanSlope)).toFixed(0) + " %"); document.getElementById("blBadge").className = "badge" + (ok ? " done" : ""); document.getElementById("blTask").className = "ask" + (ok ? " ok" : "");
+    stepEl.innerHTML = '<span class="k">' + (off < 5 ? 'no blunder yet' : (delta >= 29 ? 'squared error' : 'bounded influence')) + '</span><p>' + (off < 5 ? 'The orange point is on the line with the others, so all three losses agree. Drag it off the line and watch the arrows.' : (delta >= 29 ? 'The blunder pulls ' + (Math.abs(psi(r[BL], delta)) / typical).toFixed(0) + ' times harder than a typical point, and the line has turned to meet it: slope ' + slope.toFixed(2) + ' against ' + cleanSlope.toFixed(2) + ' from clean data.' : 'The blunder cannot pull harder than ' + delta.toFixed(1) + ' MPa, the same as a point at the knee. Its arrow is capped; the clean points outvote it and the slope is ' + slope.toFixed(2) + '.')) + '</p><p>Slide 21 in one drag: far right is squared error, far left is absolute error, and a knee near the noise level, about 2 MPa here, is Huber.</p>';
+  }
+  fitB.c.addEventListener("mousedown", ev => { const [mx, my] = fitB.pos(ev); if (Math.hypot(mx - px(bx), my - py(by)) < 22) drag = "pt"; });
+  lossB.c.addEventListener("mousedown", ev => { drag = "knee"; moveKnee(ev); });
+  function moveKnee(ev) { const [mx] = lossB.pos(ev); const LX = 50, LR = lossB.W - 20; let v = Math.abs((mx - LX) / (LR - LX) * 60 - 30); delta = Math.max(0.3, Math.min(30, v)); if (delta >= 29) delta = 30; draw(); }
+  window.addEventListener("mousemove", ev => { if (!drag) return; if (drag === "knee") { moveKnee(ev); return; } const [mx, my] = fitB.pos(ev); bx = Math.max(0.31, Math.min(0.69, 0.30 + (mx - L) / (R - L) * 0.40)); by = Math.max(22, Math.min(108, 20 + (BOT - my) / (BOT - TOP) * 90)); draw(); });
+  window.addEventListener("mouseup", () => { drag = null; });
+  quiz(document.getElementById("blQuiz"), { q: "Robustness has a precise meaning on slide 20. Which loss is robust by that definition?", options: ["Squared error, because it is the maximum likelihood loss", "Any loss whose derivative, the influence function, stays bounded as the residual grows", "Any loss that is zero at the fit"], answer: 1, why: "A bounded influence function caps how hard one observation can pull. Absolute error and Huber have it; squared error does not, which is why one blunder can turn the whole line. Huber showed the capped loss is the maximum likelihood answer for Gaussian data contaminated by blunders." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 5. THE VALLEY AND THE PRIOR ================= */
+(function valley() {
+  const n = 20, rng = mulberry32(8), g = randn(rng, 3 * n), WT = [2, 1];
+  const cement = [], binder = []; for (let i = 0; i < n; i++) { const c = 300 + 150 * rng(); cement.push(c); binder.push(c + 25 + 22 * g[i]); }
+  function std(a) { const m = a.reduce((s, v) => s + v, 0) / n, sd = Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / n); return a.map(v => (v - m) / sd); }
+  const Z1 = std(cement), Z2 = std(binder);
+  const noise0 = Array.from(g.slice(n, 2 * n));
+  function ymake(noise) { return Z1.map((z, i) => WT[0] * z + WT[1] * Z2[i] + 1.0 * noise[i]); }
+  const Y = ymake(noise0);
+  const N = [[0, 0], [0, 0]]; for (let i = 0; i < n; i++) { N[0][0] += Z1[i] * Z1[i]; N[0][1] += Z1[i] * Z2[i]; N[1][0] += Z1[i] * Z2[i]; N[1][1] += Z2[i] * Z2[i]; }
+  function ridge(y, lam) { const u = [0, 0]; for (let i = 0; i < n; i++) { u[0] += Z1[i] * y[i]; u[1] += Z2[i] * y[i]; } return solveLinear([[N[0][0] + lam, N[0][1]], [N[1][0], N[1][1] + lam]], u); }
+  const wLS = ridge(Y, 0), rLS = Math.hypot(wLS[0], wLS[1]);
+  let radius = 1.1 * rLS, drag = false, seedR = 100, refits = null;
+  function lamFor(r) { if (r >= rLS) return 0; let lo = 1e-6, hi = 1e6; for (let k = 0; k < 60; k++) { const mid = Math.sqrt(lo * hi); const w = ridge(Y, mid); if (Math.hypot(w[0], w[1]) > r) lo = mid; else hi = mid; } return Math.sqrt(lo * hi); }
+  const map = new Board(document.getElementById("vaMap")), mat = new Board(document.getElementById("vaMat"));
+  const CX = 330, CY = 290, S = 60; const px = w => CX + w * S, py = w => CY - w * S;
+  // eigen decomposition of N for the contour ellipses
+  const tr = N[0][0] + N[1][1], det = N[0][0] * N[1][1] - N[0][1] * N[1][0], disc = Math.sqrt(Math.max(0, tr * tr / 4 - det)), l1 = tr / 2 + disc, l2 = tr / 2 - disc; let e1 = [N[0][1], l1 - N[0][0]]; const en = Math.hypot(e1[0], e1[1]); e1 = [e1[0] / en, e1[1] / en]; const e2 = [-e1[1], e1[0]];
+  function makeRefits(lam) { const out = { ls: [], rd: [] }; for (let k = 0; k < 40; k++) { const nz = randn(mulberry32(seedR + k), n); const y = ymake(Array.from(nz)); out.ls.push(ridge(y, 0)); out.rd.push(ridge(y, lam)); } return out; }
+  const stepEl = document.getElementById("vaStep");
+  function draw() {
+    const lam = lamFor(radius), w = ridge(Y, lam); refits = makeRefits(lam);
+    map.clear("squared error over the two coefficients; the circle is the prior, drag its rim"); const ctx = map.ctx;
+    // contours: (w - wLS)' N (w - wLS) = level
+    [0.5, 2, 6, 14, 28, 50, 80].forEach((lev, k) => { ctx.strokeStyle = mix(css("--panel"), css("--blue"), 0.75 - 0.09 * k); ctx.lineWidth = 1.2; ctx.beginPath(); for (let t = 0; t <= 90; t++) { const th = 2 * Math.PI * t / 90, a = Math.sqrt(lev / l1) * Math.cos(th), b = Math.sqrt(lev / l2) * Math.sin(th); const ww = [wLS[0] + a * e1[0] + b * e2[0], wLS[1] + a * e1[1] + b * e2[1]]; if (t === 0) ctx.moveTo(px(ww[0]), py(ww[1])); else ctx.lineTo(px(ww[0]), py(ww[1])); } ctx.stroke(); });
+    map.line(px(-4), py(0), px(7), py(0), css("--line"), 1); map.line(px(0), py(-4), px(0), py(4.5), css("--line"), 1);
+    map.label("w1 (cement)", px(7) - 4, py(0) - 8, css("--muted"), "right", 11, true); map.label("w2 (binder)", px(0) + 8, py(4.5) + 12, css("--muted"), "left", 11, true);
+    // ridge path
+    ctx.strokeStyle = css("--orange"); ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.beginPath(); for (let k = 0; k <= 80; k++) { const lm = Math.pow(10, -3 + 6 * k / 80), ww = ridge(Y, lm); if (k === 0) ctx.moveTo(px(ww[0]), py(ww[1])); else ctx.lineTo(px(ww[0]), py(ww[1])); } ctx.lineTo(px(0), py(0)); ctx.stroke(); ctx.setLineDash([]);
+    // refits
+    refits.ls.forEach(p => map.dot(px(p[0]), py(p[1]), 3, mix(css("--panel"), css("--grey"), 0.8)));
+    refits.rd.forEach(p => map.dot(px(p[0]), py(p[1]), 3, mix(css("--panel"), css("--blue"), 0.85)));
+    // prior circle
+    ctx.strokeStyle = css("--red"); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(px(0), py(0), radius * S, 0, 2 * Math.PI); ctx.stroke(); ctx.fillStyle = mix(css("--panel"), css("--red"), 0.08); ctx.fill();
+    map.dot(px(radius * Math.cos(-0.6)), py(radius * Math.sin(-0.6)), 8, css("--red"), "#fff"); map.label("rim (drag)", px(radius * Math.cos(-0.6)) + 12, py(radius * Math.sin(-0.6)) + 14, css("--red"), "left", 11);
+    map.dot(px(WT[0]), py(WT[1]), 7, css("--ink")); map.label("truth (2, 1)", px(WT[0]) + 10, py(WT[1]) - 8, css("--ink"), "left", 12, true);
+    map.dot(px(wLS[0]), py(wLS[1]), 6, css("--grey"), "#fff"); map.label("least squares", px(wLS[0]) + 10, py(wLS[1]) + 16, css("--muted"), "left", 12);
+    map.dot(px(w[0]), py(w[1]), 8, css("--orange"), "#fff"); map.label("with the prior", px(w[0]) + 12, py(w[1]) - 10, css("--orange"), "left", 12);
+    map.label("grey dots: least squares on 40 redraws of the noise   blue dots: the same with this prior", 16, map.H - 14, css("--muted"), "left", 12);
+    // the augmented matrix
+    mat.clear("the same thing as pseudo observations"); const m = mat.ctx, x0 = 60, y0 = 56, cw = 60, rh = 14;
+    mat.label("z1", x0 + cw / 2, y0 - 8, css("--muted"), "center", 11, true); mat.label("z2", x0 + 1.5 * cw, y0 - 8, css("--muted"), "center", 11, true); mat.label("y", x0 + 2 * cw + 50, y0 - 8, css("--muted"), "center", 11, true);
+    for (let i = 0; i < n; i++) { [Z1[i], Z2[i]].forEach((z, j) => { const t = Math.max(-1, Math.min(1, z / 2)); m.fillStyle = t >= 0 ? mix(css("--panel"), css("--blue"), t) : mix(css("--panel"), css("--red"), -t); m.fillRect(x0 + j * cw + 2, y0 + i * rh, cw - 4, rh - 2); }); const t = Math.max(-1, Math.min(1, Y[i] / 5)); m.fillStyle = t >= 0 ? mix(css("--panel"), css("--blue"), t) : mix(css("--panel"), css("--red"), -t); m.fillRect(x0 + 2 * cw + 20, y0 + i * rh, 60, rh - 2); }
+    const yA = y0 + n * rh + 10, sl = Math.sqrt(lam);
+    [[sl, 0, "sqrt(lambda)    0"], [0, sl, "0    sqrt(lambda)"]].forEach((row, k) => { const y = yA + k * 26; m.strokeStyle = css("--orange"); m.lineWidth = 2; m.strokeRect(x0 + 1, y, 2 * cw - 2, 22); mat.label(row[0] > 0 ? sl.toFixed(2) : "0", x0 + cw / 2, y + 16, row[0] > 0 ? css("--orange") : css("--muted"), "center", 12, true); mat.label(row[1] > 0 ? sl.toFixed(2) : "0", x0 + 1.5 * cw, y + 16, row[1] > 0 ? css("--orange") : css("--muted"), "center", 12, true); m.strokeRect(x0 + 2 * cw + 20, y, 60, 22); mat.label("0", x0 + 2 * cw + 50, y + 16, css("--orange"), "center", 12, true); });
+    mat.label("two rows appended: \"w1 is 0\" and \"w2 is 0\",", 16, yA + 80, css("--ink"), "left", 12); mat.label("each with weight lambda = " + (lam < 0.01 ? lam.toExponential(1) : lam.toFixed(2)), 16, yA + 98, css("--ink"), "left", 12);
+    mat.label("least squares on the tall matrix gives", 16, yA + 124, css("--muted"), "left", 12); mat.label("(A'A + lambda I) w = A'y, the ridge estimate,", 16, yA + 142, css("--muted"), "left", 12); mat.label("and the MAP estimate under w ~ N(0, sigma^2 / lambda)", 16, yA + 160, css("--muted"), "left", 12);
+    const sdOf = pts => { const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length, my = pts.reduce((s, p) => s + p[1], 0) / pts.length; return [Math.sqrt(pts.reduce((s, p) => s + (p[0] - mx) ** 2 + (p[1] - my) ** 2, 0) / pts.length), mx, my]; };
+    const sLS = sdOf(refits.ls), sR = sdOf(refits.rd);
+    document.getElementById("vaR").textContent = radius.toFixed(2) + (radius >= rLS ? " (no shrinkage)" : ""); document.getElementById("vaLam").textContent = lam < 0.01 ? lam.toExponential(1) : lam.toFixed(2); document.getElementById("vaW").textContent = w[0].toFixed(2) + ", " + w[1].toFixed(2);
+    document.getElementById("vaSdLS").textContent = sLS[0].toFixed(2); document.getElementById("vaSdR").textContent = sR[0].toFixed(2); document.getElementById("vaBias").textContent = Math.hypot(sR[1] - WT[0], sR[2] - WT[1]).toFixed(2) + " (least squares: " + Math.hypot(sLS[1] - WT[0], sLS[2] - WT[1]).toFixed(2) + ")";
+    stepEl.innerHTML = '<span class="k">' + (radius >= rLS ? 'prior too wide to matter' : (lam > 5 ? 'strong prior' : 'mild prior')) + '</span><p>' + (radius >= rLS ? 'The circle contains the least squares point, so the prior changes nothing. Look at the grey dots: on other draws of the noise, least squares lands anywhere along the valley, because the two predictors say almost the same thing and the data cannot tell them apart.' : 'The solution is where the valley first touches the circle, and it has walked ' + Math.hypot(w[0] - wLS[0], w[1] - wLS[1]).toFixed(2) + ' from least squares toward the origin. The blue dots are tighter than the grey ones (' + sR[0].toFixed(2) + ' against ' + sLS[0].toFixed(2) + ') and their centre has moved off the truth by ' + Math.hypot(sR[1] - WT[0], sR[2] - WT[1]).toFixed(2) + '.') + '</p><p>Variance bought with bias. Where to stop is the next tab.</p>';
+  }
+  map.c.addEventListener("mousedown", ev => { const [mx, my] = map.pos(ev); const d = Math.hypot(mx - px(0), my - py(0)); if (Math.abs(d - radius * S) < 26) drag = true; });
+  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = map.pos(ev); radius = Math.max(0.15, Math.min(rLS * 1.15, Math.hypot(mx - px(0), my - py(0)) / S)); draw(); });
+  window.addEventListener("mouseup", () => { drag = false; });
+  document.getElementById("vaResample").addEventListener("click", () => { seedR += 40; draw(); });
+  quiz(document.getElementById("vaQuiz"), { q: "Ridge regression adds lambda to the diagonal of the normal matrix. Read as a prior, this says", options: ["The coefficients are probably large", "The coefficients are drawn from a Gaussian centred at zero, and lambda is how tightly", "The noise is not Gaussian"], answer: 1, why: "Loss plus a squared penalty is the negative log posterior under a Gaussian prior on the coefficients, so minimizing it is maximum a posteriori estimation. The same lambda is the weight of a pseudo observation saying each coefficient is zero, which is how a geodesist would write it." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 6. BET ON A FRAME ================= */
+(function filmstrip() {
+  const DEG = 11, NF = 8, LAMS = []; for (let k = 0; k < NF; k++) LAMS.push(Math.pow(10, -6 + 8 * k / (NF - 1)));
+  const truth = x => 10 * Math.sin(Math.PI * x) + 2.5 * Math.sin(2 * Math.PI * x + 0.6) - 1.5 * x;
+  const XT = [], XH = []; for (let i = 0; i < 12; i++) XT.push(0.04 + 0.92 * i / 11); for (let i = 0; i < 8; i++) XH.push(0.1 + 0.8 * (i + 0.5) / 8);
+  const hn = randn(mulberry32(31), 8), YH = XH.map((x, i) => truth(x) + 0.8 * hn[i]);
+  let seed = 3, YT = null, pick = null, revealed = false, won = 0, placed = 0;
+  function legendre(x) { const t = 2 * x - 1, P = [1, t]; for (let k = 2; k <= DEG; k++) P.push(((2 * k - 1) * t * P[k - 1] - (k - 1) * P[k - 2]) / k); return P; }
+  function fitFrame(lam) { const A = XT.map(legendre), m = DEG + 1, N = [], u = new Array(m).fill(0); for (let i = 0; i < m; i++) N.push(new Array(m).fill(0)); for (let k = 0; k < A.length; k++) for (let i = 0; i < m; i++) { u[i] += A[k][i] * YT[k]; for (let j = 0; j < m; j++) N[i][j] += A[k][i] * A[k][j]; } for (let i = 1; i < m; i++) N[i][i] += lam * i * i; return solveLinear(N, u); }
+  const evalC = (c, x) => { const P = legendre(x); return c.reduce((s, v, i) => s + v * P[i], 0); };
+  const rms = (c, xs, ys) => Math.sqrt(xs.reduce((s, x, i) => s + (evalC(c, x) - ys[i]) ** 2, 0) / xs.length);
+  function newTrain() { const g = randn(mulberry32(seed), 12); YT = XT.map((x, i) => truth(x) + 0.8 * g[i]); }
+  const board = new Board(document.getElementById("fsStrip"));
+  const FW = 138, FH = 250, FY = 44, GAP = 10, FX0 = 24;
+  const stepEl = document.getElementById("fsStep");
+  function draw() {
+    const fits = LAMS.map(fitFrame), tr = fits.map(c => rms(c, XT, YT)), te = fits.map(c => rms(c, XH, YH)), best = te.indexOf(Math.min.apply(null, te));
+    board.clear("eight fits to the same twelve stations; click the frame you bet on"); const ctx = board.ctx;
+    fits.forEach((c, k) => { const x0 = FX0 + k * (FW + GAP), on = pick === k;
+      ctx.fillStyle = on ? mix(css("--panel"), css("--orange"), 0.12) : css("--bg"); ctx.fillRect(x0, FY, FW, FH); ctx.strokeStyle = on ? css("--orange") : (revealed && k === best ? "#2E7D5B" : css("--line")); ctx.lineWidth = on || (revealed && k === best) ? 3 : 1; ctx.strokeRect(x0, FY, FW, FH); ctx.lineWidth = 1;
+      const sx = x => x0 + 8 + x * (FW - 16), sy = y => FY + FH - 30 - (y + 4) / 20 * (FH - 50);
+      ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(sx(0), sy(0)); ctx.lineTo(sx(1), sy(0)); ctx.stroke();
+      ctx.strokeStyle = css("--blue"); ctx.lineWidth = 2; ctx.beginPath(); for (let i = 0; i <= 60; i++) { const x = i / 60, y = Math.max(-4, Math.min(16, evalC(c, x))); if (i === 0) ctx.moveTo(sx(x), sy(y)); else ctx.lineTo(sx(x), sy(y)); } ctx.stroke(); ctx.lineWidth = 1;
+      XT.forEach((x, i) => board.dot(sx(x), sy(YT[i]), 3.2, css("--ink")));
+      if (revealed) XH.forEach((x, i) => board.dot(sx(x), sy(YH[i]), 3.5, css("--red"), "#fff"));
+      board.label("frame " + (k + 1), x0 + FW / 2, FY + FH - 12, on ? css("--orange") : css("--muted"), "center", 11, true); board.label("lambda " + LAMS[k].toExponential(0).replace("e+", "e").replace("e-0", "e-"), x0 + FW / 2, FY + 16, css("--muted"), "center", 10, true);
+      if (revealed) board.label("held-out " + te[k].toFixed(2), x0 + FW / 2, FY + 30, k === best ? "#2E7D5B" : css("--red"), "center", 10, true); });
+    // error chart
+    const cT = FY + FH + 60, cB = board.H - 30, cL = 70, cR = board.W - 30; const ex = k => FX0 + k * (FW + GAP) + FW / 2, ey = v => cB - Math.min(1, v / 6) * (cB - cT);
+    board.label("rms error per frame (mm): black, on the twelve training stations" + (revealed ? "; red, on the eight held-out stations" : "; the held-out curve appears on reveal"), FX0, cT - 10, css("--ink"), "left", 12);
+    board.line(cL, cT, cL, cB, css("--line"), 1); board.line(cL, cB, cR, cB, css("--line"), 1); [0, 2, 4, 6].forEach(v => board.label(v.toFixed(0), cL - 8, ey(v) + 4, css("--muted"), "right", 10, true));
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2; ctx.beginPath(); tr.forEach((v, k) => { if (k === 0) ctx.moveTo(ex(k), ey(v)); else ctx.lineTo(ex(k), ey(v)); }); ctx.stroke(); tr.forEach((v, k) => board.dot(ex(k), ey(v), 4, css("--ink")));
+    if (revealed) { ctx.strokeStyle = css("--red"); ctx.lineWidth = 2.5; ctx.beginPath(); te.forEach((v, k) => { if (k === 0) ctx.moveTo(ex(k), ey(v)); else ctx.lineTo(ex(k), ey(v)); }); ctx.stroke(); te.forEach((v, k) => board.dot(ex(k), ey(v), 5, css("--red"), "#fff")); board.dot(ex(best), ey(te[best]), 9, "#2E7D5B"); if (pick !== null) { board.line(ex(pick), cT, ex(pick), cB, css("--orange"), 2, [4, 4]); } }
+    document.getElementById("fsPick").textContent = pick === null ? "-" : "frame " + (pick + 1); document.getElementById("fsTr").textContent = pick === null ? "-" : tr[pick].toFixed(2); document.getElementById("fsTe").textContent = pick === null || !revealed ? "-" : te[pick].toFixed(2); document.getElementById("fsBest").textContent = revealed ? "frame " + (best + 1) + " (" + te[best].toFixed(2) + ")" : "-"; document.getElementById("fsScore").textContent = won + " / " + placed;
+    document.getElementById("fsReveal").disabled = pick === null || revealed;
+    if (!revealed) stepEl.innerHTML = '<span class="k">place your bet</span><p>Frame 1 passes close to every training station; frame 8 is almost a straight line. Training error, the black curve, already says frame 1 wins. The red stations have not been seen by any frame.</p><p>' + (pick === null ? 'Click a frame.' : 'Frame ' + (pick + 1) + ' chosen. Reveal.') + '</p>';
+    else stepEl.innerHTML = '<span class="k">the reveal</span><div class="ask ' + (pick === best ? 'ok' : (Math.abs(pick - best) === 1 ? '' : 'no')) + '">' + (pick === best ? 'Your frame wins. ' : (Math.abs(pick - best) === 1 ? 'One frame off. ' : 'Not this time. ')) + 'Frame ' + (best + 1) + ' has the lowest held-out error, ' + te[best].toFixed(2) + ' mm; frame 1, which training error prefers, scores ' + te[0].toFixed(2) + ' and frame 8 scores ' + te[7].toFixed(2) + '.</div><p>The red curve is the U of slide 24. Now press Redraw: the left frames change shape with every draw of the noise, the right frames do not, and the minimum of the U barely moves.</p>';
+  }
+  board.c.addEventListener("click", ev => { if (revealed) return; const [mx, my] = board.pos(ev); if (my < FY || my > FY + FH) return; const k = Math.floor((mx - FX0) / (FW + GAP)); if (k < 0 || k >= NF || mx - FX0 - k * (FW + GAP) > FW) return; pick = k; draw(); });
+  document.getElementById("fsReveal").addEventListener("click", () => { if (pick === null) return; revealed = true; placed++; const fits = LAMS.map(fitFrame), te = fits.map(c => rms(c, XH, YH)); if (te.indexOf(Math.min.apply(null, te)) === pick) won++; draw(); });
+  document.getElementById("fsRedraw").addEventListener("click", () => { seed += 1; newTrain(); if (!revealed) pick = null; draw(); });
+  quiz(document.getElementById("fsQuiz"), { q: "Why can training error never choose lambda?", options: ["Because it is too noisy to compare", "Because less constraint always fits the training points at least as well, so it always picks the smallest lambda", "Because lambda does not affect training error"], answer: 1, why: "Adding a penalty can only raise the training loss, so training error is monotone in lambda and always points to the least constrained fit. Only data the fit never touched can show the U; one held-out split is the minimum standard, and next week asks when that split tells the truth." });
+  window.addEventListener("themechange", draw);
+  newTrain(); draw();
+})();
+
+/* ---------- tabs ---------- */
+const tabs = Array.from(document.querySelectorAll("nav [role=tab]"));
+function show(name, push) {
+  if (!document.getElementById(name)) name = "ceres";
+  tabs.forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll("section.demo").forEach(s => s.classList.toggle("active", s.id === name));
+  if (push) { try { history.replaceState(null, "", "#" + name); } catch (e) {} }
+}
+tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
+show(location.hash.slice(1) || "ceres", false);
+
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
