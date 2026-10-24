@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Week 12 Demos</title>
-<meta name="description" content="CE 7453 Week 12: arrange a contrastive embedding by hand, write retrieval queries from word chips, flip the inspector's queue, pilot a system with a wrong model, and decide when to retrain a deployed model.">
+<meta name="description" content="CE 7453 Week 12: arrange a contrastive embedding by hand with a temperature thermometer, write retrieval queries from word chips, drag the inspector's review line and type a prediction, pilot a system with a model you can bend, and decide when to retrain a deployed model.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -102,6 +102,9 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 <body>
 <style>
 /* components for the instructional formats */
+.typed { display: flex; align-items: center; gap: 10px; }
+.typed input { font: inherit; font-family: var(--mono); font-size: 15px; width: 130px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.typed span { font-size: 13px; color: var(--muted); }
 .stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
 @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
 .side { display: grid; gap: 12px; min-width: 0; }
@@ -188,9 +191,7 @@ canvas.grab { cursor: grab; }
     <div class="side">
       <div class="panel step" id="ctStep"></div>
       <div class="panel">
-        <h3>temperature</h3>
-        <div class="bet"><button id="ctT1" aria-pressed="true">tau = 0.1</button><button id="ctT2" aria-pressed="false">tau = 0.5</button></div>
-        <div class="btns" style="margin-top:10px"><button class="primary" id="ctGrad">Let gradient descent take over</button><button id="ctShuffle">Scramble</button></div>
+        <div class="btns"><button class="primary" id="ctGrad">Let gradient descent take over</button><button id="ctShuffle">Scramble</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>your loss</dt><dd id="ctLoss">-</dd>
           <dt>best possible with five pairs</dt><dd id="ctBest">-</dd>
@@ -240,18 +241,14 @@ canvas.grab { cursor: grab; }
 <!-- ============ 3. TRIAGE: the inspector's queue ============ -->
 <section class="demo" id="triage" role="tabpanel">
   <h2>The inspector's queue: review the top of the list and count what you caught</h2>
-  <p class="lead">Two hundred photos from a site visit, twenty of them real defects, sorted by the model's score with the most suspicious first. Pick how many the inspector will review, predict how many of the twenty defects that review will find, then flip the cards.</p>
+  <p class="lead">Two hundred photos from a site visit, twenty of them real defects, sorted by the model's score with the most suspicious first. Drag the orange review line to set how many the inspector will review, pick a detector by clicking one of the three score-histogram cards under the queue, type how many of the twenty defects you expect the review to find, then flip the cards.</p>
   <div class="stage">
-    <div class="plot"><canvas id="trGrid" width="1200" height="520"></canvas></div>
+    <div class="plot"><canvas id="trGrid" class="grab" width="1200" height="650"></canvas></div>
     <div class="side">
       <div class="panel step" id="trStep"></div>
       <div class="panel">
-        <h3>review budget</h3>
-        <div class="bet" id="trBudget"><button data-b="20">top 20 (10 %)</button><button data-b="40" aria-pressed="true">top 40 (20 %)</button><button data-b="60">top 60 (30 %)</button><button data-b="100">top 100 (50 %)</button></div>
-        <h3 style="margin-top:12px">your prediction: defects found</h3>
-        <div class="bet" id="trPred"><button data-p="0">under 10</button><button data-p="1">10 to 13</button><button data-p="2">14 to 17</button><button data-p="3">18 to 20</button></div>
-        <h3 style="margin-top:12px">the model</h3>
-        <div class="bet"><button id="trWeak" aria-pressed="false">weak</button><button id="trMid" aria-pressed="true">typical</button><button id="trStrong" aria-pressed="false">strong</button></div>
+        <h3>your prediction: defects found in the reviewed set, of 20</h3>
+        <div class="typed"><input type="number" id="trPredN" min="0" max="20" step="1" placeholder="type a number"><span id="trPredNote">then flip</span></div>
         <div class="btns" style="margin-top:10px"><button class="primary" id="trFlip" disabled>Flip the reviewed cards</button><button id="trAll">Show every defect</button><button id="trNew">New site visit</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>reviewed</dt><dd id="trN">40</dd>
@@ -271,16 +268,15 @@ canvas.grab { cursor: grab; }
 <!-- ============ 4. WORLD MODEL: pilot it yourself ============ -->
 <section class="demo" id="worldmodel" role="tabpanel">
   <h2>Pilot it yourself, with only the learned model to guide you</h2>
-  <p class="lead">A system drifts in the plane under dynamics you cannot see. You have a learned model of it that is slightly wrong. Each turn, click where you want to push; the grey ghost shows where the model says you will land, then the real system moves. Reach the target in twenty steps, then let the planner try.</p>
+  <p class="lead">A system drifts in the plane under dynamics you cannot see. You have a learned model of it that is slightly wrong; the inset at the top right shows how wrong, and you can drag the ghost there to make the model better or worse. Each turn, click where you want to push; the grey ghost shows where the model says you will land, then the real system moves. Reach the target in twenty steps, then let the planner try.</p>
   <div class="stage">
     <div class="plot"><canvas id="wmPlane" class="hit" width="1200" height="600"></canvas></div>
     <div class="side">
       <div class="panel step" id="wmStep"></div>
       <div class="panel">
-        <h3>model error</h3>
-        <div class="bet" id="wmErrB"><button data-e="0.05">small</button><button data-e="0.2" aria-pressed="true">moderate</button><button data-e="0.5">large</button></div>
-        <div class="btns" style="margin-top:10px"><button id="wmRestart">Restart my run</button><button class="primary" id="wmPlanK1">Planner, replans every step</button><button id="wmPlanOnce">Planner, plans once</button></div>
+        <div class="btns"><button id="wmRestart">Restart my run</button><button class="primary" id="wmPlanK1">Planner, replans every step</button><button id="wmPlanOnce">Planner, plans once</button></div>
         <dl class="readout" style="margin-top:10px">
+          <dt>model error (drag the ghost in the inset)</dt><dd id="wmErr">-</dd>
           <dt>step</dt><dd id="wmT">0 / 20</dd>
           <dt>distance to target</dt><dd id="wmD">-</dd>
           <dt>ghost against reality, last step</dt><dd id="wmGap">-</dd>
@@ -384,6 +380,12 @@ function glyph(ctx, kind, x, y, w, h, tone) {
       const qx = cx + R * Math.cos(ang.c[i]), qy = cy + R * Math.sin(ang.c[i]); ctx.fillStyle = css("--panel"); ctx.strokeStyle = PAL[i]; ctx.lineWidth = 3; ctx.fillRect(qx - 12, qy - 12, 24, 24); ctx.strokeRect(qx - 12, qy - 12, 24, 24); ctx.fillStyle = PAL[i]; ctx.fillText("C" + (i + 1), qx, qy);
     }
     for (let i = 0; i < N; i++) circle.label("P" + (i + 1) + "/C" + (i + 1) + ": " + names[i], 20, 50 + 18 * i, PAL[i], "left", 12, true);
+    // the thermometer sets tau
+    const TX = 700, TY0 = 110, TY1 = 470; ctx.strokeStyle = css("--line"); ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(TX - 10, TY0 - 10, 20, TY1 - TY0 + 20, 10) : ctx.rect(TX - 10, TY0 - 10, 20, TY1 - TY0 + 20); ctx.stroke(); ctx.lineWidth = 1;
+    const ty = TY1 - (tau - 0.05) / 0.95 * (TY1 - TY0); ctx.fillStyle = css("--red"); ctx.fillRect(TX - 6, ty, 12, TY1 - ty + 4); ctx.beginPath(); ctx.arc(TX, TY1 + 14, 16, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = css("--panel"); ctx.strokeStyle = css("--red"); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(TX, ty, 8, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); ctx.lineWidth = 1;
+    [0.1, 0.25, 0.5, 1.0].forEach(v => { const y = TY1 - (v - 0.05) / 0.95 * (TY1 - TY0); circle.label(v.toFixed(2), TX + 16, y + 4, css("--muted"), "left", 10, true); });
+    circle.label("temperature", TX, TY0 - 28, css("--ink"), "center", 12); circle.label("tau = " + tau.toFixed(2), TX, TY0 - 14, css("--red"), "center", 12, true); circle.label("drag", TX, TY1 + 44, css("--muted"), "center", 10);
     mat.clear("similarity matrix, photos down, captions across"); const m = mat.ctx, S = sims(ang), s = 60, ox = 80, oy = 70;
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { const v = S[i][j]; m.fillStyle = v >= 0 ? mix(css("--panel"), css("--blue"), v) : mix(css("--panel"), css("--red"), -v); m.fillRect(ox + j * s, oy + i * s, s, s); m.strokeStyle = i === j ? css("--ink") : css("--line"); m.lineWidth = i === j ? 2.5 : 1; m.strokeRect(ox + j * s + (i === j ? 1 : 0), oy + i * s + (i === j ? 1 : 0), s - (i === j ? 2 : 0), s - (i === j ? 2 : 0)); m.fillStyle = Math.abs(v) > 0.6 ? "#fff" : css("--ink"); m.font = "12px " + css("--mono"); m.textAlign = "center"; m.textBaseline = "middle"; m.fillText(v.toFixed(2), ox + j * s + s / 2, oy + i * s + s / 2); }
     for (let i = 0; i < N; i++) { mat.label("P" + (i + 1), ox - 10, oy + i * s + s / 2 + 4, PAL[i], "right", 12, true); mat.label("C" + (i + 1), ox + i * s + s / 2, oy - 8, PAL[i], "center", 12, true); }
@@ -393,14 +395,12 @@ function glyph(ctx, kind, x, y, w, h, tone) {
     stepEl.innerHTML = '<span class="k">' + (ratio < 0.05 ? 'at the optimum' : (A === N ? 'all retrieved, not yet optimal' : 'keep going')) + '</span>' + (A < N ? '<p>' + (N - A) + ' of the photos still pick the wrong caption. Bring each P next to its own C first.</p>' : (ratio < 0.05 ? '<div class="ask ok">Your loss ' + L.toFixed(3) + ' is within 0.05 of the best possible, ' + B.toFixed(3) + '. The ten points sit as five coincident pairs spread evenly around the circle.</div>' : '<div class="ask">Every photo retrieves its caption, but the loss is ' + L.toFixed(3) + ' against a possible ' + B.toFixed(3) + '. Matched pairs that sit close to <i>other</i> pairs are still penalized: spread the five pairs apart.</div>')) + '<p>Switch the temperature and watch the same layout score differently. At tau = 0.5 the gap between a good and a perfect layout almost vanishes.</p>';
   }
   function nearest(mx, my) { let best = null, bd = 1e9; for (let i = 0; i < N; i++) { for (const k of ["p", "c"]) { const x = cx + R * Math.cos(ang[k][i]), y = cy + R * Math.sin(ang[k][i]), d = Math.hypot(mx - x, my - y); if (d < bd) { bd = d; best = { k, i }; } } } return bd < 22 ? best : null; }
-  circle.c.addEventListener("mousedown", ev => { const [mx, my] = circle.pos(ev); drag = nearest(mx, my); if (anim) { cancelAnimationFrame(anim); anim = null; } });
-  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = circle.pos(ev); ang[drag.k][drag.i] = Math.atan2(my - cy, mx - cx); draw(); });
+  circle.c.addEventListener("mousedown", ev => { const [mx, my] = circle.pos(ev); if (Math.abs(mx - 700) < 22 && my >= 90 && my <= 500) { drag = { k: "tau" }; record = null; } else drag = nearest(mx, my); if (anim) { cancelAnimationFrame(anim); anim = null; } });
+  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = circle.pos(ev); if (drag.k === "tau") { tau = Math.max(0.05, Math.min(1.0, 0.05 + (470 - my) / 360 * 0.95)); draw(); return; } ang[drag.k][drag.i] = Math.atan2(my - cy, mx - cx); draw(); });
   window.addEventListener("mouseup", () => { drag = null; });
   function gradStep() { const eps = 1e-4, lr = 0.15, base = loss(ang, tau), g = { p: [], c: [] }; for (const k of ["p", "c"]) for (let i = 0; i < N; i++) { ang[k][i] += eps; g[k].push((loss(ang, tau) - base) / eps); ang[k][i] -= eps; } let gn = 0; for (const k of ["p", "c"]) for (let i = 0; i < N; i++) gn += g[k][i] ** 2; gn = Math.sqrt(gn) + 1e-9; const scale = Math.min(1, 0.5 / gn); for (const k of ["p", "c"]) for (let i = 0; i < N; i++) ang[k][i] -= lr * g[k][i] * scale * 4; return gn; }
   document.getElementById("ctGrad").addEventListener("click", () => { if (anim) cancelAnimationFrame(anim); let n = 0; (function f() { const gn = gradStep(); draw(); n++; if (n < 400 && gn > 1e-3) anim = requestAnimationFrame(f); })(); });
   document.getElementById("ctShuffle").addEventListener("click", () => { seed += 1; scramble(); record = null; draw(); });
-  document.getElementById("ctT1").addEventListener("click", () => { tau = 0.1; record = null; document.getElementById("ctT1").setAttribute("aria-pressed", "true"); document.getElementById("ctT2").setAttribute("aria-pressed", "false"); draw(); });
-  document.getElementById("ctT2").addEventListener("click", () => { tau = 0.5; record = null; document.getElementById("ctT1").setAttribute("aria-pressed", "false"); document.getElementById("ctT2").setAttribute("aria-pressed", "true"); draw(); });
   quiz(document.getElementById("ctQuiz"), { q: "A batch of 5 pairs gives each photo 4 negatives; a batch of 32 000 gives it 31 999. Why do contrastive models train with huge batches?", options: ["Larger batches make each gradient step cheaper", "More negatives make the task harder and the learned space finer, since near misses must be separated too", "Small batches cannot fit the loss in memory"], answer: 1, why: "With five pairs the model only has to tell five concepts apart. With tens of thousands it must separate photos that differ in small ways, so the embedding has to carry fine detail. The cost is memory, which is why CLIP needed hundreds of GPUs." });
   window.addEventListener("themechange", draw);
   scramble(); draw();
@@ -438,11 +438,12 @@ function glyph(ctx, kind, x, y, w, h, tone) {
 (function triage() {
   const n = 200, K = 20, DP = { weak: 0.7, mid: 1.2, strong: 2.0 };
   const board = new Board(document.getElementById("trGrid"));
-  let seed = 2, dp = "mid", budget = 40, pred = null, flipped = false, showAll = false, items = null;
+  let seed = 2, dp = "mid", budget = 40, pred = null, flipped = false, showAll = false, items = null, dragLine = false;
+  const CARDS = [["weak", "weak detector"], ["mid", "typical detector"], ["strong", "strong detector"]];
   function make() { const rng = mulberry32(seed); items = []; for (let i = 0; i < n; i++) items.push({ rel: i < K, z: randn(rng, 2)[0] }); }
   function sorted() { return items.map(it => ({ rel: it.rel, s: it.z + (it.rel ? DP[dp] : 0) })).sort((a, b) => b.s - a.s); }
   const stepEl = document.getElementById("trStep");
-  function text() { stepEl.innerHTML = '<span class="k">before you flip</span><p>The cards are the queue, highest score at the top left. The first ' + budget + ' are inside the review line.</p><p>Twenty of the 200 are defects. Predict how many the inspector finds in the top ' + budget + ', then flip.</p>'; }
+  function text() { stepEl.innerHTML = '<span class="k">before you flip</span><p>The cards are the queue, highest score at the top left. The first ' + budget + ' are inside the review line; drag the line to change the budget.</p><p>Twenty of the 200 are defects. Type how many the inspector finds in the top ' + budget + ', then flip. The three cards under the queue are three detectors: click one.</p>'; }
   function draw() {
     const q = sorted(), cols = 20, rows = 10, cw = 54, ch = 44, ox = 60, oy = 40;
     board.clear(""); const ctx = board.ctx;
@@ -460,22 +461,29 @@ function glyph(ctx, kind, x, y, w, h, tone) {
     const bx = ox + (budget % cols) * cw, by = oy + Math.floor(budget / cols) * ch;
     ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.beginPath();
     if (budget % cols === 0) { ctx.moveTo(ox, by); ctx.lineTo(ox + cols * cw, by); } else { ctx.moveTo(ox, by + ch); ctx.lineTo(bx, by + ch); ctx.lineTo(bx, by); ctx.lineTo(ox + cols * cw, by); }
-    ctx.stroke(); board.label("review line: the inspector looks at everything above it", ox + cols * cw, oy + rows * ch + 20, css("--orange"), "right", 12);
+    ctx.stroke(); ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(budget % cols === 0 ? ox + cols * cw : bx, budget % cols === 0 ? by : by + ch / 2, 9, 0, 2 * Math.PI); ctx.fill();
+    board.label("review line (drag): the inspector looks at the " + budget + " cards above it, " + (100 * budget / n).toFixed(0) + " % of the queue", ox + cols * cw, oy + rows * ch + 20, css("--orange"), "right", 12);
     board.label("unflipped cards show the model's score; red is a confirmed defect", ox, oy + rows * ch + 20, css("--muted"), "left", 12);
+    // detector cards: score histograms of ok photos and defects
+    const cy0 = oy + rows * ch + 40; board.label("the detector (click a card): how far its scores separate defects from the rest", ox, cy0 + 12, css("--ink"), "left", 12);
+    CARDS.forEach((cd, i) => { const x = ox + i * 370, y = cy0 + 22, w = 350, h = 92, on = dp === cd[0]; ctx.fillStyle = on ? mix(css("--panel"), css("--blue"), 0.12) : css("--bg"); ctx.fillRect(x, y, w, h); ctx.strokeStyle = on ? css("--blue") : css("--line"); ctx.lineWidth = on ? 2.5 : 1; ctx.strokeRect(x, y, w, h); ctx.lineWidth = 1;
+      const d = DP[cd[0]], sc = 40, base = y + h - 12; const curve = (mu, color) => { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); for (let k = 0; k <= 80; k++) { const z = -3 + 7 * k / 80; const yy = base - 62 * Math.exp(-0.5 * (z - mu) ** 2); const xx = x + 20 + (z + 3) / 7 * (w - 40); if (k) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); } ctx.stroke(); ctx.lineWidth = 1; };
+      curve(0, mix(css("--panel"), css("--blue"), 0.6)); curve(d, css("--red")); board.label(cd[1] + ", d' = " + d.toFixed(1), x + 10, y + 16, on ? css("--blue") : css("--ink"), "left", 12); board.label("ok photos", x + 24, base - 4, mix(css("--panel"), css("--blue"), 0.8), "left", 10); board.label("defects", x + w - 24, base - 4, css("--red"), "right", 10); });
     const found = q.slice(0, budget).filter(it => it.rel).length;
     document.getElementById("trN").textContent = budget; document.getElementById("trFound").textContent = flipped ? found + " of " + K : "-"; document.getElementById("trRecall").textContent = flipped ? (100 * found / K).toFixed(0) + " %" : "-"; document.getElementById("trPrec").textContent = flipped ? (100 * found / budget).toFixed(0) + " %" : "-";
   }
   function flip() {
-    if (pred === null) return; flipped = true; const q = sorted(), found = q.slice(0, budget).filter(it => it.rel).length, bin = found < 10 ? 0 : found < 14 ? 1 : found < 18 ? 2 : 3, ok = bin === pred;
-    document.querySelectorAll("#trPred button").forEach((b, i) => { if (i === bin) b.classList.add("right"); else if (i === pred) b.classList.add("wrong"); });
+    if (pred === null) return; flipped = true; const q = sorted(), found = q.slice(0, budget).filter(it => it.rel).length, ok = Math.abs(found - pred) <= 2;
+    document.getElementById("trPredNote").textContent = ok ? "you said " + pred + ": within 2" : "you said " + pred + ", it was " + found;
     const curve = [20, 40, 60, 100].map(b => q.slice(0, b).filter(it => it.rel).length);
-    stepEl.innerHTML = '<span class="k">the count</span><div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'Not quite. ') + 'The top ' + budget + ' hold ' + found + ' of the 20 defects: recall ' + (100 * found / K).toFixed(0) + ' % at a ' + (100 * budget / n).toFixed(0) + ' % budget.</div><p>On this site visit the same model finds ' + curve.join(', ') + ' defects at budgets of 20, 40, 60 and 100. The number to report is the one at the budget the inspector will really have. Press Show every defect to see where the misses sit in the queue.</p>';
+    stepEl.innerHTML = '<span class="k">the count</span><div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Within two: you said ' + pred + '. ' : 'You said ' + pred + '. ') + 'The top ' + budget + ' hold ' + found + ' of the 20 defects: recall ' + (100 * found / K).toFixed(0) + ' % at a ' + (100 * budget / n).toFixed(0) + ' % budget.</div><p>On this site visit the same model finds ' + curve.join(', ') + ' defects at budgets of 20, 40, 60 and 100. The number to report is the one at the budget the inspector will really have. Press Show every defect to see where the misses sit in the queue.</p>';
     document.getElementById("trFlip").disabled = true; draw();
   }
-  function reset() { flipped = false; showAll = false; pred = null; document.querySelectorAll("#trPred button").forEach(b => { b.className = ""; b.setAttribute("aria-pressed", "false"); }); document.getElementById("trFlip").disabled = true; text(); draw(); }
-  document.querySelectorAll("#trBudget button").forEach(b => b.addEventListener("click", () => { budget = +b.dataset.b; document.querySelectorAll("#trBudget button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); reset(); }));
-  document.querySelectorAll("#trPred button").forEach((b, i) => b.addEventListener("click", () => { if (flipped) return; pred = i; document.querySelectorAll("#trPred button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); document.getElementById("trFlip").disabled = false; }));
-  [["trWeak", "weak"], ["trMid", "mid"], ["trStrong", "strong"]].forEach(([id, k]) => document.getElementById(id).addEventListener("click", () => { dp = k; ["trWeak", "trMid", "trStrong"].forEach(j => document.getElementById(j).setAttribute("aria-pressed", j === id ? "true" : "false")); reset(); }));
+  function reset() { flipped = false; showAll = false; pred = null; document.getElementById("trPredN").value = ""; document.getElementById("trPredNote").textContent = "then flip"; document.getElementById("trFlip").disabled = true; text(); draw(); }
+  document.getElementById("trPredN").addEventListener("input", ev => { if (flipped) return; const v = parseInt(ev.target.value, 10); if (isNaN(v) || v < 0 || v > 20) { pred = null; document.getElementById("trFlip").disabled = true; return; } pred = v; document.getElementById("trFlip").disabled = false; });
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const cols = 20, cw = 54, ch = 44, ox = 60, oy = 40; const bx = ox + (budget % cols) * cw, by = oy + Math.floor(budget / cols) * ch; const onLine = (my >= by - 10 && my <= by + ch + 10 && mx >= ox - 10 && mx <= ox + cols * cw + 10); if (onLine) { dragLine = true; return; } const cy0 = oy + 10 * ch + 62; if (my >= cy0 && my <= cy0 + 92) { const i = Math.floor((mx - ox) / 370); if (i >= 0 && i < 3 && mx - ox - i * 370 <= 350) { dp = CARDS[i][0]; reset(); } } });
+  window.addEventListener("mousemove", ev => { if (!dragLine) return; const [mx, my] = board.pos(ev); const cols = 20, cw = 54, ch = 44, ox = 60, oy = 40; const col = Math.max(0, Math.min(cols, Math.round((mx - ox) / cw))), row = Math.max(0, Math.min(9, Math.floor((my - oy) / ch))); const b = Math.max(5, Math.min(195, row * cols + col)); if (b !== budget) { budget = b; if (flipped || pred !== null) reset(); else draw(); } });
+  window.addEventListener("mouseup", () => { dragLine = false; });
   document.getElementById("trFlip").addEventListener("click", flip);
   document.getElementById("trAll").addEventListener("click", () => { showAll = true; flipped = true; draw(); });
   document.getElementById("trNew").addEventListener("click", () => { seed += 1; make(); reset(); });
@@ -489,7 +497,8 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   const th = 0.25, damp = 0.985, A = [[damp * Math.cos(th), -damp * Math.sin(th)], [damp * Math.sin(th), damp * Math.cos(th)]], B = 0.12, target = [1.5, 0.6], x0 = [-1.8, -1.2], TOT = 20, H = 12, lam = 0.02, UMAX = 2.5;
   const board = new Board(document.getElementById("wmPlane"));
   const px = v => board.W / 2 + v * 95, py = v => board.H / 2 - v * 95;
-  let seed = 5, Enoise = null, err = 0.2, x = null, t = 0, path = [], ghosts = [], lastGap = null, finals = { you: null, k1: null, once: null }, finished = false, planPaths = { k1: null, once: null };
+  const INS = { x: 940, y: 24, w: 244, h: 170, cx: 1040, cy: 120 }, EDIR = [0.6, 0.8];
+  let dragGhost = false, seed = 5, Enoise = null, err = 0.2, x = null, t = 0, path = [], ghosts = [], lastGap = null, finals = { you: null, k1: null, once: null }, finished = false, planPaths = { k1: null, once: null };
   function newFit() { const g = randn(mulberry32(seed), 4); Enoise = [[g[0], g[1]], [g[2], g[3]]].map(r => r.map(v => v / 2)); }
   const mul = (M, v) => [M[0][0] * v[0] + M[0][1] * v[1], M[1][0] * v[0] + M[1][1] * v[1]];
   const mm = (M, N) => [[M[0][0] * N[0][0] + M[0][1] * N[1][0], M[0][0] * N[0][1] + M[0][1] * N[1][1]], [M[1][0] * N[0][0] + M[1][1] * N[1][0], M[1][0] * N[0][1] + M[1][1] * N[1][1]]];
@@ -514,11 +523,23 @@ function glyph(ctx, kind, x, y, w, h, tone) {
     ctx.strokeStyle = css("--red"); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(px(target[0]), py(target[1]), 12, 0, 2 * Math.PI); ctx.stroke(); board.label("target", px(target[0]) + 16, py(target[1]) - 10, css("--red"), "left", 13);
     ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(px(x[0]), py(x[1]), 9, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
     board.label("grey dots: where the model said you would land; blue: where you did", 16, board.H - 14, css("--muted"), "left", 12);
+    // inset: the learned model against the real dynamics
+    ctx.fillStyle = css("--panel"); ctx.fillRect(INS.x, INS.y, INS.w, INS.h); ctx.strokeStyle = css("--line"); ctx.strokeRect(INS.x, INS.y, INS.w, INS.h);
+    board.label("one step from here, no push:", INS.x + 10, INS.y + 18, css("--ink"), "left", 12); board.label("real (blue) and the learned model (grey ghost)", INS.x + 10, INS.y + 34, css("--muted"), "left", 10);
+    const rt = [INS.cx + 70, INS.cy - 20], gt = [rt[0] + err * 150 * EDIR[0], rt[1] + err * 150 * EDIR[1]];
+    ctx.strokeStyle = css("--blue"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(INS.cx - 40, INS.cy + 10); ctx.lineTo(rt[0], rt[1]); ctx.stroke(); ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(rt[0], rt[1], 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = css("--grey"); ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(INS.cx - 40, INS.cy + 10); ctx.lineTo(gt[0], gt[1]); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; ctx.fillStyle = mix(css("--panel"), css("--grey"), 0.7); ctx.beginPath(); ctx.arc(gt[0], gt[1], 10, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--ink"); ctx.stroke();
+    ctx.fillStyle = css("--ink"); ctx.beginPath(); ctx.arc(INS.cx - 40, INS.cy + 10, 5, 0, 2 * Math.PI); ctx.fill();
+    board.label("drag the ghost to make the model worse", INS.x + 10, INS.y + INS.h - 10, css("--muted"), "left", 10); board.label("error " + err.toFixed(2), INS.x + INS.w - 10, INS.y + INS.h - 10, css("--ink"), "right", 12, true);
+    document.getElementById("wmErr").textContent = err.toFixed(2) + (err < 0.1 ? " (small)" : (err < 0.35 ? " (moderate)" : " (large)"));
     document.getElementById("wmT").textContent = t + " / " + TOT; document.getElementById("wmD").textContent = Math.hypot(x[0] - target[0], x[1] - target[1]).toFixed(2); document.getElementById("wmGap").textContent = lastGap === null ? "-" : lastGap.toFixed(3);
     document.getElementById("wmBoard").textContent = (finals.you === null ? "-" : finals.you.toFixed(2)) + " / " + (finals.k1 === null ? "-" : finals.k1.toFixed(2)) + " / " + (finals.once === null ? "-" : finals.once.toFixed(2));
   }
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const rt = [INS.cx + 70, INS.cy - 20], gt = [rt[0] + err * 150 * EDIR[0], rt[1] + err * 150 * EDIR[1]]; if (Math.hypot(mx - gt[0], my - gt[1]) < 16) dragGhost = true; });
+  window.addEventListener("mousemove", ev => { if (!dragGhost) return; const [mx, my] = board.pos(ev); const rt = [INS.cx + 70, INS.cy - 20]; const proj = ((mx - rt[0]) * EDIR[0] + (my - rt[1]) * EDIR[1]) / 150; err = Math.max(0.02, Math.min(0.6, proj)); draw(); });
+  window.addEventListener("mouseup", () => { if (dragGhost) { dragGhost = false; restart(); } });
   board.c.addEventListener("click", ev => {
-    if (finished) return; const [mx, my] = board.pos(ev), wx = (mx - board.W / 2) / 95, wy = -(my - board.H / 2) / 95;
+    if (finished) return; const [mx, my] = board.pos(ev); if (mx >= INS.x && mx <= INS.x + INS.w && my >= INS.y && my <= INS.y + INS.h) return; const wx = (mx - board.W / 2) / 95, wy = -(my - board.H / 2) / 95;
     let u = [(wx - x[0]) / B * 0.3, (wy - x[1]) / B * 0.3]; const un = Math.hypot(u[0], u[1]); if (un > UMAX) u = [u[0] / un * UMAX, u[1] / un * UMAX];
     const Ah = model(), ghost = mul(Ah, x); ghost[0] += B * u[0]; ghost[1] += B * u[1]; ghosts.push(ghost);
     const rng = mulberry32(seed + 200 + t); x = realStep(x, u, rng); path.push(x.slice()); t++; lastGap = Math.hypot(ghost[0] - x[0], ghost[1] - x[1]);
@@ -528,7 +549,6 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   document.getElementById("wmRestart").addEventListener("click", restart);
   document.getElementById("wmPlanK1").addEventListener("click", () => { planPaths.k1 = runPlanner(1); const e = planPaths.k1[TOT]; finals.k1 = Math.hypot(e[0] - target[0], e[1] - target[1]); draw(); });
   document.getElementById("wmPlanOnce").addEventListener("click", () => { planPaths.once = runPlanner(TOT); const e = planPaths.once[TOT]; finals.once = Math.hypot(e[0] - target[0], e[1] - target[1]); draw(); if (finals.k1 !== null) stepEl.innerHTML = '<span class="k">the comparison</span><div class="ask">Final distances: you ' + (finals.you === null ? '(unfinished)' : finals.you.toFixed(2)) + ', replanning planner ' + finals.k1.toFixed(2) + ', plan-once planner ' + finals.once.toFixed(2) + '.</div><p>The plan-once run is what a world model does without feedback: its errors compound for twenty steps. Replanning is cheap insurance against a wrong model, and your own clicking was a form of it. Switch the model error to large and run both again.</p>'; });
-  document.querySelectorAll("#wmErrB button").forEach(b => b.addEventListener("click", () => { err = +b.dataset.e; document.querySelectorAll("#wmErrB button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); restart(); }));
   quiz(document.getElementById("wmQuiz"), { q: "A learned world model is 5 % wrong per step. Planning twenty steps ahead inside it and executing the plan blind is risky because", options: ["The planner is too slow", "Errors compound: after twenty steps the imagined state can be far from the real one, and the plan was made for the imagined one", "Twenty steps is too short a horizon"], answer: 1, why: "Model error accumulates multiplicatively through the rollout. Replanning after each observation resets the rollout to the true state, which is why model-based control is almost always receding-horizon in practice." });
   window.addEventListener("themechange", draw);
   newFit(); restart();
