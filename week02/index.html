@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week 2 Demos</title>
+<meta name="description" content="CE 7453 Week 2: hunt the leak in three real pipelines, paint held-out blocks on a soil map, price a crack detector's threshold with two cost tags, race a flexible forecast against persistence, draw a logit boundary for commuters, and find the widest street between pavement sections.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-line course header with a tab strip, then one demo at a time:
+   a wide plot on the left, a narrow control column on the right, a caption underneath.
+   Colors follow the lecture deck (dark body text, one blue, red for the figure's "wrong" curve). */
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --ink: #2B2B2B;
+  --muted: #6B7280;
+  --line: #D9DDE3;
+  --blue: #1F5C99;
+  --blue-soft: #D6E3F2;
+  --red: #B3261E;
+  --orange: #C9731F;
+  --grey: #8A8F98;
+  --focus: #1F5C99;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+    --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+  --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  padding-block: 14px 8px; border-bottom: 1px solid var(--line);
+}
+header .weeks { font-size: 13px; color: var(--blue); text-decoration: none; border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px; }
+header .weeks:hover { background: var(--blue-soft); }
+header .course { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+nav button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+nav button[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+nav button:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+nav button .slide { font-family: var(--mono); font-size: 12px; opacity: 0.8; margin-left: 6px; }
+main { padding-block: 4px 24px; }
+section.demo { display: none; }
+section.demo.active { display: block; }
+.demo h2 { font-size: 22px; font-weight: 600; margin: 6px 0 2px; text-wrap: balance; }
+.demo .lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.plot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-width: 0; }
+.plot canvas { width: 100%; height: auto; display: block; max-width: 100%; }
+.plot.two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 860px) { .plot.two { grid-template-columns: 1fr; } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctl label output { font-family: var(--mono); font-weight: 400; color: var(--blue); }
+.ctl input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--blue); }
+.ctl .hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; background: var(--c); }
+.legend span.dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.caption { margin: 12px 0 0; max-width: 90ch; font-size: 15px; }
+.caption p { margin: 0 0 6px; }
+footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<style>
+/* components for the instructional formats */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.step { font-size: 15px; line-height: 1.5; }
+.step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
+.step p { margin: 6px 0; }
+.ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
+.ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
+.ask.no { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ask.ok { background: #1E3A2C; } :root:not([data-theme="light"]) .ask.no { background: #432426; } }
+:root[data-theme="dark"] .ask.ok { background: #1E3A2C; } :root[data-theme="dark"] .ask.no { background: #432426; }
+.quiz { font-size: 15px; }
+.quiz .q { margin: 0 0 8px; font-weight: 500; }
+.quiz .opts { display: grid; gap: 6px; }
+.quiz button { text-align: left; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.quiz button.right { border-color: #2E7D5B; background: #E3F2EA; }
+.quiz button.wrong { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quiz button.right { background: #1E3A2C; } :root:not([data-theme="light"]) .quiz button.wrong { background: #432426; } }
+:root[data-theme="dark"] .quiz button.right { background: #1E3A2C; } :root[data-theme="dark"] .quiz button.wrong { background: #432426; }
+.quiz .why { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { color: #2E7D5B; border-color: #2E7D5B; }
+.badge.fail { color: var(--red); border-color: var(--red); }
+canvas.hit { cursor: pointer; }
+canvas.grab { cursor: grab; }
+.typed { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; font-size: 14px; }
+.typed input { font: inherit; font-family: var(--mono); font-size: 14px; width: 110px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); text-align: right; }
+.tally { display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 4px 10px; font-size: 13.5px; font-family: var(--mono); }
+.tally .h { color: var(--muted); font-family: var(--sans); }
+.tally .w { color: #2E7D5B; font-weight: 600; }
+</style>
+
+<header>
+  <a class="weeks" href="../">All weeks</a>
+  <span class="course">CE 7453 &middot; Week 2 &middot; Honest validation, and the classical toolkit</span>
+  <h1>Interactive demonstrations</h1>
+</header>
+
+<nav role="tablist" aria-label="Demos">
+  <button role="tab" data-tab="leak" aria-selected="true">The leak hunt<span class="slide">slides 4, 5</span></button>
+  <button role="tab" data-tab="fence" aria-selected="false">Paint the fence<span class="slide">slides 6, 7, 8</span></button>
+  <button role="tab" data-tab="ledger" aria-selected="false">Price the threshold<span class="slide">slides 9, 10</span></button>
+  <button role="tab" data-tab="tally" aria-selected="false">Beat the free predictor<span class="slide">slide 11</span></button>
+  <button role="tab" data-tab="mode" aria-selected="false">Draw the choice boundary<span class="slide">slides 14, 15, 18</span></button>
+  <button role="tab" data-tab="margin" aria-selected="false">The widest street<span class="slide">slides 21, 22</span></button>
+</nav>
+
+<main>
+
+<!-- ============ 1. LEAK: find the leak in the pipeline ============ -->
+<section class="demo active" id="leak" role="tabpanel">
+  <h2>The leak hunt: three pipelines from real projects, one leak in each</h2>
+  <p class="lead">Each flowchart is a modelling pipeline a student actually ran, drawn step by step. Somewhere in it, information from the test side reaches the fitted model. Click the box where the leak happens. The reported test score is shown; after your click, the honest score the same pipeline would have produced is revealed.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="lkFlow" class="hit" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="lkStep"></div>
+      <div class="panel">
+        <div class="btns"><button id="lkNext" disabled>Next pipeline</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>pipeline</dt><dd id="lkN">1 / 3</dd>
+          <dt>reported score</dt><dd id="lkRep">-</dd>
+          <dt>honest score</dt><dd id="lkHon">-</dd>
+          <dt>leaks found</dt><dd id="lkScore">0 / 3</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="lkQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The three leaks are the classics on slide 5: a scaler fit on all rows before the split, so the test rows' mean and spread are inside the training features; near-duplicate samples, here the same bridge inspected in consecutive years, landing on both sides of the split; and a threshold chosen by watching the test score, which turns the test set into a second training set. The inflated scores are typical of what Kapoor and Narayanan found across published studies. None of the three authors meant to cheat.</p>
+  </div>
+</section>
+
+<!-- ============ 2. FENCE: paint the held-out blocks ============ -->
+<section class="demo" id="fence" role="tabpanel">
+  <h2>Paint the fence: hold out blocks of a soil field and watch the honest score appear</h2>
+  <p class="lead">Five hundred samples of a soil property across a site, with spatial correlation, as on slide 8. The model is one nearest neighbour. Click cells of the grid to paint them as held out: the model trains on everything else and is scored on the painted cells. Compare with the random split and with the truth on a survey block in the middle of the site that was never sampled. Click a painted cell again to add a buffer ring; click a third time to clear it.</p>
+  <div class="stage">
+    <div class="plot two">
+      <canvas id="feMap" class="hit" width="800" height="520"></canvas>
+      <canvas id="feBars" width="400" height="520"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="feStep"></div>
+      <div class="panel">
+        <div class="btns"><button id="feRandom">Random split instead</button><button id="feClear">Clear the paint</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>samples held out</dt><dd id="feHeld">0</dd>
+          <dt>RMSE, random five-fold split</dt><dd id="feRand">-</dd>
+          <dt>RMSE, your painted blocks</dt><dd id="feBlock">-</dd>
+          <dt>RMSE, truth on the unseen survey block</dt><dd id="feTruth">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="feQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The field is smooth over a few hundred metres, so a sample's nearest neighbour in a random split is usually a few metres away and carries nearly the same value; the random score is a test of memory, not of prediction. Painting whole blocks forces the model to predict where it has no near neighbours, which is the deployment question on slide 7, and a buffer ring stops the correlation reaching across the fence. The survey block in the middle was never sampled; its error is what a client would actually see on new ground, and a painted block of about the same size should land near it while the random score flatters.</p>
+  </div>
+</section>
+
+<!-- ============ 3. LEDGER: price the threshold ============ -->
+<section class="demo" id="ledger" role="tabpanel">
+  <h2>Price the threshold: two thousand welds, forty cracks, two price tags</h2>
+  <p class="lead">A fatigue-crack detector scores every weld on a bridge. Drag the threshold through the scores: welds to its right are flagged. Type what a missed crack and a false alarm cost, and the ledger adds up the bill per weld. Accuracy, precision, recall and the two curves update as you go.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="ldStrip" class="grab" width="1200" height="600"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="ldStep"></div>
+      <div class="panel">
+        <h3>the price tags</h3>
+        <div class="typed"><span>a missed crack costs</span><input type="number" id="ldMiss" value="20000" min="0" step="100"><span>a false alarm costs</span><input type="number" id="ldFA" value="100" min="0" step="10"></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>threshold</dt><dd id="ldTau">0.50</dd>
+          <dt>accuracy</dt><dd id="ldAcc">-</dd>
+          <dt>precision / recall</dt><dd id="ldPR">-</dd>
+          <dt>expected cost per weld</dt><dd id="ldCost">-</dd>
+          <dt>best threshold for these prices</dt><dd id="ldBest">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="ldQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>With two percent cracks, the detector that never flags anything scores 98 percent accuracy and finds nothing, which is slide 9. The expected cost per weld is p(miss) times its price plus p(false alarm) times its price; minimizing it puts the threshold on the posterior at c_FA / (c_FA + c_miss), which is 0.005 at the one-to-two-hundred ratio on slide 10. The ROC curve barely moves as the threshold crosses the rare class; the precision-recall curve shows the struggle, which is why it is the picture to use under imbalance.</p>
+  </div>
+</section>
+
+<!-- ============ 4. TALLY: beat the free predictor ============ -->
+<section class="demo" id="tally" role="tabpanel">
+  <h2>Beat the free predictor: forecast a river stage from any day you choose</h2>
+  <p class="lead">Two hundred days of river stage at a gauge. Click any day to make it the forecast origin: a flexible model fitted to the thirty days before it, and a sober regression on the last five days' values, forecast a week ahead against the two predictors that cost nothing, persistence and the long-run mean. The next seven days are then revealed and the tally records who won. Click five or six origins and read the skill.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="taSeries" class="hit" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="taStep"></div>
+      <div class="panel">
+        <h3>the tally over your origins</h3>
+        <div class="tally" id="taTally"></div>
+        <div class="btns" style="margin-top:10px"><button id="taReset">Clear the tally</button><button id="taNew">New river</button></div>
+      </div>
+      <div class="panel quiz" id="taQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The flexible model is a cubic in time fitted to the last thirty days, the kind of trend extrapolation that looks skilled in a scatter and fails forward; the lag-5 model is a linear regression on the five previous days, refitted on every day before the origin and rolled forward. Persistence says tomorrow equals today, the mean says every day equals the record's average. Skill is one minus the model's mean squared error over the free predictor's; a negative skill means the model would have been worse than doing nothing, which under honest forward chaining is common on a series that is close to a random walk, as slide 11 warns.</p>
+  </div>
+</section>
+
+<!-- ============ 5. MODE: draw the choice boundary ============ -->
+<section class="demo" id="mode" role="tabpanel">
+  <h2>Draw the choice boundary: three hundred commuters, car or transit</h2>
+  <p class="lead">Each commuter is a point: how many minutes longer transit takes across, how many dollars cheaper it is up. Blue took transit, red drove. Drag the two handles to place a boundary line and drag the dashed line to set how sharply the probability ramps across it: that is logistic regression drawn by hand, the logit model of slide 15. The score is the cross entropy, and the reliability diagram on the right says whether your probabilities mean what they say.</p>
+  <div class="stage">
+    <div class="plot two">
+      <canvas id="moPlane" class="grab" width="800" height="520"></canvas>
+      <canvas id="moSide" width="400" height="520"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="moStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="moFit">Fit by maximum likelihood</button><button id="moReset">Start over</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>cross entropy per commuter, yours</dt><dd id="moCE">-</dd>
+          <dt>cross entropy, maximum likelihood</dt><dd id="moCEml">-</dd>
+          <dt>accuracy, yours</dt><dd id="moAcc">-</dd>
+          <dt>calibration gap (mean |bin share - bin p|)</dt><dd id="moCal">-</dd>
+          <dt>minutes of transit time worth one dollar</dt><dd id="moRate">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="moQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The probability of transit is sigmoid(w . x + b): the line is where it equals one half, the dashed line is where it equals 0.9, and the distance between them sets the steepness. Fitting by maximum likelihood minimizes the Bernoulli cross entropy, the loss Week 1 promised, and its gradient is residual times feature, the least-squares shape on slide 15. The ratio of the two weights is a rate of exchange between minutes and dollars, which is what a transport planner reads off a logit model. The reliability diagram is slide 18: a line placed well but with too steep a ramp is overconfident, and the diagram bows away from the diagonal.</p>
+  </div>
+</section>
+
+<!-- ============ 6. MARGIN: the widest street ============ -->
+<section class="demo" id="margin" role="tabpanel">
+  <h2>The widest street: find the margin by hand, then lift a ring apart</h2>
+  <p class="lead">Left: forty pavement sections, rehabilitate or not, by roughness and rut depth, separable. Drag the two handles to aim the street and the edge handle to widen it; the street is valid only while no section stands inside it. Then reveal the support vector machine's street and the sections that hold it up. Right: sensor readings where the faults sit inside a ring. No straight street works, so drag the slicing height on the lifted view, where the third coordinate is distance from the centre squared.</p>
+  <div class="stage">
+    <div class="plot two">
+      <canvas id="mgPlane" class="grab" width="760" height="540"></canvas>
+      <canvas id="mgLift" class="grab" width="440" height="540"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="mgStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="mgReveal">Reveal the SVM street</button><button id="mgReset">Start over</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>your street width</dt><dd id="mgW">-</dd>
+          <dt>sections inside your street</dt><dd id="mgIn">-</dd>
+          <dt>widest possible street</dt><dd id="mgBest">-</dd>
+          <dt>support vectors</dt><dd id="mgSV">-</dd>
+          <dt>ring: faults on the wrong side of the slice</dt><dd id="mgRing">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="mgQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Among all separating lines the support vector machine keeps the one with the widest gap to the nearest point on each side, slide 21; only those nearest points, the support vectors, hold the street up, and every other section could be deleted without moving it. The ring is slide 22: in the plane no line separates the classes, but with one added coordinate, distance from the centre squared, a flat slice does, and the slice's height is a circle back in the plane. A kernel scores that lifted geometry without ever computing the lift.</p>
+  </div>
+</section>
+
+</main>
+<footer>CE 7453 Machine Learning for Civil, Environmental and Geodetic Engineering. Each demo is a small closed-form toy chosen so that the effect on the slide is visible without a trained network.</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- utilities ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const u = 1 - rng(), v = rng(), r = Math.sqrt(-2 * Math.log(u)); out[i] = r * Math.cos(2 * Math.PI * v); if (i + 1 < n) out[i + 1] = r * Math.sin(2 * Math.PI * v); } return out; }
+function hexToRgb(h) { if (h.indexOf("rgb") === 0) return h.replace(/[^0-9.,]/g, "").split(",").slice(0, 3).map(Number); h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
+function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
+Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
+Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+Board.prototype.label = function (s, x, y, color, align, size, mono) { const ctx = this.ctx; ctx.fillStyle = color || css("--muted"); ctx.font = (size || 13) + "px " + css(mono ? "--mono" : "--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(s, x, y); };
+Board.prototype.line = function (x1, y1, x2, y2, color, width, dash) { const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 1; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); };
+Board.prototype.dot = function (x, y, r, color, stroke) { const ctx = this.ctx; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); } };
+function quiz(el, spec) {
+  el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
+  const opts = el.querySelector(".opts"), why = el.querySelector(".why");
+  spec.options.forEach((o, i) => { const b = document.createElement("button"); b.textContent = o; b.addEventListener("click", () => { Array.from(opts.children).forEach(c => c.classList.remove("right", "wrong")); b.classList.add(i === spec.answer ? "right" : "wrong"); if (i !== spec.answer) opts.children[spec.answer].classList.add("right"); why.textContent = (i === spec.answer ? "Right. " : "No. ") + spec.why; }); opts.appendChild(b); });
+}
+function solveLinear(Mtx, rhs) { const n = rhs.length, A = Mtx.map((r, i) => Array.from(r).concat([rhs[i]])); for (let p = 0; p < n; p++) { let best = p; for (let r = p + 1; r < n; r++) if (Math.abs(A[r][p]) > Math.abs(A[best][p])) best = r; const tmp = A[p]; A[p] = A[best]; A[best] = tmp; if (Math.abs(A[p][p]) < 1e-12) return null; for (let r = p + 1; r < n; r++) { const f = A[r][p] / A[p][p]; if (f === 0) continue; for (let j = p; j <= n; j++) A[r][j] -= f * A[p][j]; } } const out = new Array(n).fill(0); for (let p = n - 1; p >= 0; p--) { let s = A[p][n]; for (let j = p + 1; j < n; j++) s -= A[p][j] * out[j]; out[p] = s / A[p][p]; } return out; }
+function wls(A, y, w) { const n = A[0].length, N = [], u = new Array(n).fill(0); for (let i = 0; i < n; i++) N.push(new Array(n).fill(0)); for (let k = 0; k < A.length; k++) { const wk = w ? w[k] : 1; for (let i = 0; i < n; i++) { u[i] += wk * A[k][i] * y[k]; for (let j = 0; j < n; j++) N[i][j] += wk * A[k][i] * A[k][j]; } } return solveLinear(N, u); }
+const sigmoid = z => 1 / (1 + Math.exp(-z));
+function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath(); }
+
+/* ================= 1. THE LEAK HUNT ================= */
+(function leak() {
+  const PIPES = [
+    { title: "Pipeline 1: bridge deck condition rating from 2,400 inspection records", rep: "R^2 0.91", hon: "R^2 0.84", leak: 1,
+      boxes: ["load 2,400 deck records, 14 features", "standardize every feature: fit the scaler on all 2,400 rows", "random 80 / 20 split", "train gradient boosting on the 80 %", "tune depth on a validation fold", "score once on the 20 %: R^2 0.91"],
+      why: "The scaler was fit on all rows, so every training feature carries the test rows' mean and spread. A small leak, but a leak: the honest version fits the scaler inside the training fold only, and the score drops to 0.84.", hint: "Think about what was computed before the split and used after it." },
+    { title: "Pipeline 2: scour risk at 1,500 culverts, inspected every year for four years", rep: "AUC 0.96", hon: "AUC 0.78", leak: 2,
+      boxes: ["load 6,000 inspections: 1,500 culverts x 4 years", "features: hydraulics, age, last year's rating", "random split by inspection row", "train a random forest", "tune the number of trees by cross validation", "report test AUC 0.96"],
+      why: "Splitting by row puts a culvert's 2022 inspection in training and its 2023 inspection in test; the two are near duplicates, so the model recognizes the culvert instead of predicting scour. Splitting by culvert, so a structure leaves training whole, gives 0.78. This is slide 6's address-and-date failure in tabular form.", hint: "Which rows are almost copies of each other, and where do they land?" },
+    { title: "Pipeline 3: weld crack detector, 2,000 scans", rep: "F1 0.82", hon: "F1 0.71", leak: 3,
+      boxes: ["load 2,000 weld scans", "split 70 / 30 by weld", "train a convolutional scorer on the 70 %", "sweep the threshold; keep the one with the best F1 on the 30 %", "report F1 0.82 on the 30 %"],
+      why: "The threshold was chosen by watching the test score, so the test set was used to fit a parameter and then used again to grade it. Choosing the threshold on a validation slice of the 70 % and touching the 30 % once gives 0.71. Every rerun after a disappointing test score is the same leak by hand.", hint: "Which number was chosen by looking at the test score?" } ];
+  const board = new Board(document.getElementById("lkFlow"));
+  let cur = 0, answered = null, found = 0, done = [false, false, false];
+  const stepEl = document.getElementById("lkStep");
+  function boxRects(p) { const n = p.boxes.length, gap = 18, w = Math.min(190, (board.W - 60 - gap * (n - 1)) / n), x0 = (board.W - (n * w + (n - 1) * gap)) / 2; return p.boxes.map((b, i) => ({ x: x0 + i * (w + gap), y: 150, w, h: 150 })); }
+  function wrapText(ctx, text, x, y, maxW, lh) { const words = text.split(" "); let line = "", yy = y; words.forEach(wd => { const t = line ? line + " " + wd : wd; if (ctx.measureText(t).width > maxW && line) { ctx.fillText(line, x, yy); line = wd; yy += lh; } else line = t; }); ctx.fillText(line, x, yy); return yy; }
+  function draw() {
+    const p = PIPES[cur], rects = boxRects(p);
+    board.clear(p.title); const ctx = board.ctx;
+    board.label("the test set is meant to be touched once, after every decision is frozen (slide 4); click the box where that promise breaks", 16, 44, css("--muted"), "left", 12);
+    rects.forEach((r, i) => { const isLeak = i === p.leak, picked = answered === i;
+      ctx.fillStyle = picked ? (isLeak ? "#E3F2EA" : "#F9E4E2") : (answered !== null && isLeak ? "#E3F2EA" : css("--bg")); roundRect(ctx, r.x, r.y, r.w, r.h, 10); ctx.fill(); ctx.strokeStyle = picked || (answered !== null && isLeak) ? (isLeak ? "#2E7D5B" : css("--red")) : css("--line"); ctx.lineWidth = picked || (answered !== null && isLeak) ? 3 : 1.5; ctx.stroke(); ctx.lineWidth = 1;
+      ctx.fillStyle = css("--muted"); ctx.font = "11px " + css("--mono"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText("step " + (i + 1), r.x + 12, r.y + 20);
+      ctx.fillStyle = "#2B2B2B"; ctx.font = "13.5px " + css("--sans"); wrapText(ctx, p.boxes[i], r.x + 12, r.y + 44, r.w - 24, 18);
+      if (i < rects.length - 1) { const nx = rects[i + 1].x; ctx.strokeStyle = css("--grey"); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(r.x + r.w + 2, r.y + r.h / 2); ctx.lineTo(nx - 4, r.y + r.h / 2); ctx.stroke(); ctx.fillStyle = css("--grey"); ctx.beginPath(); ctx.moveTo(nx - 2, r.y + r.h / 2); ctx.lineTo(nx - 10, r.y + r.h / 2 - 5); ctx.lineTo(nx - 10, r.y + r.h / 2 + 5); ctx.closePath(); ctx.fill(); } });
+    // the two data lanes under the chart
+    const ly = 350; board.label("training side", 40, ly, css("--blue"), "left", 12); board.label("test side", 40, ly + 60, css("--red"), "left", 12);
+    board.line(130, ly - 4, board.W - 40, ly - 4, css("--blue"), 3); board.line(130, ly + 56, board.W - 40, ly + 56, css("--red"), 3);
+    if (answered !== null) { const r = rects[p.leak]; const cx = r.x + r.w / 2; ctx.strokeStyle = css("--red"); ctx.lineWidth = 2.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(cx, ly + 56); ctx.lineTo(cx, ly - 4); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = css("--red"); ctx.beginPath(); ctx.moveTo(cx, ly - 6); ctx.lineTo(cx - 6, ly + 6); ctx.lineTo(cx + 6, ly + 6); ctx.closePath(); ctx.fill(); board.label("the leak: test information crosses into the fit here", cx + 12, ly + 30, css("--red"), "left", 12); }
+    board.label("reported: " + p.rep + (answered !== null ? "     honest: " + p.hon : ""), 40, ly + 100, css("--ink"), "left", 14, true);
+    document.getElementById("lkN").textContent = (cur + 1) + " / 3"; document.getElementById("lkRep").textContent = p.rep; document.getElementById("lkHon").textContent = answered !== null ? p.hon : "-"; document.getElementById("lkScore").textContent = found + " / 3";
+    document.getElementById("lkNext").disabled = answered === null;
+    stepEl.innerHTML = answered === null ? '<span class="k">pipeline ' + (cur + 1) + '</span><p>Read the six steps in order. One of them lets the test rows shape the model before the final score. Click it.</p>' : '<span class="k">' + (answered === p.leak ? 'found' : 'not that step') + '</span><div class="ask ' + (answered === p.leak ? 'ok' : 'no') + '">' + (answered === p.leak ? 'Right: step ' + (p.leak + 1) + '. ' : 'Step ' + (answered + 1) + ' is clean. The leak is step ' + (p.leak + 1) + '. ') + p.why + '</div>';
+  }
+  board.c.addEventListener("click", ev => { if (answered !== null) return; const [mx, my] = board.pos(ev); const rects = boxRects(PIPES[cur]); const i = rects.findIndex(r => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h); if (i < 0) return; answered = i; if (i === PIPES[cur].leak && !done[cur]) { found++; done[cur] = true; } draw(); });
+  document.getElementById("lkNext").addEventListener("click", () => { cur = (cur + 1) % PIPES.length; answered = null; draw(); });
+  quiz(document.getElementById("lkQuiz"), { q: "A colleague reruns an experiment eight times, changing the features each time, until the test score is good, then reports that score. What happened?", options: ["Nothing; the test set was never used for training", "The test set chose the features, so it is now part of the fit and the score is inflated", "The score is fine as long as the splits were random"], answer: 1, why: "Each rerun was a decision made by looking at the test score, which is a fit to the test set by hand. The honest procedure makes those decisions on validation data and touches the test set once, after everything is frozen." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 2. PAINT THE FENCE ================= */
+(function fence() {
+  const N = 500, NS = 200, rng = mulberry32(2026), g = randn(rng, N + NS + 10);
+  const f = (x, y) => 1.3 * Math.sin(2 * Math.PI * 0.9 * x + 0.4) * Math.cos(2 * Math.PI * 0.7 * y) + 0.9 * Math.sin(2 * Math.PI * (0.5 * x + 0.8 * y) + 1.1) + 0.5 * x;
+  const HOLE = [0.55, 0.85, 0.30, 0.70]; const inHole = (x, y) => x > HOLE[0] && x < HOLE[1] && y > HOLE[2] && y < HOLE[3];
+  const S = []; while (S.length < N) { const x = rng(), y = rng(); if (inHole(x, y)) continue; S.push({ x, y, v: f(x, y) + 0.35 * g[S.length] }); }
+  const SV = []; for (let i = 0; i < NS; i++) { const x = HOLE[0] + (HOLE[1] - HOLE[0]) * rng(), y = HOLE[2] + (HOLE[3] - HOLE[2]) * rng(); SV.push({ x, y, v: f(x, y) + 0.35 * g[N + i] }); }
+  const COLS = 10, ROWS = 8; let cell = new Array(COLS * ROWS).fill(0), randomMode = false;
+  const rperm = S.map((s, i) => i).sort((a, b) => (mulberry32(a + 7)() - mulberry32(b + 7)())); const fold = new Array(N); rperm.forEach((i, k) => fold[i] = k % 5);
+  const map = new Board(document.getElementById("feMap")), bars = new Board(document.getElementById("feBars"));
+  const X0 = 40, X1 = 760, Y0 = 40, Y1 = 500, px = x => X0 + x * (X1 - X0), py = y => Y0 + y * (Y1 - Y0);
+  const cellOf = s => Math.min(COLS - 1, Math.floor(s.x * COLS)) + COLS * Math.min(ROWS - 1, Math.floor(s.y * ROWS));
+  const vcol = v => { const t = Math.max(0, Math.min(1, (v + 2.2) / 4.4)); return t < 0.5 ? mix(css("--blue"), css("--panel"), t * 2) : mix(css("--panel"), css("--red"), (t - 0.5) * 2); };
+  function nn(train, q) { let b = -1, bd = 1e9; for (const t of train) { const d = (t.x - q.x) ** 2 + (t.y - q.y) ** 2; if (d < bd) { bd = d; b = t; } } return b.v; }
+  function rmse(train, test) { if (!test.length || !train.length) return null; let s = 0; for (const q of test) s += (nn(train, q) - q.v) ** 2; return Math.sqrt(s / test.length); }
+  const randCV = (function () { let s = 0; for (let k = 0; k < 5; k++) { const tr = S.filter((q, i) => fold[i] !== k), te = S.filter((q, i) => fold[i] === k); for (const q of te) s += (nn(tr, q) - q.v) ** 2; } return Math.sqrt(s / N); })();
+  const truth = rmse(S, SV);
+  function buffered() { const b = new Array(COLS * ROWS).fill(false); for (let c = 0; c < COLS * ROWS; c++) if (cell[c] === 2) { const cx = c % COLS, cy = Math.floor(c / COLS); for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const nx = cx + dx, ny = cy + dy; if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) b[nx + COLS * ny] = true; } } return b; }
+  const stepEl = document.getElementById("feStep");
+  function draw() {
+    const buf = buffered(); let test, train, held;
+    if (randomMode) { test = S.filter((q, i) => fold[i] === 0); train = S.filter((q, i) => fold[i] !== 0); }
+    else { test = S.filter(s => cell[cellOf(s)] > 0); train = S.filter(s => cell[cellOf(s)] === 0 && !buf[cellOf(s)]); }
+    const yours = rmse(train, test); held = test.length;
+    map.clear("the site, 1 km across: samples coloured by value; click a cell to hold it out, again for a buffer ring, again to clear"); const ctx = map.ctx;
+    // faint field
+    const tw = (X1 - X0) / 56 + 0.6, th = (Y1 - Y0) / 46 + 0.6; for (let i = 0; i < 56; i++) for (let j = 0; j < 46; j++) { const x = (i + 0.5) / 56, y = (j + 0.5) / 46; ctx.fillStyle = mix(css("--panel"), vcol(f(x, y)), 0.35); ctx.fillRect(px(x) - tw / 2, py(y) - th / 2, tw, th); }
+    // cells
+    for (let c = 0; c < COLS * ROWS; c++) { const cx = c % COLS, cy = Math.floor(c / COLS), x = px(cx / COLS), y = py(cy / ROWS), w = (X1 - X0) / COLS, h = (Y1 - Y0) / ROWS;
+      if (!randomMode && cell[c] > 0) { ctx.fillStyle = mix(css("--panel"), css("--orange"), 0.35); ctx.fillRect(x, y, w, h); }
+      else if (!randomMode && buf[c]) { ctx.fillStyle = mix(css("--panel"), css("--grey"), 0.35); ctx.fillRect(x, y, w, h); }
+      ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h); }
+    S.forEach((s, i) => { const te = randomMode ? fold[i] === 0 : cell[cellOf(s)] > 0, ex = !randomMode && buf[cellOf(s)] && !te; map.dot(px(s.x), py(s.y), te ? 4.5 : 3, ex ? css("--grey") : vcol(s.v), te ? css("--ink") : null); });
+    SV.forEach(s => map.dot(px(s.x), py(s.y), 2, mix(css("--panel"), vcol(s.v), 0.5)));
+    ctx.strokeStyle = css("--ink"); ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5; ctx.strokeRect(px(HOLE[0]), py(HOLE[2]), px(HOLE[1]) - px(HOLE[0]), py(HOLE[3]) - py(HOLE[2])); ctx.setLineDash([]); map.label("survey block, never sampled: the truth is measured here", px(HOLE[0]), py(HOLE[2]) - 6, css("--ink"), "left", 11);
+    map.label("orange: held out   grey: buffer, excluded from training   outlined dots: scored", X0, Y1 + 18, css("--muted"), "left", 12);
+    // bars
+    bars.clear("RMSE of the same one-nearest-neighbour model"); const bc = bars.ctx, rows = [["random five-fold split", randCV, css("--grey")], [randomMode ? "random 20 % hold-out" : "your painted blocks", yours, css("--orange")], ["truth: unseen survey block", truth, css("--ink")]];
+    rows.forEach((r, k) => { const y = 70 + k * 120; bars.label(r[0], 20, y, css("--ink"), "left", 13); if (r[1] === null) { bars.label("paint some cells first", 20, y + 30, css("--muted"), "left", 12); return; } bc.fillStyle = css("--bg"); bc.fillRect(20, y + 12, 340, 26); bc.fillStyle = r[2]; bc.fillRect(20, y + 12, 340 * Math.min(1, r[1] / 1.4), 26); bars.label(r[1].toFixed(2), 20 + 340 * Math.min(1, r[1] / 1.4) + 8, y + 31, css("--ink"), "left", 14, true); });
+    bars.label("1-NN predicts each held-out sample from its", 20, 440, css("--muted"), "left", 12); bars.label("closest training sample; distance does all the work", 20, 458, css("--muted"), "left", 12);
+    document.getElementById("feHeld").textContent = held; document.getElementById("feRand").textContent = randCV.toFixed(2); document.getElementById("feBlock").textContent = yours === null ? "-" : yours.toFixed(2); document.getElementById("feTruth").textContent = truth.toFixed(2);
+    const painted = cell.filter(c => c > 0).length, bufs = cell.filter(c => c === 2).length;
+    stepEl.innerHTML = randomMode ? '<span class="k">random split</span><div class="ask no">Held-out samples sit a few metres from training samples, so the nearest neighbour already knows the answer: ' + yours.toFixed(2) + ' against a truth of ' + truth.toFixed(2) + '. This is the 0.49 against 0.81 of slide 8.</div><p>Click a cell to start painting blocks instead.</p>' : (painted === 0 ? '<span class="k">nothing held out</span><p>Press the random button to see the flattering score first, or start painting cells. Contiguous blocks of several cells are what slide 7 calls spatial block cross validation.</p>' : '<span class="k">' + painted + (painted === 1 ? ' cell' : ' cells') + ' held out' + (bufs ? ', ' + bufs + ' with a buffer' : '') + '</span><div class="ask ' + (yours !== null && Math.abs(yours - truth) < 0.2 ? 'ok' : '') + '">Your score ' + (yours === null ? '-' : yours.toFixed(2)) + ' against the truth ' + truth.toFixed(2) + ' and the random split\'s ' + randCV.toFixed(2) + '.' + (yours !== null && yours < truth - 0.2 ? ' Still flattering: small or scattered cells leave near neighbours across the fence. Paint larger blocks, or add buffers.' : (yours !== null && Math.abs(yours - truth) < 0.2 ? ' Close to what a client would see on new ground.' : (yours !== null ? ' Erring on the safe side, which is the right side to err on.' : ''))) + '</div>');
+  }
+  map.c.addEventListener("click", ev => { const [mx, my] = map.pos(ev); if (mx < X0 || mx > X1 || my < Y0 || my > Y1) return; const cx = Math.floor((mx - X0) / (X1 - X0) * COLS), cy = Math.floor((my - Y0) / (Y1 - Y0) * ROWS); const c = cx + COLS * cy; if (randomMode) { randomMode = false; cell = new Array(COLS * ROWS).fill(0); } cell[c] = (cell[c] + 1) % 3; draw(); });
+  document.getElementById("feRandom").addEventListener("click", () => { randomMode = true; draw(); });
+  document.getElementById("feClear").addEventListener("click", () => { randomMode = false; cell = new Array(COLS * ROWS).fill(0); draw(); });
+  quiz(document.getElementById("feQuiz"), { q: "Random cross validation reports RMSE 0.49, block cross validation 1.07, and a survey on new ground gives 0.81. Which number goes in the report, and why?", options: ["0.49: it is the lowest and uses all the data", "The block score: it answers the deployment question, predicting where there are no near neighbours, and errs on the safe side", "The average of the three"], answer: 1, why: "The random score measures memory of the neighbourhood, not skill at the deployment task. The block score is a little pessimistic, which is the right direction for a number a client will act on. Slide 7's rule: ask where the model will be used, and hold exactly that out." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 3. PRICE THE THRESHOLD ================= */
+(function ledger() {
+  const NW = 2000, NC = 40, rng = mulberry32(99), g = randn(rng, NW);
+  const W = []; for (let i = 0; i < NW; i++) { const crack = i < NC; W.push({ crack, z: crack ? 1.0 + 1.2 * g[i] : -4.0 + 1.2 * g[i] }); }
+  W.forEach(w => w.p = sigmoid(w.z));
+  const sorted = W.slice().sort((a, b) => a.z - b.z);
+  let tau = 0.5, drag = false;
+  const board = new Board(document.getElementById("ldStrip"));
+  const ZL = -9, ZR = 6, HX0 = 60, HX1 = 760, HY0 = 60, HY1 = 250; const zx = z => HX0 + (z - ZL) / (ZR - ZL) * (HX1 - HX0);
+  const logit = p => Math.log(p / (1 - p));
+  function counts(t) { let tp = 0, fn = 0, fp = 0, tn = 0; for (const w of W) { if (w.p >= t) { if (w.crack) tp++; else fp++; } else { if (w.crack) fn++; else tn++; } } return { tp, fn, fp, tn }; }
+  const stepEl = document.getElementById("ldStep");
+  function draw() {
+    const cM = Math.max(0, +document.getElementById("ldMiss").value || 0), cF = Math.max(0, +document.getElementById("ldFA").value || 0);
+    const c = counts(tau), acc = (c.tp + c.tn) / NW, prec = c.tp + c.fp ? c.tp / (c.tp + c.fp) : null, rec = c.tp / NC, cost = (c.fn * cM + c.fp * cF) / NW;
+    const tStar = cM + cF > 0 ? cF / (cF + cM) : 0.5;
+    board.clear("detector scores on a logit axis: grey bars sound welds, red marks cracks; drag the threshold"); const ctx = board.ctx;
+    // histogram of sound welds
+    const NB = 60, bins = new Array(NB).fill(0), cb = new Array(NB).fill(0); W.forEach(w => { const b = Math.max(0, Math.min(NB - 1, Math.floor((w.z - ZL) / (ZR - ZL) * NB))); if (w.crack) cb[b]++; else bins[b]++; }); const bmax = Math.max.apply(null, bins);
+    bins.forEach((n, b) => { const x = HX0 + b * (HX1 - HX0) / NB, h = n / bmax * (HY1 - HY0); ctx.fillStyle = mix(css("--panel"), css("--grey"), 0.6); ctx.fillRect(x + 1, HY1 - h, (HX1 - HX0) / NB - 2, h); });
+    cb.forEach((n, b) => { const x = HX0 + b * (HX1 - HX0) / NB; for (let k = 0; k < n; k++) { ctx.fillStyle = css("--red"); ctx.fillRect(x + 2, HY1 - 8 - k * 7, (HX1 - HX0) / NB - 4, 6); } });
+    board.line(HX0, HY1, HX1, HY1, css("--line"), 1); [0.001, 0.01, 0.1, 0.5, 0.9, 0.99].forEach(p => { const x = zx(logit(p)); board.line(x, HY1, x, HY1 + 5, css("--line"), 1); board.label(String(p), x, HY1 + 18, css("--muted"), "center", 10, true); });
+    board.label("score = probability of a crack", (HX0 + HX1) / 2, HY1 + 34, css("--muted"), "center", 11);
+    const tx = zx(logit(tau)); ctx.fillStyle = mix(css("--panel"), css("--orange"), 0.12); ctx.fillRect(tx, HY0 - 10, HX1 - tx, HY1 - HY0 + 10); board.line(tx, HY0 - 14, tx, HY1 + 6, css("--orange"), 3); board.label("threshold " + (tau < 0.01 ? tau.toFixed(4) : tau.toFixed(3)) + ": flag everything to the right", tx + 8, HY0 - 2, css("--orange"), "left", 12);
+    const sx = zx(logit(Math.max(1e-5, Math.min(1 - 1e-5, tStar)))); board.line(sx, HY0 - 14, sx, HY1 + 6, "#2E7D5B", 2, [5, 4]); board.label("best for these prices: " + (tStar < 0.01 ? tStar.toFixed(4) : tStar.toFixed(3)), sx + (sx > tx ? 8 : -8), HY1 - 6, "#2E7D5B", sx > tx ? "left" : "right", 11);
+    // confusion tiles
+    const TX = 820, TY = 60, TW = 170, TH = 80; const tiles = [["flagged, cracked (hit)", c.tp, "#2E7D5B", 0, 0], ["flagged, sound (false alarm)", c.fp, css("--orange"), 1, 0], ["passed, cracked (miss)", c.fn, css("--red"), 0, 1], ["passed, sound (correct pass)", c.tn, css("--grey"), 1, 1]];
+    tiles.forEach(t => { const x = TX + t[3] * (TW + 10), y = TY + t[4] * (TH + 10); ctx.fillStyle = mix(css("--panel"), t[2], 0.18); ctx.fillRect(x, y, TW, TH); ctx.strokeStyle = t[2]; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, TW, TH); board.label(String(t[1]), x + 12, y + 36, css("--ink"), "left", 24, true); board.label(t[0], x + 12, y + 62, css("--muted"), "left", 11); });
+    board.label("bill: " + c.fn + " misses x " + cM + " + " + c.fp + " alarms x " + cF + " = " + (c.fn * cM + c.fp * cF).toLocaleString() + "  (" + cost.toFixed(0) + " per weld)", TX, TY + 2 * TH + 40, css("--ink"), "left", 12, true);
+    // cost curve
+    const CX0 = 60, CX1 = 560, CY0 = 330, CY1 = 540; board.label("expected cost per weld against the threshold", CX0, CY0 - 10, css("--ink"), "left", 12);
+    board.line(CX0, CY1, CX1, CY1, css("--line"), 1); board.line(CX0, CY0, CX0, CY1, css("--line"), 1);
+    let cmax = 0; const curve = []; for (let k = 0; k <= 150; k++) { const z = ZL + (ZR - ZL) * k / 150, cc = counts(sigmoid(z)); const v = (cc.fn * cM + cc.fp * cF) / NW; curve.push([z, v]); cmax = Math.max(cmax, v); } cmax = cmax || 1;
+    const cx = z => CX0 + (z - ZL) / (ZR - ZL) * (CX1 - CX0), cy = v => CY1 - v / cmax * (CY1 - CY0);
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2; ctx.beginPath(); curve.forEach((p, i) => { if (i === 0) ctx.moveTo(cx(p[0]), cy(p[1])); else ctx.lineTo(cx(p[0]), cy(p[1])); }); ctx.stroke();
+    board.dot(cx(logit(tau)), cy(cost), 7, css("--orange"), "#fff"); board.label(cost.toFixed(0) + " per weld", cx(logit(tau)) + 10, cy(cost) - 8, css("--orange"), "left", 12, true);
+    [0.001, 0.01, 0.1, 0.5, 0.9].forEach(p => board.label(String(p), cx(logit(p)), CY1 + 16, css("--muted"), "center", 10, true)); board.label(cmax.toFixed(0), CX0 - 6, CY0 + 10, css("--muted"), "right", 10, true); board.label("0", CX0 - 6, CY1 + 4, css("--muted"), "right", 10, true);
+    const allFlag = (NW - NC) * cF / NW, noneFlag = NC * cM / NW; board.label("flag every weld: " + allFlag.toFixed(0) + " per weld   flag none: " + noneFlag.toFixed(0) + " per weld", CX0, CY1 + 34, css("--muted"), "left", 11);
+    // ROC and PR
+    const roc = [], pr = []; sorted.slice().reverse().forEach((w, i) => { }); let tp = 0, fp = 0; const rev = sorted.slice().reverse(); rev.forEach(w => { if (w.crack) tp++; else fp++; roc.push([fp / (NW - NC), tp / NC]); pr.push([tp / NC, tp / (tp + fp)]); });
+    const small = (x0, y0, w, h, pts, title, cur, xl, yl) => { board.label(title, x0, y0 - 8, css("--ink"), "left", 12); ctx.strokeStyle = css("--line"); ctx.strokeRect(x0, y0, w, h); ctx.strokeStyle = css("--blue"); ctx.lineWidth = 2; ctx.beginPath(); pts.forEach((p, i) => { const x = x0 + p[0] * w, y = y0 + h - p[1] * h; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.lineWidth = 1; board.dot(x0 + cur[0] * w, y0 + h - cur[1] * h, 6, css("--orange"), "#fff"); board.label(xl, x0 + w / 2, y0 + h + 14, css("--muted"), "center", 10); ctx.save(); ctx.translate(x0 - 8, y0 + h / 2); ctx.rotate(-Math.PI / 2); board.label(yl, 0, 0, css("--muted"), "center", 10); ctx.restore(); };
+    small(640, 340, 180, 180, roc, "ROC: flattering under imbalance", [c.fp / (NW - NC), rec], "false alarm rate", "recall");
+    small(900, 340, 180, 180, pr, "precision-recall: the struggle", [rec, prec === null ? 1 : prec], "recall", "precision");
+    document.getElementById("ldTau").textContent = tau < 0.01 ? tau.toFixed(4) : tau.toFixed(3); document.getElementById("ldAcc").textContent = (100 * acc).toFixed(1) + " %"; document.getElementById("ldPR").textContent = (prec === null ? "-" : (100 * prec).toFixed(0) + " %") + " / " + (100 * rec).toFixed(0) + " %"; document.getElementById("ldCost").textContent = cost.toFixed(1); document.getElementById("ldBest").textContent = (tStar < 0.01 ? tStar.toFixed(4) : tStar.toFixed(3)) + " = c_FA / (c_FA + c_miss)";
+    stepEl.innerHTML = '<span class="k">' + (Math.abs(logit(tau) - logit(Math.max(1e-5, Math.min(1 - 1e-5, tStar)))) < 0.5 ? 'at the priced threshold' : (tau > tStar ? 'threshold too high for these prices' : 'threshold too low for these prices')) + '</span><p>At ' + (tau < 0.01 ? tau.toFixed(4) : tau.toFixed(2)) + ' the detector flags ' + (c.tp + c.fp) + ' welds, catches ' + c.tp + ' of 40 cracks and misses ' + c.fn + '. Accuracy reads ' + (100 * acc).toFixed(1) + ' %' + (acc > 0.97 && rec < 0.5 ? ', which is the trap on slide 9: a high number that hides the misses' : '') + '.</p><p>With a miss at ' + cM + ' and an alarm at ' + cF + ', the bill is lowest at a threshold of ' + (tStar < 0.01 ? tStar.toFixed(4) : tStar.toFixed(3)) + '. Change the prices and the green line moves; nothing about 0.5 was ever sacred.</p>';
+  }
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (my < HY1 + 40 && mx >= HX0 - 10 && mx <= HX1 + 10) { drag = true; move(ev); } });
+  function move(ev) { const [mx] = board.pos(ev); const z = Math.max(ZL + 0.2, Math.min(ZR - 0.2, ZL + (mx - HX0) / (HX1 - HX0) * (ZR - ZL))); tau = sigmoid(z); draw(); }
+  window.addEventListener("mousemove", ev => { if (drag) move(ev); });
+  window.addEventListener("mouseup", () => { drag = false; });
+  ["ldMiss", "ldFA"].forEach(id => document.getElementById(id).addEventListener("input", draw));
+  quiz(document.getElementById("ldQuiz"), { q: "A missed crack costs 200 times a false alarm. The threshold that minimizes expected cost is", options: ["0.5, because that is where the posterior favours a crack", "About 0.005: flag any weld whose crack probability exceeds c_FA / (c_FA + c_miss)", "0.995, to keep false alarms rare"], answer: 1, why: "Flag when p x c_miss exceeds (1 - p) x c_FA, which solves to p above c_FA / (c_FA + c_miss) = 1 / 201. A cheap alarm and an expensive miss push the threshold toward raising alarms, which is slide 10's point." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 4. BEAT THE FREE PREDICTOR ================= */
+(function tally() {
+  const ND = 200, H = 7, FITW = 30;
+  let seed = 11, series = null, picks = [], last = null;
+  function make() { const rng = mulberry32(seed), g = randn(rng, ND); series = []; let s = 0; for (let t = 0; t < ND; t++) { s = 0.96 * s + 0.11 * g[t]; series.push(2.0 + 0.5 * Math.sin(2 * Math.PI * t / 120 + 0.7) + s); } }
+  const board = new Board(document.getElementById("taSeries"));
+  const L = 60, R = board.W - 40, TOP = 50, BOT = board.H - 60, px = t => L + t / (ND - 1) * (R - L), py = v => BOT - (v - 0.5) / 3.5 * (BOT - TOP);
+  const stepEl = document.getElementById("taStep");
+  function forecast(t0) { const A = [], y = []; for (let t = t0 - FITW + 1; t <= t0; t++) { const u = (t - t0) / FITW; A.push([1, u, u * u, u * u * u]); y.push(series[t]); } const c = wls(A, y, null); const flex = [], pers = [], clim = []; const m = series.slice(0, t0 + 1).reduce((s, v) => s + v, 0) / (t0 + 1); for (let h = 1; h <= H; h++) { const u = h / FITW; flex.push(c[0] + c[1] * u + c[2] * u * u + c[3] * u * u * u); pers.push(series[t0]); clim.push(m); } const ar = []; { const Aa = [], ya = []; for (let t = 5; t <= t0; t++) { Aa.push([1, series[t - 1], series[t - 2], series[t - 3], series[t - 4], series[t - 5]]); ya.push(series[t]); } const ca = wls(Aa, ya, null); const hist = series.slice(t0 - 4, t0 + 1); for (let h = 1; h <= H; h++) { const L5 = hist.length; const v = ca[0] + ca[1] * hist[L5 - 1] + ca[2] * hist[L5 - 2] + ca[3] * hist[L5 - 3] + ca[4] * hist[L5 - 4] + ca[5] * hist[L5 - 5]; ar.push(v); hist.push(v); } }
+    const mse = f => f.reduce((s, v, i) => s + (v - series[t0 + 1 + i]) ** 2, 0) / H; return { flex, ar, pers, clim, e: [mse(flex), mse(ar), mse(pers), mse(clim)] }; }
+  function draw() {
+    board.clear("river stage at the gauge, m: click a day to forecast the week after it"); const ctx = board.ctx;
+    board.line(L, TOP, L, BOT, css("--line"), 1); board.line(L, BOT, R, BOT, css("--line"), 1);
+    for (let v = 1; v <= 3.5; v += 0.5) { board.label(v.toFixed(1), L - 8, py(v) + 4, css("--muted"), "right", 10, true); board.line(L, py(v), R, py(v), css("--line"), 0.5); }
+    for (let t = 0; t < ND; t += 20) board.label("day " + t, px(t), BOT + 16, css("--muted"), "center", 10);
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 1.5; ctx.beginPath(); series.forEach((v, t) => { if (t === 0) ctx.moveTo(px(t), py(v)); else ctx.lineTo(px(t), py(v)); }); ctx.stroke();
+    if (last !== null) { const t0 = last, F = forecast(t0); ctx.fillStyle = mix(css("--panel"), css("--orange"), 0.15); ctx.fillRect(px(t0 - FITW + 1), TOP, px(t0) - px(t0 - FITW + 1), BOT - TOP); board.line(px(t0), TOP, px(t0), BOT, css("--orange"), 2); board.label("origin, day " + t0, px(t0), TOP - 8, css("--orange"), "center", 11);
+      board.label("fitted window", px(t0 - FITW / 2), TOP + 14, css("--orange"), "center", 10);
+      const tr = (vals, color, width, dash) => { ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(px(t0), py(series[t0])); vals.forEach((v, h) => ctx.lineTo(px(t0 + 1 + h), py(v))); ctx.stroke(); ctx.setLineDash([]); };
+      tr(F.flex, css("--blue"), 3); tr(F.ar, css("--orange"), 2.5); tr(F.pers, "#2E7D5B", 2.5, [6, 4]); tr(F.clim, css("--grey"), 2.5, [2, 4]);
+      for (let h = 1; h <= H; h++) board.dot(px(t0 + h), py(series[t0 + h]), 4, css("--red"), "#fff");
+      board.label("blue: cubic through the last 30 days   orange: regression on the last five days' values   green dashed: persistence   grey dotted: long-run mean   red dots: what happened", L, board.H - 14, css("--muted"), "left", 12); }
+    else board.label("the series is a near random walk on top of a slow season; most of its day-to-day change is unpredictable", L, board.H - 14, css("--muted"), "left", 12);
+    // tally table
+    const T = document.getElementById("taTally"); let html = '<span class="h">origin</span><span class="h">cubic</span><span class="h">lag-5</span><span class="h">persist</span><span class="h">mean</span>';
+    let sf = 0, sa = 0, sp = 0, sm = 0, wins = [0, 0, 0, 0];
+    picks.forEach(t0 => { const F = forecast(t0); const w = F.e.indexOf(Math.min.apply(null, F.e)); wins[w]++; sf += F.e[0]; sa += F.e[1]; sp += F.e[2]; sm += F.e[3]; html += '<span>day ' + t0 + '</span>' + F.e.map((e, i) => '<span class="' + (i === w ? 'w' : '') + '">' + e.toFixed(3) + '</span>').join(''); });
+    if (picks.length) html += '<span class="h">wins</span>' + wins.map(w => '<span class="w">' + w + '</span>').join('') + '<span class="h">skill vs persistence</span><span>' + (1 - sf / sp).toFixed(2) + '</span><span>' + (1 - sa / sp).toFixed(2) + '</span><span>0.00</span><span>' + (1 - sm / sp).toFixed(2) + '</span>';
+    T.innerHTML = html;
+    stepEl.innerHTML = picks.length === 0 ? '<span class="k">no forecasts yet</span><p>Click a day between 30 and 192. The cubic will look confident; the table keeps score in mean squared error over the seven days.</p>' : '<span class="k">' + picks.length + (picks.length === 1 ? ' origin' : ' origins') + '</span><div class="ask ' + (picks.length >= 5 ? (sf > sp ? 'no' : 'ok') : '') + '">' + (picks.length < 5 ? 'Skill so far ' + (1 - sf / sp).toFixed(2) + ' against persistence. Keep clicking; one origin proves nothing either way.' : (sf > sp ? 'Over ' + picks.length + ' origins the cubic has negative skill, ' + (1 - sf / sp).toFixed(2) + ': it loses to a predictor that costs nothing and should not be deployed.' : 'Over ' + picks.length + ' origins the cubic has skill ' + (1 - sf / sp).toFixed(2) + ' against persistence. Check that the wins are not all from one quiet stretch before believing it.') + ' The lag-5 regression, a sensible model, scores ' + (1 - sa / sp).toFixed(2) + ': ' + (sa < sp ? 'a small, honest gain.' : 'no gain at all.')) + '</div><p>A flexible fit to the recent past extrapolates its own wiggle; a sober autoregression mostly rediscovers persistence. Report skill over the free predictor, never the raw error alone.</p>';
+  }
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); if (my < TOP || my > BOT) return; const t0 = Math.round((mx - L) / (R - L) * (ND - 1)); if (t0 < FITW || t0 > ND - 1 - H) return; last = t0; if (!picks.includes(t0)) picks.push(t0); draw(); });
+  document.getElementById("taReset").addEventListener("click", () => { picks = []; last = null; draw(); });
+  document.getElementById("taNew").addEventListener("click", () => { seed += 1; make(); picks = []; last = null; draw(); });
+  quiz(document.getElementById("taQuiz"), { q: "A paper reports a one-day-ahead water level model with RMSE 4 cm and no baseline. What is the first question to ask?", options: ["Which network architecture was used", "What persistence scores on the same days: on a slowly varying series, tomorrow equals today is often within a few centimetres already", "Whether the data were scaled"], answer: 1, why: "Skill is the gain over a predictor that costs nothing. On a near random walk one-step skill is scarce, and a model that cannot beat persistence has learned nothing worth deploying, however small its RMSE looks on its own." });
+  window.addEventListener("themechange", draw);
+  make(); draw();
+})();
+
+/* ================= 5. DRAW THE CHOICE BOUNDARY ================= */
+(function mode() {
+  const n = 300, rng = mulberry32(14), g = randn(rng, n);
+  const C = []; for (let i = 0; i < n; i++) { const dt = -20 + 60 * rng(), dc = -2 + 10 * rng(); const u = 0.8 - 0.07 * dt + 0.35 * dc; C.push({ dt, dc, y: rng() < sigmoid(u) ? 1 : 0 }); }
+  const plane = new Board(document.getElementById("moPlane")), side = new Board(document.getElementById("moSide"));
+  const L = 60, R = plane.W - 30, TOP = 40, BOT = plane.H - 50; const px = dt => L + (dt + 20) / 60 * (R - L), py = dc => BOT - (dc + 2) / 10 * (BOT - TOP);
+  const dx = (R - L) / 60, dy = (BOT - TOP) / 10; // px per unit
+  let A = [10, -1], B = [12, 7], off = -60, drag = null, fitted = false;
+  const stepEl = document.getElementById("moStep");
+  function model() { const vx = (B[0] - A[0]) * dx, vy = -(B[1] - A[1]) * dy; const nrm = Math.hypot(vx, vy) || 1; let nx = -vy / nrm, ny = vx / nrm; // unit normal in pixel space
+    const k = Math.log(9) / Math.max(4, Math.abs(off) * 1); if (off < 0) { nx = -nx; ny = -ny; }
+    const mid = [(px(A[0]) + px(B[0])) / 2, (py(A[1]) + py(B[1])) / 2]; return { nx, ny, k, mid, score: (dt, dc) => k * ((px(dt) - mid[0]) * nx + (py(dc) - mid[1]) * ny) }; }
+  function stats(m) { let ce = 0, acc = 0; const bins = []; for (let b = 0; b < 10; b++) bins.push([0, 0]); C.forEach(c => { const z = m.score(c.dt, c.dc), p = sigmoid(z); const pc = Math.min(1 - 1e-6, Math.max(1e-6, p)); ce += -(c.y * Math.log(pc) + (1 - c.y) * Math.log(1 - pc)); if ((p >= 0.5) === (c.y === 1)) acc++; const b = Math.min(9, Math.floor(p * 10)); bins[b][0] += c.y; bins[b][1]++; }); let gap = 0, nb = 0; bins.forEach((b, i) => { if (b[1] >= 5) { gap += Math.abs(b[0] / b[1] - (i + 0.5) / 10); nb++; } }); return { ce: ce / n, acc: acc / n, bins, gap: nb ? gap / nb : 0 }; }
+  // maximum likelihood by Newton's method in data units
+  const ML = (function () { let w = [0, 0, 0]; for (let it = 0; it < 30; it++) { const Hs = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], gr = [0, 0, 0]; C.forEach(c => { const x = [1, c.dt, c.dc], p = sigmoid(w[0] + w[1] * c.dt + w[2] * c.dc); for (let i = 0; i < 3; i++) { gr[i] += (c.y - p) * x[i]; for (let j = 0; j < 3; j++) Hs[i][j] += p * (1 - p) * x[i] * x[j]; } }); for (let i = 0; i < 3; i++) Hs[i][i] += 1e-6; const d = solveLinear(Hs, gr); if (!d) break; w = w.map((v, i) => v + d[i]); } return w; })();
+  const mlModel = { score: (dt, dc) => ML[0] + ML[1] * dt + ML[2] * dc }, mlStats = stats(mlModel);
+  function draw() {
+    const m = model(), st = stats(m);
+    plane.clear("commuters: transit minutes longer across, dollars cheaper up; blue took transit, red drove"); const ctx = plane.ctx;
+    // probability field
+    for (let i = 0; i < 60; i++) for (let j = 0; j < 40; j++) { const dt = -20 + 60 * (i + 0.5) / 60, dc = -2 + 10 * (j + 0.5) / 40, p = sigmoid(m.score(dt, dc)); ctx.fillStyle = mix(mix(css("--panel"), css("--red"), 0.25 * (1 - p)), mix(css("--panel"), css("--blue"), 0.25 * p), p); ctx.fillRect(px(dt) - dx / 2, py(dc) - dy * 0.125 - 0.3, dx + 0.6, dy * 0.25 + 0.6); }
+    plane.line(L, BOT, R, BOT, css("--line"), 1); plane.line(L, TOP, L, BOT, css("--line"), 1);
+    for (let t = -20; t <= 40; t += 10) plane.label(t + " min", px(t), BOT + 16, css("--muted"), "center", 10, true); for (let c = -2; c <= 8; c += 2) plane.label("$" + c, L - 8, py(c) + 4, css("--muted"), "right", 10, true);
+    C.forEach(c => plane.dot(px(c.dt), py(c.dc), 3.5, c.y ? css("--blue") : css("--red")));
+    // the line and the 0.9 line
+    const ext = (p0, p1, f) => [p0[0] + (p1[0] - p0[0]) * f, p0[1] + (p1[1] - p0[1]) * f];
+    const a = [px(A[0]), py(A[1])], b = [px(B[0]), py(B[1])]; const e1 = ext(a, b, -5), e2 = ext(a, b, 6);
+    ctx.save(); ctx.beginPath(); ctx.rect(L, TOP, R - L, BOT - TOP); ctx.clip();
+    plane.line(e1[0], e1[1], e2[0], e2[1], css("--ink"), 2.5);
+    const o = Math.log(9) / m.k; plane.line(e1[0] + m.nx * o, e1[1] + m.ny * o, e2[0] + m.nx * o, e2[1] + m.ny * o, css("--blue"), 1.5, [6, 4]); plane.line(e1[0] - m.nx * o, e1[1] - m.ny * o, e2[0] - m.nx * o, e2[1] - m.ny * o, css("--red"), 1.5, [6, 4]);
+    ctx.restore();
+    plane.dot(a[0], a[1], 8, css("--ink"), "#fff"); plane.dot(b[0], b[1], 8, css("--ink"), "#fff");
+    const hm = [m.mid[0] + m.nx * o, m.mid[1] + m.ny * o]; plane.dot(hm[0], hm[1], 7, css("--blue"), "#fff"); plane.label("p(transit) = 0.9 here (drag)", hm[0] + 10, hm[1] - 8, css("--blue"), "left", 11);
+    plane.label("p = 0.5 on the solid line (drag its handles)", m.mid[0] + 10, m.mid[1] + 16, css("--ink"), "left", 11);
+    // side: ramp and reliability
+    side.clear("the ramp along the normal, and the reliability diagram"); const sc = side.ctx;
+    const RX0 = 40, RX1 = 380, RY0 = 60, RY1 = 200; side.line(RX0, RY1, RX1, RY1, css("--line"), 1); side.line(RX0, RY0, RX0, RY1, css("--line"), 1);
+    const zr = 6; sc.strokeStyle = css("--ink"); sc.lineWidth = 2; sc.beginPath(); for (let i = 0; i <= 80; i++) { const z = -zr + 2 * zr * i / 80; const x = RX0 + (z + zr) / (2 * zr) * (RX1 - RX0), y = RY1 - sigmoid(z) * (RY1 - RY0); if (i === 0) sc.moveTo(x, y); else sc.lineTo(x, y); } sc.stroke();
+    C.forEach(c => { const z = Math.max(-zr, Math.min(zr, m.score(c.dt, c.dc))); side.dot(RX0 + (z + zr) / (2 * zr) * (RX1 - RX0), c.y ? RY0 - 8 : RY1 + 8, 2.5, c.y ? css("--blue") : css("--red")); });
+    side.label("score w . x + b", (RX0 + RX1) / 2, RY1 + 26, css("--muted"), "center", 11); side.label("p(transit)", RX0 + 4, RY0 - 14, css("--muted"), "left", 11); side.label("blue dots: took transit; red: drove", RX0, RY1 + 42, css("--muted"), "left", 11);
+    const CX0 = 60, CX1 = 360, CY0 = 300, CY1 = 500; side.label("reliability: predicted p against the share who took transit", RX0, CY0 - 10, css("--ink"), "left", 12);
+    side.line(CX0, CY1, CX1, CY1, css("--line"), 1); side.line(CX0, CY0, CX0, CY1, css("--line"), 1); side.line(CX0, CY1, CX1, CY0, css("--grey"), 1, [4, 4]);
+    st.bins.forEach((b, i) => { if (b[1] < 5) return; const x = CX0 + (i + 0.5) / 10 * (CX1 - CX0), y = CY1 - (b[0] / b[1]) * (CY1 - CY0); side.dot(x, y, 4 + Math.min(8, b[1] / 8), css("--orange"), "#fff"); });
+    side.label("0", CX0, CY1 + 14, css("--muted"), "center", 10, true); side.label("1", CX1, CY1 + 14, css("--muted"), "center", 10, true); side.label("predicted p", (CX0 + CX1) / 2, CY1 + 28, css("--muted"), "center", 11); side.label("bigger dot: more commuters in the bin", CX0, CY1 + 44, css("--muted"), "left", 10);
+    document.getElementById("moCE").textContent = st.ce.toFixed(3); document.getElementById("moCEml").textContent = mlStats.ce.toFixed(3); document.getElementById("moAcc").textContent = (100 * st.acc).toFixed(1) + " %"; document.getElementById("moCal").textContent = st.gap.toFixed(3);
+    // weights in data units: score = k * ((px(dt)-mid)*nx + (py(dc)-mid)*ny); d/d dt = k*dx*nx ; d/d dc = -k*dy*ny
+    const wdt = m.k * dx * m.nx, wdc = -m.k * dy * m.ny; document.getElementById("moRate").textContent = Math.abs(wdt) > 1e-9 ? (Math.abs(wdc / wdt)).toFixed(1) + " (max likelihood: " + Math.abs(ML[2] / ML[1]).toFixed(1) + ")" : "-";
+    stepEl.innerHTML = '<span class="k">' + (fitted ? 'maximum likelihood' : 'your logit model') + '</span><div class="ask ' + (st.ce <= mlStats.ce + 0.02 ? 'ok' : '') + '">Cross entropy ' + st.ce.toFixed(3) + ' per commuter against ' + mlStats.ce.toFixed(3) + ' for the maximum likelihood fit' + (st.ce <= mlStats.ce + 0.02 ? ': as good as it gets.' : '. Accuracy ' + (100 * st.acc).toFixed(0) + ' %.') + (st.gap > 0.08 ? ' The reliability dots bow off the diagonal: your probabilities are ' + (st.bins.some((b, i) => b[1] >= 5 && Math.abs(b[0] / b[1] - 0.5) < Math.abs((i + 0.5) / 10 - 0.5) - 0.08) ? 'overconfident, the ramp is too steep.' : 'underconfident, the ramp is too shallow.') : '') + '</div><p>Accuracy only counts which side of the solid line each commuter falls on; cross entropy also charges for saying 0.95 about someone who drove. A line in the right place with the wrong steepness scores the same accuracy and a worse cross entropy.</p>';
+  }
+  plane.c.addEventListener("mousedown", ev => { const [mx, my] = plane.pos(ev); const m = model(), o = Math.log(9) / m.k; const hm = [m.mid[0] + m.nx * o, m.mid[1] + m.ny * o]; if (Math.hypot(mx - hm[0], my - hm[1]) < 14) { drag = "off"; return; } if (Math.hypot(mx - px(A[0]), my - py(A[1])) < 14) drag = "A"; else if (Math.hypot(mx - px(B[0]), my - py(B[1])) < 14) drag = "B"; });
+  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = plane.pos(ev); fitted = false; const dt = Math.max(-20, Math.min(40, -20 + (mx - L) / (R - L) * 60)), dc = Math.max(-2, Math.min(8, -2 + (BOT - my) / (BOT - TOP) * 10)); if (drag === "A") A = [dt, dc]; else if (drag === "B") B = [dt, dc]; else { const m = model(); const sgn = off < 0 ? -1 : 1; const d = ((mx - m.mid[0]) * m.nx + (my - m.mid[1]) * m.ny) * sgn; off = Math.max(-300, Math.min(300, d === 0 ? off : (Math.abs(d) < 4 ? 4 * Math.sign(off) : d * sgn))); } draw(); });
+  window.addEventListener("mouseup", () => { drag = null; });
+  document.getElementById("moFit").addEventListener("click", () => { // line: ML[0] + ML[1] dt + ML[2] dc = 0 ; pick two points
+    const dcAt = dt => -(ML[0] + ML[1] * dt) / ML[2]; A = [0, dcAt(0)]; B = [15, dcAt(15)]; // normal in pixel space
+    const wpx = Math.hypot(ML[1] / dx, ML[2] / dy); // |w| in pixel units
+    const o = Math.log(9) / wpx; // pixel offset of the 0.9 line
+    off = o; const m0 = model(); const test = m0.score(0, dcAt(0) + 1); const mlAt = ML[0] + ML[2] * (dcAt(0) + 1); if ((test > 0) !== (mlAt > 0)) off = -o; fitted = true; draw(); });
+  document.getElementById("moReset").addEventListener("click", () => { A = [10, -1]; B = [12, 7]; off = -60; fitted = false; draw(); });
+  quiz(document.getElementById("moQuiz"), { q: "The logit model gives transit a weight of -0.07 per minute and +0.35 per dollar. A planner reads this as", options: ["Transit is chosen 35 % of the time", "Five minutes of extra travel time are worth about one dollar of fare to these commuters", "The model is 93 % accurate"], answer: 1, why: "The ratio of two utility weights is a rate of exchange: 0.35 / 0.07 = 5 minutes per dollar. That is the value of time a mode-choice model delivers, and it is the same ratio whether you fit it as logistic regression or as McFadden's conditional logit." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 6. THE WIDEST STREET ================= */
+(function margin() {
+  const rng = mulberry32(21), P = [];
+  while (P.length < 40) { const iri = 1 + 4 * rng(), rut = 2 + 18 * rng(); const s = (iri - 2.7) * 1.0 + (rut - 9.5) * 0.12; if (s > 0.45) P.push({ x: iri, y: rut, c: 1 }); else if (s < -0.45) P.push({ x: iri, y: rut, c: 0 }); }
+  const plane = new Board(document.getElementById("mgPlane")), lift = new Board(document.getElementById("mgLift"));
+  const L = 60, R = plane.W - 30, TOP = 40, BOT = plane.H - 50; const px = x => L + (x - 1) / 4 * (R - L), py = y => BOT - (y - 2) / 18 * (BOT - TOP);
+  const PP = P.map(p => ({ x: px(p.x), y: py(p.y), c: p.c }));
+  let A = [px(1.6), py(16)], B = [px(4.2), py(4)], hw = 14, drag = null, revealed = false;
+  // exact maximum margin in pixel space by candidate directions
+  function hull(pts) { const s = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y); const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); const lo = [], up = []; for (const p of s) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); } for (let i = s.length - 1; i >= 0; i--) { const p = s[i]; while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); } return lo.slice(0, -1).concat(up.slice(0, -1)); }
+  const SVM = (function () { const A0 = PP.filter(p => p.c === 0), A1 = PP.filter(p => p.c === 1), h0 = hull(A0), h1 = hull(A1); const cands = []; h0.forEach(p => h1.forEach(q => cands.push([q.x - p.x, q.y - p.y]))); const edges = (h) => h.map((p, i) => { const q = h[(i + 1) % h.length]; return [-(q.y - p.y), q.x - p.x]; }); edges(h0).concat(edges(h1)).forEach(e => cands.push(e)); let best = null; cands.forEach(d => { const nrm = Math.hypot(d[0], d[1]); if (nrm < 1e-9) return; const n = [d[0] / nrm, d[1] / nrm]; const s0 = A0.map(p => p.x * n[0] + p.y * n[1]), s1 = A1.map(p => p.x * n[0] + p.y * n[1]); let m = (Math.min.apply(null, s1) - Math.max.apply(null, s0)) / 2, c = (Math.min.apply(null, s1) + Math.max.apply(null, s0)) / 2, nn = n; if (m < 0) { m = (Math.min.apply(null, s0) - Math.max.apply(null, s1)) / 2; c = (Math.min.apply(null, s0) + Math.max.apply(null, s1)) / 2; nn = [-n[0], -n[1]]; c = -c; } if (m > 0 && (!best || m > best.m)) best = { m, c, n: nn }; }); const sv = PP.filter(p => Math.abs(Math.abs(p.x * best.n[0] + p.y * best.n[1] - best.c) - best.m) < 0.5); return Object.assign(best, { sv }); })();
+  const stepEl = document.getElementById("mgStep");
+  function street() { const vx = B[0] - A[0], vy = B[1] - A[1], nrm = Math.hypot(vx, vy) || 1; const n = [-vy / nrm, vx / nrm]; const c = A[0] * n[0] + A[1] * n[1]; let inside = 0, s0 = [], s1 = []; PP.forEach(p => { const d = p.x * n[0] + p.y * n[1] - c; if (Math.abs(d) < hw) inside++; (p.c ? s1 : s0).push(d); }); const sep = (Math.min.apply(null, s1) > 0 && Math.max.apply(null, s0) < 0) || (Math.min.apply(null, s0) > 0 && Math.max.apply(null, s1) < 0); return { n, c, inside, sep, mid: [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2] }; }
+  // ring data for the lift
+  const rr = mulberry32(5), RING = []; for (let i = 0; i < 30; i++) { const a = 2 * Math.PI * rr(), r = 0.85 * Math.sqrt(rr()); RING.push({ x: r * Math.cos(a), y: r * Math.sin(a), c: 1 }); } for (let i = 0; i < 40; i++) { const a = 2 * Math.PI * rr(), r = 1.3 + 0.9 * rr(); RING.push({ x: r * Math.cos(a), y: r * Math.sin(a), c: 0 }); }
+  let hgt = 3.2, dragH = false;
+  function draw() {
+    const s = street(), valid = s.sep && s.inside === 0;
+    plane.clear("pavement sections: roughness across, rut depth up; blue keep, red rehabilitate"); const ctx = plane.ctx;
+    plane.line(L, BOT, R, BOT, css("--line"), 1); plane.line(L, TOP, L, BOT, css("--line"), 1);
+    for (let x = 1; x <= 5; x++) plane.label("IRI " + x, px(x), BOT + 16, css("--muted"), "center", 10, true); for (let y = 2; y <= 20; y += 6) plane.label(y + " mm", L - 8, py(y) + 4, css("--muted"), "right", 10, true);
+    const drawStreet = (n, c, w, color, alpha, dash) => { const t = [-n[1], n[0]]; const p0 = [n[0] * c, n[1] * c]; ctx.save(); ctx.beginPath(); ctx.rect(L, TOP, R - L, BOT - TOP); ctx.clip(); ctx.globalAlpha = alpha; ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(p0[0] + n[0] * w - t[0] * 2000, p0[1] + n[1] * w - t[1] * 2000); ctx.lineTo(p0[0] + n[0] * w + t[0] * 2000, p0[1] + n[1] * w + t[1] * 2000); ctx.lineTo(p0[0] - n[0] * w + t[0] * 2000, p0[1] - n[1] * w + t[1] * 2000); ctx.lineTo(p0[0] - n[0] * w - t[0] * 2000, p0[1] - n[1] * w - t[1] * 2000); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; plane.line(p0[0] - t[0] * 2000, p0[1] - t[1] * 2000, p0[0] + t[0] * 2000, p0[1] + t[1] * 2000, color, 2, dash); ctx.restore(); };
+    if (revealed) drawStreet(SVM.n, SVM.c, SVM.m, "#2E7D5B", 0.18, [6, 4]);
+    drawStreet(s.n, s.c, hw, valid ? css("--orange") : css("--red"), 0.22);
+    PP.forEach(p => plane.dot(p.x, p.y, 5, p.c ? css("--red") : css("--blue")));
+    if (revealed) SVM.sv.forEach(p => { ctx.strokeStyle = "#2E7D5B"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, 2 * Math.PI); ctx.stroke(); });
+    plane.dot(A[0], A[1], 8, css("--ink"), "#fff"); plane.dot(B[0], B[1], 8, css("--ink"), "#fff");
+    const eh = [s.mid[0] + s.n[0] * hw, s.mid[1] + s.n[1] * hw]; plane.dot(eh[0], eh[1], 7, css("--orange"), "#fff"); plane.label("edge (drag to widen)", eh[0] + 10, eh[1] - 6, css("--orange"), "left", 11);
+    plane.label(valid ? "a clean street, " + (2 * hw).toFixed(0) + " px wide" : (s.sep ? s.inside + " section" + (s.inside > 1 ? "s" : "") + " standing in the street" : "the street does not separate the classes"), L, board0(), valid ? css("--orange") : css("--red"), "left", 12);
+    function board0() { return plane.H - 14; }
+    // lift panel
+    lift.clear("sensor faults (red) sit inside a ring of normal readings"); const lc = lift.ctx; const PX0 = 220, PY0 = 130, PS = 38; // plan
+    lc.strokeStyle = css("--line"); lc.strokeRect(PX0 - 100, PY0 - 100, 200, 200); RING.forEach(p => lift.dot(PX0 + p.x * PS, PY0 - p.y * PS, 3.5, p.c ? css("--red") : css("--blue")));
+    lc.strokeStyle = "#2E7D5B"; lc.lineWidth = 2; lc.setLineDash([5, 4]); lc.beginPath(); lc.arc(PX0, PY0, Math.sqrt(hgt) * PS, 0, 2 * Math.PI); lc.stroke(); lc.setLineDash([]); lc.lineWidth = 1;
+    lift.label("plan view: no straight line separates them; the slice is this circle", 20, 250, css("--muted"), "left", 11);
+    const SX0 = 60, SX1 = 380, SY0 = 290, SY1 = 500; lift.label("lifted: height = x^2 + y^2, drag the slice", 20, SY0 - 10, css("--ink"), "left", 12);
+    lift.line(SX0, SY1, SX1, SY1, css("--line"), 1); lift.line(SX0, SY0, SX0, SY1, css("--line"), 1);
+    const sx = x => SX0 + (x + 2.3) / 4.6 * (SX1 - SX0), sy = z => SY1 - z / 5 * (SY1 - SY0);
+    let wrong = 0; RING.forEach(p => { const z = p.x * p.x + p.y * p.y; if ((z < hgt) !== (p.c === 1)) wrong++; lift.dot(sx(p.x), sy(z), 3.5, p.c ? css("--red") : css("--blue")); });
+    lc.fillStyle = mix(css("--panel"), "#2E7D5B", 0.12); lc.fillRect(SX0, sy(hgt), SX1 - SX0, SY1 - sy(hgt)); lift.line(SX0, sy(hgt), SX1, sy(hgt), "#2E7D5B", 3); lift.dot(SX1 - 10, sy(hgt), 8, "#2E7D5B", "#fff");
+    lift.label("height " + hgt.toFixed(2) + " = radius " + Math.sqrt(hgt).toFixed(2), SX0 + 6, sy(hgt) - 8, "#2E7D5B", "left", 11, true); lift.label("x", (SX0 + SX1) / 2, SY1 + 16, css("--muted"), "center", 10, true); lift.label(wrong === 0 ? "a flat slice separates every reading" : wrong + " on the wrong side", SX0, SY1 + 34, wrong === 0 ? "#2E7D5B" : css("--red"), "left", 12);
+    document.getElementById("mgW").textContent = valid ? (2 * hw).toFixed(0) + " px" : "not valid"; document.getElementById("mgIn").textContent = s.inside; document.getElementById("mgBest").textContent = revealed ? (2 * SVM.m).toFixed(0) + " px" : "-"; document.getElementById("mgSV").textContent = revealed ? SVM.sv.length + " of 40" : "-"; document.getElementById("mgRing").textContent = wrong;
+    const ratio = valid ? 2 * hw / (2 * SVM.m) : 0;
+    stepEl.innerHTML = '<span class="k">' + (revealed ? 'the support vector machine' : 'your street') + '</span>' + (valid ? '<div class="ask ' + (ratio >= 0.95 ? 'ok' : '') + '">A clean street ' + (2 * hw).toFixed(0) + ' px wide' + (revealed ? ', which is ' + (100 * ratio).toFixed(0) + ' % of the widest possible, ' + (2 * SVM.m).toFixed(0) + ' px. ' + SVM.sv.length + ' sections hold the SVM street up; the other ' + (40 - SVM.sv.length) + ' could be deleted without moving it.' : '. Widen it until a section touches each edge, then reveal.') + '</div>' : '<div class="ask no">' + (s.sep ? 'The street runs through ' + s.inside + ' section' + (s.inside > 1 ? 's' : '') + '. Narrow it or turn it.' : 'Both classes are on the same side somewhere. Turn the street until blue and red are apart.') + '</div>') + '<p>Only the sections touching the edges decide the street. On the right, the ring cannot be cut by any line, so lift it: the slice height is the kernel trick with the lift written out.</p>';
+  }
+  plane.c.addEventListener("mousedown", ev => { const [mx, my] = plane.pos(ev); const s = street(); const eh = [s.mid[0] + s.n[0] * hw, s.mid[1] + s.n[1] * hw]; if (Math.hypot(mx - eh[0], my - eh[1]) < 14) { drag = "w"; return; } if (Math.hypot(mx - A[0], my - A[1]) < 14) drag = "A"; else if (Math.hypot(mx - B[0], my - B[1]) < 14) drag = "B"; });
+  lift.c.addEventListener("mousedown", ev => { const [, my] = lift.pos(ev); if (my > 280) { dragH = true; moveH(ev); } });
+  function moveH(ev) { const [, my] = lift.pos(ev); const SY0 = 290, SY1 = 500; hgt = Math.max(0.05, Math.min(5, (SY1 - my) / (SY1 - SY0) * 5)); draw(); }
+  window.addEventListener("mousemove", ev => { if (dragH) { moveH(ev); return; } if (!drag) return; const [mx, my] = plane.pos(ev); const cx = Math.max(L, Math.min(R, mx)), cy = Math.max(TOP, Math.min(BOT, my)); if (drag === "A") A = [cx, cy]; else if (drag === "B") B = [cx, cy]; else { const s = street(); hw = Math.max(2, Math.min(200, Math.abs((mx - s.mid[0]) * s.n[0] + (my - s.mid[1]) * s.n[1]))); } draw(); });
+  window.addEventListener("mouseup", () => { drag = null; dragH = false; });
+  document.getElementById("mgReveal").addEventListener("click", () => { revealed = true; draw(); });
+  document.getElementById("mgReset").addEventListener("click", () => { A = [px(1.6), py(16)]; B = [px(4.2), py(4)]; hw = 14; revealed = false; hgt = 3.2; draw(); });
+  quiz(document.getElementById("mgQuiz"), { q: "Two sections far from the boundary are deleted from the training set. The support vector machine's street", options: ["Narrows, because there is less data", "Does not move: only the support vectors on the edges of the street define it", "Widens, because the deleted sections were in the way"], answer: 1, why: "The solution depends only on the points that touch the margin. Everything else has zero weight in the dual, which is why the method is named after the support vectors and why it holds up well with many features and few samples, slide 22." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ---------- tabs ---------- */
+const tabs = Array.from(document.querySelectorAll("nav [role=tab]"));
+function show(name, push) {
+  if (!document.getElementById(name)) name = "leak";
+  tabs.forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll("section.demo").forEach(s => s.classList.toggle("active", s.id === name));
+  if (push) { try { history.replaceState(null, "", "#" + name); } catch (e) {} }
+}
+tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
+show(location.hash.slice(1) || "leak", false);
+
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
