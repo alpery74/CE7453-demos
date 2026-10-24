@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week 4 Demos</title>
+<meta name="description" content="CE 7453 Week 4: carry a signal through twelve stations, race three optimizers through a thin valley, diagnose six training curves and prescribe the fix, beat a learned crack filter with nine typed numbers, stack layers for reach, read the two learning curves against a domain gap, and stamp augmentations approved or refused.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-line course header with a tab strip, then one demo at a time:
+   a wide plot on the left, a narrow control column on the right, a caption underneath.
+   Colors follow the lecture deck (dark body text, one blue, red for the figure's "wrong" curve). */
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --ink: #2B2B2B;
+  --muted: #6B7280;
+  --line: #D9DDE3;
+  --blue: #1F5C99;
+  --blue-soft: #D6E3F2;
+  --red: #B3261E;
+  --orange: #C9731F;
+  --grey: #8A8F98;
+  --focus: #1F5C99;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+    --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171C; --panel: #1C2027; --ink: #E7E9EC; --muted: #9AA1AB; --line: #2E343D;
+  --blue: #7FB0E3; --blue-soft: #243447; --red: #EF8075; --orange: #E6A65A; --grey: #7C838D; --focus: #7FB0E3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  padding-block: 14px 8px; border-bottom: 1px solid var(--line);
+}
+header .weeks { font-size: 13px; color: var(--blue); text-decoration: none; border: 1px solid var(--line); padding: 3px 9px; border-radius: 6px; }
+header .weeks:hover { background: var(--blue-soft); }
+header .course { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+nav { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 10px; }
+nav button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+nav button[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+nav button:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+nav button .slide { font-family: var(--mono); font-size: 12px; opacity: 0.8; margin-left: 6px; }
+main { padding-block: 4px 24px; }
+section.demo { display: none; }
+section.demo.active { display: block; }
+.demo h2 { font-size: 22px; font-weight: 600; margin: 6px 0 2px; text-wrap: balance; }
+.demo .lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.plot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-width: 0; }
+.plot canvas { width: 100%; height: auto; display: block; max-width: 100%; }
+.plot.two { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 860px) { .plot.two { grid-template-columns: 1fr; } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.ctl label output { font-family: var(--mono); font-weight: 400; color: var(--blue); }
+.ctl input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--blue); }
+.ctl .hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button {
+  font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; background: var(--c); }
+.legend span.dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.caption { margin: 12px 0 0; max-width: 90ch; font-size: 15px; }
+.caption p { margin: 0 0 6px; }
+footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<style>
+/* components for the instructional formats */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.step { font-size: 15px; line-height: 1.5; }
+.step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
+.step p { margin: 6px 0; }
+.ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
+.ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
+.ask.no { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ask.ok { background: #1E3A2C; } :root:not([data-theme="light"]) .ask.no { background: #432426; } }
+:root[data-theme="dark"] .ask.ok { background: #1E3A2C; } :root[data-theme="dark"] .ask.no { background: #432426; }
+.quiz { font-size: 15px; }
+.quiz .q { margin: 0 0 8px; font-weight: 500; }
+.quiz .opts { display: grid; gap: 6px; }
+.quiz button { text-align: left; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.quiz button.right { border-color: #2E7D5B; background: #E3F2EA; }
+.quiz button.wrong { border-color: var(--red); background: #F9E4E2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quiz button.right { background: #1E3A2C; } :root:not([data-theme="light"]) .quiz button.wrong { background: #432426; } }
+:root[data-theme="dark"] .quiz button.right { background: #1E3A2C; } :root[data-theme="dark"] .quiz button.wrong { background: #432426; }
+.quiz .why { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { color: #2E7D5B; border-color: #2E7D5B; }
+canvas.hit { cursor: pointer; }
+canvas.grab { cursor: grab; }
+.btns button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btns button.small { font-size: 12.5px; padding: 5px 9px; }
+.opt { display: grid; gap: 6px; font-size: 14px; }
+.opt label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.opt label output { font-family: var(--mono); color: var(--blue); font-size: 13px; }
+.opt input[type="range"] { width: 100%; accent-color: var(--blue); margin: 0; }
+.opt select { font: inherit; font-size: 14px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.kgrid { display: grid; grid-template-columns: repeat(3, 56px); gap: 6px; justify-content: start; }
+.kgrid input { width: 56px; font: inherit; font-family: var(--mono); font-size: 14px; text-align: center; padding: 6px 2px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.pal { display: flex; flex-wrap: wrap; gap: 6px; }
+.pal button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px dashed var(--blue); background: var(--blue-soft); color: var(--ink); cursor: pointer; }
+.stack { display: grid; gap: 4px; margin-top: 8px; }
+.stack button { font: inherit; font-family: var(--mono); font-size: 12.5px; text-align: left; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+.stack button:hover { border-color: var(--red); text-decoration: line-through; }
+.board { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.board th { text-align: left; padding: 6px 6px; border-bottom: 2px solid var(--line); font-weight: 500; vertical-align: bottom; }
+.board th.aug { text-align: center; font-family: var(--mono); font-weight: 400; font-size: 12px; }
+.board td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: center; }
+.board td:first-child { text-align: left; }
+.board td button { font: inherit; font-size: 12px; width: 94px; white-space: nowrap; padding: 5px 0; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; }
+.board td button.yes { background: #E3F2EA; border-color: #2E7D5B; color: #2E7D5B; }
+.board td button.no { background: #F9E4E2; border-color: var(--red); color: var(--red); }
+.board td button.miss { outline: 2px solid var(--orange); outline-offset: 1px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .board td button.yes { background: #1E3A2C; } :root:not([data-theme="light"]) .board td button.no { background: #432426; } }
+:root[data-theme="dark"] .board td button.yes { background: #1E3A2C; } :root[data-theme="dark"] .board td button.no { background: #432426; }
+.cases { display: flex; flex-wrap: wrap; gap: 6px; }
+.cases button { font: inherit; font-family: var(--mono); font-size: 12.5px; padding: 5px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.cases button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.cases button.ok { border-color: #2E7D5B; color: #2E7D5B; }
+.cases button.on.ok { background: #2E7D5B; color: #fff; }
+.cases button.bad { border-color: var(--red); color: var(--red); }
+</style>
+
+<header>
+  <a class="weeks" href="../">All weeks</a>
+  <span class="course">CE 7453 &middot; Week 4 &middot; Making deep learning work</span>
+  <h1>Interactive demonstrations</h1>
+</header>
+
+<nav role="tablist" aria-label="Demos">
+  <button role="tab" data-tab="relay" aria-selected="true">Twelve stations<span class="slide">slides 5, 6, 17</span></button>
+  <button role="tab" data-tab="race" aria-selected="false">The time trial<span class="slide">slides 7, 8</span></button>
+  <button role="tab" data-tab="clinic" aria-selected="false">The curve clinic<span class="slide">slides 9, 10, 11</span></button>
+  <button role="tab" data-tab="kernel" aria-selected="false">Beat the learned filter<span class="slide">slides 14, 15</span></button>
+  <button role="tab" data-tab="stack" aria-selected="false">Stack for reach<span class="slide">slide 16</span></button>
+  <button role="tab" data-tab="labels" aria-selected="false">Fifty labels<span class="slide">slides 19, 20, 22</span></button>
+  <button role="tab" data-tab="board" aria-selected="false">The review board<span class="slide">slide 21</span></button>
+</nav>
+
+<main>
+
+<!-- ============ 1. RELAY: variance through twelve stations ============ -->
+<section class="demo active" id="relay" role="tabpanel">
+  <h2>Twelve stations: carry a signal forward and a gradient back without losing either</h2>
+  <p class="lead">A twelve-layer network drawn as a leveling run: the signal passes station to station on the way out, the gradient passes back on the way home. Each gauge is the spread of what arrives at that station, on a log scale, with the green band marking spreads that survive. Choose the activation and set the initial weight gain until all twenty-four gauges stay in the band. Then see what a skip connection does to a run that has already failed.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="rlPlot" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="rlStep"></div>
+      <div class="panel">
+        <h3>activation</h3>
+        <div class="btns"><button id="rlSig" aria-pressed="true">sigmoid</button><button id="rlTanh" aria-pressed="false">tanh</button><button id="rlRelu" aria-pressed="false">ReLU</button><button id="rlLeaky" aria-pressed="false">leaky ReLU</button></div>
+        <div class="opt" style="margin-top:10px">
+          <label>initial weight gain, as a multiple of the Xavier spread<output id="rlGainOut">1.00</output></label>
+          <input type="range" id="rlGain" min="-1" max="0.7" step="0.01" value="0">
+          <span style="font-size:12.5px;color:var(--muted)">0 is all zeros; 1 is Xavier, 1/n; 1.41 is He, 2/n</span>
+        </div>
+        <div class="btns" style="margin-top:10px"><button id="rlSkip" aria-pressed="false">skip connections</button><button id="rlZero">all zeros</button><button id="rlRedraw">redraw weights</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>signal spread at station 12</dt><dd id="rlFwd">-</dd>
+          <dt>gradient spread back at station 1</dt><dd id="rlBwd">-</dd>
+          <dt>dead units at station 12</dt><dd id="rlDead">-</dd>
+          <dt>gauges in the band</dt><dd id="rlBand">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="rlQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Each station multiplies the spread by a factor and depth compounds it, the same bookkeeping as error propagation along a traverse. A sigmoid's derivative peaks at a quarter, so the gradient loses most of its spread at every station on the way back, slide 5; no gain fixes that, because a large gain saturates the units and the derivative goes to zero anyway. With ReLU, half the units are off, so Xavier's 1/n halves the signal spread at every station and He's 2/n restores it, slide 6. At gain zero every unit in a station computes the same thing and the gradients are identical, the symmetry that never breaks. A skip connection adds the station's input to its output, so the gradient has an identity path home whatever the activation does, slide 17.</p>
+  </div>
+</section>
+
+<!-- ============ 2. RACE: optimizer time trial ============ -->
+<section class="demo" id="race" role="tabpanel">
+  <h2>The time trial: three optimizers, one badly scaled valley, a stopwatch</h2>
+  <p class="lead">Fit pile settlement, in millimetres, to two columns: the test load in meganewtons, which runs from 0.1 to 0.9, and the months since installation, which run from 1 to 60. In raw units the months column is seventy times wider than the load column, so the loss is a long thin valley. Three runners start from the same point: plain gradient descent, momentum, and Adam. Set one learning rate for all three, press start, and watch each lane's distance to the bottom shrink. Then standardize the columns and run the same race again.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="rcPlot" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="rcStep"></div>
+      <div class="panel">
+        <div class="opt">
+          <label>learning rate<output id="rcLrOut">0.01</output></label>
+          <input type="range" id="rcLr" min="-4" max="0.5" step="0.05" value="-2">
+        </div>
+        <div class="btns" style="margin-top:10px"><button id="rcNorm" aria-pressed="false">standardize the columns</button></div>
+        <div class="btns" style="margin-top:8px"><button class="primary" id="rcGo">Start</button><button id="rcReset">Reset</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>steep to flat curvature ratio</dt><dd id="rcCond">-</dd>
+          <dt>gradient descent</dt><dd id="rcT0">-</dd>
+          <dt>momentum 0.9</dt><dd id="rcT1">-</dd>
+          <dt>Adam</dt><dd id="rcT2">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="rcQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Plain descent must use a step small enough for the steep direction, then crawls along the flat one; the ratio of the two curvatures, the condition number, says how many times slower the crawl is, the Week 1 story again. Momentum averages recent gradients, so the zigzag across the valley cancels and the crawl along it accumulates, slide 8. Adam divides each coordinate's step by the running root-mean-square of its own gradient, which rescales the valley to nearly round on its own; that statistic is not curvature, and it is why weight decay has to be decoupled in AdamW. Standardizing the columns rounds the valley for everyone, which is what normalization layers do between layers, slide 7, and after it plain descent with a large step is hard to beat.</p>
+  </div>
+</section>
+
+<!-- ============ 3. CLINIC: read the training curves ============ -->
+<section class="demo" id="clinic" role="tabpanel">
+  <h2>The curve clinic: six patients, one chart each, name the pathology and write the prescription</h2>
+  <p class="lead">Each case is a small model fitted by gradient descent to a noisy settlement record, with a hidden configuration. You see only the two curves: training loss in black, validation in red. Name what is wrong, choose a prescription, and the clinic re-runs the training with your prescription applied and shows the new chart next to the old one. A third split, never used for any decision, reports the honest score at the end.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="clPlot" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="clStep"></div>
+      <div class="panel">
+        <h3>case</h3>
+        <div class="cases" id="clCases"></div>
+        <h3 style="margin-top:12px">diagnosis</h3>
+        <div class="btns"><button class="small" data-dx="under">underfitting</button><button class="small" data-dx="over">overfitting</button><button class="small" data-dx="high">learning rate too high</button><button class="small" data-dx="low">learning rate too low</button></div>
+        <h3 style="margin-top:12px">prescription</h3>
+        <div class="btns"><button class="small" data-rx="cap">add capacity</button><button class="small" data-rx="longer">train longer</button><button class="small" data-rx="lrup">raise the rate</button><button class="small" data-rx="lrdown">cut the rate</button><button class="small" data-rx="wd">weight decay</button><button class="small" data-rx="early">stop early</button><button class="small" data-rx="data">more data</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>validation loss, as presented</dt><dd id="clV0">-</dd>
+          <dt>validation loss, after your prescription</dt><dd id="clV1">-</dd>
+          <dt>third split, after your prescription</dt><dd id="clT1">-</dd>
+          <dt>cases cleared</dt><dd id="clScore">0 of 6</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="clQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Slide 11 gives the four shapes. Both curves stalled high and close together is underfitting: more capacity, longer training, or a larger step. Training still falling while validation turns back up is overfitting: decay, dropout, an earlier stop, or more data. A loss that thrashes or climbs is a step too large; an endless slow creep is a step too small. Early stopping, slide 10, keeps the weights from the epoch where validation was lowest, and because that epoch was chosen by looking at the validation curve, the validation number at that epoch is no longer an honest estimate; the third split is. Weight decay and early stopping fail differently, so the clinic lets you combine them by applying one prescription after another.</p>
+  </div>
+</section>
+
+<!-- ============ 4. KERNEL: beat the learned filter ============ -->
+<section class="demo" id="kernel" role="tabpanel">
+  <h2>Beat the learned filter: type a 3 by 3 kernel that finds the crack, then let gradient descent type its own</h2>
+  <p class="lead">A pavement patch with a crack through it, and the crack map an inspector traced. Type any nine numbers into the kernel and the response map updates; the score is how well the response separates crack pixels from the rest. The handbook kernels are one click away. Then press learn: a single 3 by 3 kernel with a bias is fitted to the traced map by gradient descent, and its nine numbers appear next to yours.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="knPlot" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="knStep"></div>
+      <div class="panel">
+        <h3>your kernel</h3>
+        <div class="kgrid" id="knGrid"></div>
+        <div class="btns" style="margin-top:8px"><button class="small" data-k="id">identity</button><button class="small" data-k="blur">box blur</button><button class="small" data-k="sx">Sobel x</button><button class="small" data-k="sy">Sobel y</button><button class="small" data-k="lap">Laplacian</button></div>
+        <div class="btns" style="margin-top:8px"><button class="primary" id="knLearn">Learn a kernel from the traced map</button><button id="knNew">New patch</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>your score, separation of crack from pavement</dt><dd id="knMine">-</dd>
+          <dt>learned kernel's score</dt><dd id="knTheirs">-</dd>
+          <dt>parameters, this kernel</dt><dd id="knP1">10</dd>
+          <dt>parameters, a dense layer on the same patch</dt><dd id="knP2">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="knQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>A convolutional layer is the sliding sum of products you used for blurring and edge finding, with the nine entries made trainable, slide 14. The learned kernel is whatever nine numbers make the response match the traced map best, and on a crack patch it usually comes out as a second-derivative detector, a Laplacian with its own weights, because a crack is a dark line thinner than the pavement texture around it. Nobody told it about the handbook. The score is the separation between the mean response on crack pixels and on pavement, in units of the pavement's spread. A dense layer that maps the same patch to the same map would hold one weight per pair of pixels, the number on the last line, and would have to learn the crack separately at every position, slide 15.</p>
+  </div>
+</section>
+
+<!-- ============ 5. STACK: receptive field ============ -->
+<section class="demo" id="stack" role="tabpanel">
+  <h2>Stack for reach: build a layer stack whose top unit can see the whole spall</h2>
+  <p class="lead">A deck photo with a spall about sixty pixels across and a crack a few pixels wide. Add layers from the palette; the square on the image is what one unit at the top of your stack can see, centred where you last clicked. Reach a receptive field that covers the spall while keeping the output map at least eight by eight, and do it with the fewest parameters. Click a layer in the stack to remove it.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="stPlot" class="hit" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="stStep"></div>
+      <div class="panel">
+        <h3>palette, click to add on top</h3>
+        <div class="pal"><button data-l="c3">conv 3x3</button><button data-l="c5">conv 5x5</button><button data-l="c7">conv 7x7</button><button data-l="c3s2">conv 3x3, stride 2</button><button data-l="p2">max pool 2</button></div>
+        <h3 style="margin-top:12px">your stack, bottom to top</h3>
+        <div class="stack" id="stStack"></div>
+        <div class="btns" style="margin-top:8px"><button id="stClear">Clear</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>receptive field of a top unit</dt><dd id="stRF">1 px</dd>
+          <dt>output map</dt><dd id="stOut">128 x 128</dd>
+          <dt>parameters, 16 channels per layer</dt><dd id="stPar">0</dd>
+          <dt>best stack that covers the spall</dt><dd id="stBest">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="stQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Each layer adds its kernel size minus one, times the product of every stride below it, slide 16. Three by three kernels add two pixels of reach each and cost nine weights per channel pair; a stride of two or a pooling layer doubles the increment of everything above it for nothing, which is why the field grows geometrically and the map shrinks. Seven by seven kernels reach fast but cost five times the weights of three by three, and two stacked three by threes reach as far as one five by five with fewer weights and a nonlinearity between them. A unit whose field never reaches across the spall cannot tell a spall from a stain, however many channels it has.</p>
+  </div>
+</section>
+
+<!-- ============ 6. LABELS: the two learning curves ============ -->
+<section class="demo" id="labels" role="tabpanel">
+  <h2>Fifty labels: the learning curve from scratch against the curve on a borrowed trunk</h2>
+  <p class="lead">A defect classifier is trained with n labelled patches, for n from five to two thousand, two ways: from scratch, and as a small head on a pretrained trunk whose features were learned on someone else's images. The dial sets the domain gap, how far the trunk's features are rotated away from the ones this task needs. Drag the dial and read where the two curves cross; a self-supervised trunk pretrained on your own unlabelled archive sits at zero gap by construction.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="lbPlot" class="grab" width="1200" height="520"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="lbStep"></div>
+      <div class="panel">
+        <div class="opt">
+          <label>domain gap, degrees of rotation<output id="lbGapOut">0</output></label>
+          <input type="range" id="lbGap" min="0" max="90" step="5" value="0">
+        </div>
+        <div class="btns" style="margin-top:10px"><button class="small" data-gap="0">photographs of cracks</button><button class="small" data-gap="40">satellite tiles</button><button class="small" data-gap="80">seismograms</button><button class="small" data-gap="0">your own archive, self-supervised</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>accuracy at 50 labels, from scratch</dt><dd id="lbS50">-</dd>
+          <dt>accuracy at 50 labels, pretrained trunk</dt><dd id="lbP50">-</dd>
+          <dt>labels at which scratch catches up</dt><dd id="lbCross">-</dd>
+          <dt>labels to reach 90 %, pretrained</dt><dd id="lb90">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="lbQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The trunk carries the features and the head is a handful of weights, so with fifty labels the head is well determined and the trunk's features do the work; from scratch, the same fifty labels have to pin down every weight, slide 20. The gap is the caution on the same slide: rotate the features away from what the task needs and the borrowed trunk plateaus below the scratch curve, however many labels you add, because a frozen trunk cannot learn what it was never shown. Fine-tuning at a small rate moves the trunk toward the task and closes part of the gap; self-supervision on your own archive removes it, slide 22, by pretraining where the images are plentiful and the labels absent.</p>
+  </div>
+</section>
+
+<!-- ============ 7. BOARD: approve or refuse an augmentation ============ -->
+<section class="demo" id="board" role="tabpanel">
+  <h2>The review board: stamp each augmentation approved or refused, task by task</h2>
+  <p class="lead">Four imaging tasks from the field, six augmentations a library offers by default. Stamp each cell. The physics decides: an augmentation is a claim that the label does not change under that transformation. When you have stamped all twenty-four, reveal the board's rulings. The bottom chart runs a small experiment live: a classifier trained with your stamps for the task you select, scored on untouched images.</p>
+  <div class="stage">
+    <div>
+      <div class="panel" style="padding:10px 12px"><table class="board" id="bdTable"></table></div>
+      <div class="plot" style="margin-top:12px"><canvas id="bdPlot" width="1200" height="300"></canvas></div>
+    </div>
+    <div class="side">
+      <div class="panel step" id="bdStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="bdReveal">Reveal the rulings</button><button id="bdClear">Clear stamps</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>stamped</dt><dd id="bdN">0 of 24</dd>
+          <dt>agree with the board</dt><dd id="bdAgree">-</dd>
+          <dt>experiment: labels after augmentation</dt><dd id="bdLab">-</dd>
+          <dt>experiment: accuracy on untouched images</dt><dd id="bdAcc">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="bdQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Flips and rotations multiply fifty crack patches into four hundred at no labelling cost because a crack is still a crack upside down, slide 21. The same flip on a slope aspect map manufactures a wrong label at every rotated copy, and a model trained on it learns that aspect does not matter, which is false. Brightness jitter is harmless for a photograph and destroys a calibrated radiometric band. Every row of the board is a physical statement about what the label depends on; the experiment shows the two ways a wrong stamp costs you, a model that cannot tell the classes apart when the label depends on orientation, and a model that never learned the invariance it should have when a harmless augmentation was refused.</p>
+  </div>
+</section>
+
+</main>
+<footer>CE 7453 Machine Learning for Civil, Environmental and Geodetic Engineering. Each demo is a small closed-form toy chosen so that the effect on the slide is visible without a trained network.</footer>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- utilities ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function randn(rng, n) { const out = new Float64Array(n); for (let i = 0; i < n; i += 2) { const u = 1 - rng(), v = rng(), r = Math.sqrt(-2 * Math.log(u)); out[i] = r * Math.cos(2 * Math.PI * v); if (i + 1 < n) out[i + 1] = r * Math.sin(2 * Math.PI * v); } return out; }
+function hexToRgb(h) { if (h.indexOf("rgb") === 0) return h.replace(/[^0-9.,]/g, "").split(",").slice(0, 3).map(Number); h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(c1, c2, t) { const a = hexToRgb(c1), b = hexToRgb(c2); return "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",") + ")"; }
+const PAL = ["#1F5C99", "#C9731F", "#2E7D5B", "#8E44AD"];
+function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
+Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
+Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+Board.prototype.label = function (s, x, y, color, align, size, mono) { const ctx = this.ctx; ctx.fillStyle = color || css("--muted"); ctx.font = (size || 13) + "px " + css(mono ? "--mono" : "--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(s, x, y); };
+Board.prototype.line = function (x1, y1, x2, y2, color, width, dash) { const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 1; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); };
+Board.prototype.dot = function (x, y, r, color, stroke) { const ctx = this.ctx; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); } };
+Board.prototype.path = function (pts, color, width, dash) { const ctx = this.ctx; ctx.strokeStyle = color; ctx.lineWidth = width || 1; ctx.setLineDash(dash || []); ctx.beginPath(); pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); }); ctx.stroke(); ctx.setLineDash([]); };
+function quiz(el, spec) {
+  el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
+  const opts = el.querySelector(".opts"), why = el.querySelector(".why");
+  spec.options.forEach((o, i) => { const b = document.createElement("button"); b.textContent = o; b.addEventListener("click", () => { Array.from(opts.children).forEach(c => c.classList.remove("right", "wrong")); b.classList.add(i === spec.answer ? "right" : "wrong"); if (i !== spec.answer) opts.children[spec.answer].classList.add("right"); why.textContent = (i === spec.answer ? "Right. " : "No. ") + spec.why; }); opts.appendChild(b); });
+}
+const sigmoid = z => 1 / (1 + Math.exp(-z));
+const mean = a => a.reduce((s, v) => s + v, 0) / (a.length || 1);
+const sd = a => { const m = mean(a); return Math.sqrt(mean(a.map(v => (v - m) * (v - m)))); };
+function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAttribute("aria-pressed", id === on ? "true" : "false")); }
+function solve(A, b) { const n = b.length; const M = A.map((r, i) => Array.from(r).concat([b[i]])); for (let c = 0; c < n; c++) { let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r; const t = M[c]; M[c] = M[p]; M[p] = t; const d = M[c][c] || 1e-12; for (let r = 0; r < n; r++) { if (r === c) continue; const f = M[r][c] / d; if (!f) continue; for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; } } return M.map((r, i) => r[n] / (r[i] || 1e-12)); }
+
+/* ================= 1. TWELVE STATIONS ================= */
+(function relay() {
+  const N = 64, B = 128, L = 12;
+  const board = new Board(document.getElementById("rlPlot"));
+  let act = "sig", gainV = 0, zeros = false, skip = false, seed = 1;
+  const stepEl = document.getElementById("rlStep");
+  const ACT = {
+    sig: { f: z => 1 / (1 + Math.exp(-z)), d: z => { const s = 1 / (1 + Math.exp(-z)); return s * (1 - s); } },
+    tanh: { f: z => Math.tanh(z), d: z => { const t = Math.tanh(z); return 1 - t * t; } },
+    relu: { f: z => z > 0 ? z : 0, d: z => z > 0 ? 1 : 0 },
+    leaky: { f: z => z > 0 ? z : 0.1 * z, d: z => z > 0 ? 1 : 0.1 }
+  };
+  function run() {
+    const gain = zeros ? 0 : Math.pow(10, gainV); const rng = mulberry32(seed);
+    const g = randn(rng, L * N * N + B * N + B * N);
+    let h = new Float64Array(B * N); for (let i = 0; i < B * N; i++) h[i] = g[L * N * N + i];
+    const W = [], Z = [], Hs = [h];
+    const fwd = [], bwd = [];
+    for (let l = 0; l < L; l++) {
+      const w = new Float64Array(N * N); for (let i = 0; i < N * N; i++) w[i] = g[l * N * N + i] * gain / Math.sqrt(N); W.push(w);
+      const z = new Float64Array(B * N);
+      for (let b = 0; b < B; b++) for (let o = 0; o < N; o++) { let s = 0; for (let i = 0; i < N; i++) s += w[o * N + i] * h[b * N + i]; z[b * N + o] = s; }
+      Z.push(z); fwd.push(sd(Array.from(z)));
+      const hn = new Float64Array(B * N); const f = ACT[act].f; for (let i = 0; i < B * N; i++) hn[i] = f(z[i]) + (skip ? h[i] : 0);
+      h = hn; Hs.push(h);
+    }
+    // backward: gradient of sum(r * h_L) with random signs r
+    let gr = new Float64Array(B * N); for (let i = 0; i < B * N; i++) gr[i] = g[L * N * N + B * N + i] > 0 ? 1 : -1;
+    for (let l = L - 1; l >= 0; l--) {
+      const w = W[l], z = Z[l], d = ACT[act].d; const gz = new Float64Array(B * N); for (let i = 0; i < B * N; i++) gz[i] = gr[i] * d(z[i]);
+      const gp = new Float64Array(B * N);
+      for (let b = 0; b < B; b++) for (let i = 0; i < N; i++) { let s = 0; for (let o = 0; o < N; o++) s += w[o * N + i] * gz[b * N + o]; gp[b * N + i] = s + (skip ? gr[b * N + i] : 0); }
+      bwd[l] = sd(Array.from(gp)); gr = gp;
+    }
+    // dead or saturated units at station 12
+    const zL = Z[L - 1], d = ACT[act].d; let dead = 0; for (let o = 0; o < N; o++) { let alive = false; for (let b = 0; b < B; b++) if (Math.abs(d(zL[b * N + o])) > 0.01) { alive = true; break; } if (!alive) dead++; }
+    return { fwd, bwd, dead, gain };
+  }
+  function draw() {
+    const r = run(); const ctx = board.ctx;
+    board.clear("the run: signal spread arriving at each station on the way out (top), gradient spread arriving on the way back (bottom)");
+    const L0 = 70, R = board.W - 40, sx = l => L0 + (l + 0.5) / L * (R - L0);
+    const rows = [{ y0: 48, y1: 250, v: r.fwd, color: css("--blue"), name: "forward: spread of the signal arriving", dir: 1 }, { y0: 318, y1: 520, v: r.bwd, color: css("--orange"), name: "backward: spread of the gradient arriving", dir: -1 }];
+    const lo = -6, hi = 3; let inBand = 0;
+    rows.forEach(row => {
+      const y = v => row.y1 - (Math.max(lo, Math.min(hi, Math.log10(Math.max(v, 1e-12)))) - lo) / (hi - lo) * (row.y1 - row.y0);
+      ctx.fillStyle = mix(css("--panel"), "#2E7D5B", 0.18); ctx.fillRect(L0, y(2), R - L0, y(0.5) - y(2));
+      board.label("band: spread 0.5 to 2", L0 + 4, y(2) - 4, "#2E7D5B", "left", 10);
+      for (let e = lo; e <= hi; e += 3) { board.line(L0, y(Math.pow(10, e)), R, y(Math.pow(10, e)), css("--line"), 1, [2, 4]); board.label("1e" + e, L0 - 6, y(Math.pow(10, e)) + 4, css("--muted"), "right", 10, true); }
+      board.label(row.name, L0, row.y0 - 10, css("--ink"), "left", 12);
+      const pts = [];
+      row.v.forEach((v, l) => { const x = sx(l); const top = y(v); ctx.fillStyle = v < 1e-6 ? css("--red") : (v >= 0.5 && v <= 2 ? "#2E7D5B" : row.color); ctx.fillRect(x - 14, Math.min(top, row.y1), 28, Math.abs(row.y1 - top) || 1); pts.push([x, top]); if (v >= 0.5 && v <= 2) inBand++; board.label(v < 1e-6 ? "lost" : (v >= 100 || v < 0.01 ? v.toExponential(0) : v.toFixed(2)), x, Math.min(top, row.y1) - 5, v < 1e-6 ? css("--red") : css("--ink"), "center", 9, true); });
+      board.path(pts, css("--ink"), 1, [3, 3]);
+      row.v.forEach((v, l) => { board.label("S" + (l + 1), sx(l), row.y1 + 14, css("--muted"), "center", 10, true); });
+    });
+    // arrows for direction of travel
+    board.label("signal travels this way: S1 to S12", L0, 282, css("--blue"), "left", 11);
+    board.label("gradient travels this way: S12 to S1", R, 282, css("--orange"), "right", 11);
+    document.getElementById("rlFwd").textContent = r.fwd[L - 1] < 1e-6 ? "lost" : r.fwd[L - 1].toPrecision(3); document.getElementById("rlBwd").textContent = r.bwd[0] < 1e-6 ? "lost" : r.bwd[0].toPrecision(3); document.getElementById("rlDead").textContent = r.dead + " of " + N; document.getElementById("rlBand").textContent = inBand + " of 24";
+    const names = { sig: "sigmoid", tanh: "tanh", relu: "ReLU", leaky: "leaky ReLU" };
+    let msg;
+    if (zeros) msg = '<div class="ask no">All zeros: every unit at a station receives the same input and the same gradient. Nothing in this run will ever differ from its neighbour, whatever the data, so the symmetry never breaks. Redraw to leave.</div>';
+    else if (inBand === 24) msg = '<div class="ask ok">All twenty-four gauges in the band. <span class="badge done">signal and gradient both arrive</span> Gain ' + r.gain.toFixed(2) + ' with ' + names[act] + (skip ? ' and skip connections' : '') + '.</div>';
+    else if (act === "sig") msg = '<div class="ask ' + (r.bwd[0] < 1e-3 ? 'no' : '') + '">Sigmoid: forward is ' + (r.fwd[L - 1] >= 0.5 && r.fwd[L - 1] <= 2 ? 'fine' : 'off the band') + ', the gradient back at station 1 is ' + (r.bwd[0] < 1e-6 ? 'gone' : r.bwd[0].toExponential(1)) + '. A quarter per station at best; a larger gain saturates the units and the derivative goes to zero instead. Try the slider anyway, then switch activations.</div>';
+    else if (r.fwd[L - 1] < 1e-2) msg = '<div class="ask no">The signal shrinks station by station: ' + r.fwd[L - 1].toExponential(1) + ' by the end. Weights too small. Raise the gain.</div>';
+    else if (r.fwd[L - 1] > 100) msg = '<div class="ask no">The signal explodes: ' + r.fwd[L - 1].toExponential(1) + ' by station 12. Weights too large.</div>';
+    else msg = '<div class="ask">' + inBand + ' of 24 in the band. ' + (act === "relu" || act === "leaky" ? 'Half the units are off in a ReLU station, so the gain that keeps the spread flat is the square root of two, not one.' : 'tanh is symmetric about zero and keeps a derivative near one for small inputs; find the gain that holds both rows flat.') + '</div>';
+    stepEl.innerHTML = '<span class="k">' + names[act] + ', gain ' + r.gain.toFixed(2) + (skip ? ', skip connections' : '') + '</span>' + msg + (r.dead > 0 ? '<p>' + r.dead + ' of the 64 units at station 12 are dead or saturated: their derivative is zero on every sample in the batch, so they will never receive a gradient.</p>' : '');
+  }
+  const gainEl = document.getElementById("rlGain");
+  gainEl.addEventListener("input", () => { gainV = +gainEl.value; zeros = false; document.getElementById("rlGainOut").textContent = Math.pow(10, gainV).toFixed(2); draw(); });
+  [["rlSig", "sig"], ["rlTanh", "tanh"], ["rlRelu", "relu"], ["rlLeaky", "leaky"]].forEach(([id, a]) => document.getElementById(id).addEventListener("click", () => { act = a; pressed(["rlSig", "rlTanh", "rlRelu", "rlLeaky"], id); draw(); }));
+  document.getElementById("rlSkip").addEventListener("click", () => { skip = !skip; document.getElementById("rlSkip").setAttribute("aria-pressed", skip ? "true" : "false"); draw(); });
+  document.getElementById("rlZero").addEventListener("click", () => { zeros = true; draw(); });
+  document.getElementById("rlRedraw").addEventListener("click", () => { seed++; zeros = false; draw(); });
+  quiz(document.getElementById("rlQuiz"), { q: "He initialization uses variance 2/n where Xavier uses 1/n. Where does the factor of two come from?", options: ["ReLU doubles the gradient", "ReLU sets half of its inputs to zero, so the output variance of a station is half what it would be with a linear unit, and the weights must make up for it", "Deeper networks need larger weights"], answer: 1, why: "Variance bookkeeping: a ReLU station passes on average half the squared signal. Doubling the weight variance restores the spread so that it neither shrinks nor grows across twelve stations, slide 6." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 2. THE TIME TRIAL ================= */
+(function race() {
+  const rng = mulberry32(21), g = randn(rng, 120);
+  const n = 60; const LOAD = [], MON = []; for (let i = 0; i < n; i++) { LOAD.push(0.1 + 0.8 * rng()); MON.push(1 + Math.floor(60 * rng())); }
+  const Y = LOAD.map((l, i) => 12 * l + 0.5 * MON[i] + 1.0 * g[i]);
+  const board = new Board(document.getElementById("rcPlot"));
+  let norm = false, lrV = -2, anim = null, runners = null, iter = 0;
+  const stepEl = document.getElementById("rcStep");
+  let F, yc, H, wStar, Lmin, L0, cond, lam, colStats;
+  function setup() {
+    let F0 = LOAD.map((l, i) => [l, MON[i]]); const m = [mean(F0.map(f => f[0])), mean(F0.map(f => f[1]))], s = [sd(F0.map(f => f[0])), sd(F0.map(f => f[1]))];
+    colStats = { m, s }; F = norm ? F0.map(f => [(f[0] - m[0]) / s[0], (f[1] - m[1]) / s[1]]) : F0;
+    const ym = mean(Y); yc = Y.map(y => y - ym);
+    H = [[0, 0], [0, 0]]; const b = [0, 0]; F.forEach((f, i) => { H[0][0] += 2 * f[0] * f[0] / n; H[0][1] += 2 * f[0] * f[1] / n; H[1][1] += 2 * f[1] * f[1] / n; b[0] += 2 * f[0] * yc[i] / n; b[1] += 2 * f[1] * yc[i] / n; }); H[1][0] = H[0][1];
+    wStar = solve(H, b); Lmin = loss(wStar); L0 = loss([0, 0]);
+    const tr = H[0][0] + H[1][1], det = H[0][0] * H[1][1] - H[0][1] * H[1][0], disc = Math.sqrt(Math.max(0, tr * tr / 4 - det)); lam = [tr / 2 + disc, tr / 2 - disc]; cond = lam[0] / lam[1];
+  }
+  function loss(w) { return mean(F.map((f, i) => (f[0] * w[0] + f[1] * w[1] - yc[i]) ** 2)); }
+  function grad(w) { const gr = [0, 0]; F.forEach((f, i) => { const r = f[0] * w[0] + f[1] * w[1] - yc[i]; gr[0] += 2 * r * f[0] / n; gr[1] += 2 * r * f[1] / n; }); return gr; }
+  function newRunners() { return [{ name: "gradient descent", w: [0, 0], v: [0, 0], trace: [[0, 0]], done: null, dead: false, color: css("--ink") }, { name: "momentum 0.9", w: [0, 0], v: [0, 0], trace: [[0, 0]], done: null, dead: false, color: css("--blue") }, { name: "Adam", w: [0, 0], m: [0, 0], v: [0, 0], t: 0, trace: [[0, 0]], done: null, dead: false, color: css("--orange") }]; }
+  const decades = w => { const l = loss(w); return Math.max(0, Math.min(6, Math.log10((L0 - Lmin) / Math.max(l - Lmin, 1e-300)))); };
+  function step(r, k, lr) {
+    if (r.done !== null || r.dead) return; const gr = grad(r.w);
+    if (k === 0) { r.w = [r.w[0] - lr * gr[0], r.w[1] - lr * gr[1]]; }
+    else if (k === 1) { r.v = [0.9 * r.v[0] + gr[0], 0.9 * r.v[1] + gr[1]]; r.w = [r.w[0] - lr * r.v[0], r.w[1] - lr * r.v[1]]; }
+    else { r.t++; r.m = [0.9 * r.m[0] + 0.1 * gr[0], 0.9 * r.m[1] + 0.1 * gr[1]]; r.v = [0.999 * r.v[0] + 0.001 * gr[0] * gr[0], 0.999 * r.v[1] + 0.001 * gr[1] * gr[1]]; const mh = r.m.map(v => v / (1 - Math.pow(0.9, r.t))), vh = r.v.map(v => v / (1 - Math.pow(0.999, r.t))); r.w = [r.w[0] - lr * mh[0] / (Math.sqrt(vh[0]) + 1e-8), r.w[1] - lr * mh[1] / (Math.sqrt(vh[1]) + 1e-8)]; }
+    r.trace.push(r.w.slice()); const l = loss(r.w);
+    if (!isFinite(l) || l > 1e6 * L0) r.dead = true; else if (decades(r.w) >= 6) r.done = r.trace.length - 1;
+  }
+  function draw() {
+    const ctx = board.ctx; board.clear(norm ? "standardized columns: the valley is nearly round" : "raw columns: load in meganewtons against months, a long thin valley");
+    const LX0 = 70, LX1 = 700; const laneY = [90, 190, 290];
+    board.label("distance to the bottom of the valley, in decades of loss above the minimum; finish at six", LX0, 56, css("--ink"), "left", 12);
+    runners.forEach((r, k) => { const y = laneY[k]; ctx.fillStyle = css("--bg"); ctx.fillRect(LX0, y - 18, LX1 - LX0, 36); ctx.strokeStyle = css("--line"); ctx.strokeRect(LX0, y - 18, LX1 - LX0, 36); for (let d = 0; d <= 6; d++) { board.line(LX0 + d / 6 * (LX1 - LX0), y - 18, LX0 + d / 6 * (LX1 - LX0), y + 18, css("--line"), 1); board.label(String(d), LX0 + d / 6 * (LX1 - LX0), y + 32, css("--muted"), "center", 10, true); } const p = r.dead ? 0 : decades(r.w); ctx.fillStyle = r.dead ? css("--red") : r.color; ctx.fillRect(LX0, y - 12, Math.max(4, p / 6 * (LX1 - LX0)), 24); board.label(r.name + (r.dead ? "  diverged" : (r.done !== null ? "  finished at step " + r.done : (iter ? "  step " + iter : ""))), LX0, y - 24, r.color, "left", 12); });
+    board.line(LX1, 60, LX1, 320, "#2E7D5B", 2); board.label("finish", LX1 + 4, 70, "#2E7D5B", "left", 11);
+    // the columns and the valley's numbers
+    const TX = 70, TY = 372; board.label("the two columns of the design matrix", TX, TY, css("--ink"), "left", 12);
+    const rows = [["load, MN", colStats.m[0].toFixed(2), colStats.s[0].toFixed(2), norm ? "0, 1" : colStats.m[0].toFixed(2) + ", " + colStats.s[0].toFixed(2)], ["months", colStats.m[1].toFixed(1), colStats.s[1].toFixed(1), norm ? "0, 1" : colStats.m[1].toFixed(1) + ", " + colStats.s[1].toFixed(1)]];
+    board.label("column", TX, TY + 22, css("--muted"), "left", 11); board.label("mean", TX + 150, TY + 22, css("--muted"), "right", 11); board.label("spread", TX + 240, TY + 22, css("--muted"), "right", 11); board.label("as fed to the optimizer: mean, spread", TX + 300, TY + 22, css("--muted"), "left", 11);
+    rows.forEach((r, i) => { const y = TY + 42 + i * 20; board.label(r[0], TX, y, css("--ink"), "left", 12, true); board.label(r[1], TX + 150, y, css("--ink"), "right", 12, true); board.label(r[2], TX + 240, y, css("--ink"), "right", 12, true); board.label(r[3], TX + 300, y, css("--ink"), "left", 12, true); });
+    board.label("curvature of the valley: steep direction " + lam[0].toPrecision(3) + ", flat direction " + lam[1].toPrecision(3) + ", ratio " + cond.toFixed(0), TX, TY + 100, css("--ink"), "left", 12, true);
+    board.label("largest step plain descent survives: 2 / " + lam[0].toPrecision(3) + " = " + (2 / lam[0]).toPrecision(2) + "; steps to finish at that rate, about " + Math.round(cond * 3.5).toLocaleString(), TX, TY + 120, css("--muted"), "left", 11);
+    // valley map
+    const MX0 = 790, MX1 = 1180, MY0 = 50, MY1 = 500; const spanX = 2.6 * Math.max(Math.abs(wStar[0]), 1e-3), spanY = 2.6 * Math.max(Math.abs(wStar[1]), 1e-3); const cx = wStar[0], cy = wStar[1];
+    const px = w => MX0 + ((w - cx) / spanX + 0.5) * (MX1 - MX0), py = w => MY1 - ((w - cy) / spanY + 0.5) * (MY1 - MY0);
+    board.label("the valley: loss over the two coefficients; dot is the start, cross the optimum", MX0, MY0 - 10, css("--ink"), "left", 12);
+    let v = [H[0][1], lam[0] - H[0][0]]; if (Math.abs(H[0][1]) < 1e-12) v = [1, 0]; const nv = Math.hypot(v[0], v[1]); v = [v[0] / nv, v[1] / nv];
+    ctx.save(); ctx.beginPath(); ctx.rect(MX0, MY0, MX1 - MX0, MY1 - MY0); ctx.clip();
+    for (let e = -3; e <= 4; e++) { const c = (L0 - Lmin) * Math.pow(2, e); ctx.strokeStyle = mix(css("--panel"), css("--grey"), 0.55); ctx.lineWidth = 1; ctx.beginPath(); for (let t = 0; t <= 120; t++) { const th = 2 * Math.PI * t / 120, a = Math.sqrt(2 * c / lam[0]) * Math.cos(th), b = Math.sqrt(2 * c / lam[1]) * Math.sin(th); const x = cx + a * v[0] - b * v[1], y = cy + a * v[1] + b * v[0]; if (t === 0) ctx.moveTo(px(x), py(y)); else ctx.lineTo(px(x), py(y)); } ctx.stroke(); }
+    runners.forEach(r => { const pts = r.trace.filter((p, i) => i % Math.max(1, Math.floor(r.trace.length / 600)) === 0 || i === r.trace.length - 1).map(p => [px(p[0]), py(p[1])]); board.path(pts, r.color, 1.5); });
+    ctx.restore(); ctx.strokeStyle = css("--line"); ctx.strokeRect(MX0, MY0, MX1 - MX0, MY1 - MY0);
+    board.dot(px(0), py(0), 5, css("--ink")); board.line(px(cx) - 6, py(cy), px(cx) + 6, py(cy), css("--red"), 2); board.line(px(cx), py(cy) - 6, px(cx), py(cy) + 6, css("--red"), 2);
+    board.label("coefficient on load", (MX0 + MX1) / 2, MY1 + 16, css("--muted"), "center", 10); board.label("coefficient on months, up", MX0 + 6, MY0 + 14, css("--muted"), "left", 10);
+    board.label("the map is stretched to fit each axis; the contour spacing tells the shape", MX0, MY1 + 32, css("--muted"), "left", 10);
+    document.getElementById("rcCond").textContent = cond.toFixed(0); runners.forEach((r, k) => { document.getElementById("rcT" + k).textContent = r.dead ? "diverged" : (r.done !== null ? r.done + " steps" : (iter >= 10000 ? "not in 10000" : (iter ? "running" : "-"))); });
+    const lr = Math.pow(10, lrV); const finished = runners.filter(r => r.done !== null).slice().sort((a, b) => a.done - b.done); const over = runners.every(r => r.done !== null || r.dead) || iter >= 10000;
+    stepEl.innerHTML = '<span class="k">' + (norm ? 'standardized' : 'raw columns') + ', ratio ' + cond.toFixed(0) + ', rate ' + lr.toPrecision(2) + '</span><p>' + (iter === 0 ? (lr > 2 / lam[0] ? 'This rate is above what plain descent survives here, ' + (2 / lam[0]).toPrecision(2) + '. Start anyway and see who diverges.' : 'Press start. At this rate the steep direction is safe and the flat direction will take about ' + Math.round(Math.log(1e6) / (2 * lr * lam[1])).toLocaleString() + ' steps for plain descent.') : (over ? (finished.length ? 'Order of finish: ' + finished.map(r => r.name + ' (' + r.done + ')').join(', ') + '. ' : 'Nobody finished in 10,000 steps. ') + (runners.some(r => r.dead) ? runners.filter(r => r.dead).map(r => r.name).join(' and ') + ' diverged: the step overshoots in the steep direction. ' : '') + (norm ? 'With round columns the plain method with a large step is hard to beat; Adam\'s per-coordinate rescaling has nothing left to fix.' : (runners[2].done !== null && runners[0].done === null ? 'Adam finished where plain descent did not: dividing by each coordinate\'s own gradient scale undoes most of the unit mismatch. Now standardize the columns and run again.' : 'Raise the rate until plain descent diverges, then standardize and run again.')) : 'Step ' + iter + '.')) + '</p>';
+  }
+  function frame() { for (let k = 0; k < 40 && iter < 10000; k++) { iter++; runners.forEach((r, i) => step(r, i, Math.pow(10, lrV))); } draw(); if (iter < 10000 && runners.some(r => r.done === null && !r.dead)) anim = requestAnimationFrame(frame); else anim = null; }
+  function reset() { if (anim) cancelAnimationFrame(anim); anim = null; setup(); runners = newRunners(); iter = 0; draw(); }
+  document.getElementById("rcGo").addEventListener("click", () => { if (anim) return; if (iter > 0) { runners = newRunners(); iter = 0; } frame(); });
+  document.getElementById("rcReset").addEventListener("click", reset);
+  document.getElementById("rcNorm").addEventListener("click", () => { norm = !norm; document.getElementById("rcNorm").setAttribute("aria-pressed", norm ? "true" : "false"); reset(); });
+  const lrEl = document.getElementById("rcLr"); lrEl.addEventListener("input", () => { lrV = +lrEl.value; document.getElementById("rcLrOut").textContent = Math.pow(10, lrV).toPrecision(2); if (!anim) draw(); });
+  quiz(document.getElementById("rcQuiz"), { q: "Adam divides each coordinate's step by the root of a running mean of squared gradients. Why does that help in a thin valley?", options: ["It estimates the curvature exactly", "It rescales each coordinate by its own gradient size, so the steep direction takes small steps and the flat one large steps, as if the columns had been standardized", "It adds momentum"], answer: 1, why: "The second moment is a gradient statistic, not curvature, but dividing by it undoes much of the scale difference between coordinates, which is why standardizing the columns helps everyone and Adam least, slide 8." });
+  window.addEventListener("themechange", () => { if (!anim) draw(); });
+  reset();
+})();
+
+/* ================= 3. THE CURVE CLINIC ================= */
+(function clinic() {
+  const board = new Board(document.getElementById("clPlot"));
+  const stepEl = document.getElementById("clStep");
+  function cheb(x, d) { const f = [1, x]; for (let k = 2; k <= d; k++) f.push(2 * x * f[k - 1] - f[k - 2]); return f.slice(0, d + 1); }
+  function makeData(seed, n) { const rng = mulberry32(seed), g = randn(rng, n); const X = [], Y = []; for (let i = 0; i < n; i++) { const x = -1 + 2 * rng(); X.push(x); Y.push(Math.sin(3 * x) + 0.5 * x + 0.3 * g[i]); } return { X, Y }; }
+  function train(cfg) {
+    const tr = makeData(cfg.seed, cfg.n), va = makeData(cfg.seed + 100, 30), te = makeData(cfg.seed + 200, 30);
+    const d = cfg.degree; const F = tr.X.map(x => cheb(x, d)), Fv = va.X.map(x => cheb(x, d)), Ft = te.X.map(x => cheb(x, d));
+    const w = new Float64Array(d + 1); const hist = [];
+    const loss = (Fs, Ys) => mean(Fs.map((f, i) => (f.reduce((s, v, j) => s + v * w[j], 0) - Ys[i]) ** 2));
+    for (let e = 0; e < cfg.epochs; e++) {
+      const grad = new Float64Array(d + 1);
+      F.forEach((f, i) => { const r = f.reduce((s, v, j) => s + v * w[j], 0) - tr.Y[i]; f.forEach((v, j) => grad[j] += 2 * r * v / F.length); });
+      for (let j = 0; j < w.length; j++) w[j] -= cfg.lr * (grad[j] + 2 * cfg.wd * w[j]);
+      const row = [loss(F, tr.Y), loss(Fv, va.Y), loss(Ft, te.Y)]; hist.push(row);
+      if (!isFinite(row[0]) || row[0] > 1e4) break;
+    }
+    return hist;
+  }
+  const CASES = [
+    { name: "A", cfg: { seed: 9, degree: 18, lr: 0.05, wd: 0, epochs: 400, n: 24 }, dx: "over", rx: ["wd", "early", "data"] },
+    { name: "B", cfg: { seed: 3, degree: 1, lr: 0.05, wd: 0, epochs: 400, n: 24 }, dx: "under", rx: ["cap"] },
+    { name: "C", cfg: { seed: 1, degree: 8, lr: "high", wd: 0, epochs: 400, n: 24 }, dx: "high", rx: ["lrdown"] },
+    { name: "D", cfg: { seed: 4, degree: 5, lr: 0.002, wd: 0, epochs: 400, n: 24 }, dx: "low", rx: ["lrup"] },
+    { name: "E", cfg: { seed: 5, degree: 18, lr: 0.05, wd: 0, epochs: 400, n: 20 }, dx: "over", rx: ["wd", "early", "data"] },
+    { name: "F", cfg: { seed: 5, degree: 5, lr: 0.05, wd: 0, epochs: 40, n: 24 }, dx: "under", rx: ["longer", "lrup"] }
+  ];
+  function lmax(seed, n, d) { const tr = makeData(seed, n); const F = tr.X.map(x => cheb(x, d)); const m = d + 1; const H = []; for (let a = 0; a < m; a++) H.push(new Float64Array(m)); F.forEach(f => { for (let a = 0; a < m; a++) for (let b = 0; b < m; b++) H[a][b] += 2 * f[a] * f[b] / F.length; }); let v = new Float64Array(m).fill(1), l = 1; for (let it = 0; it < 100; it++) { const w = new Float64Array(m); for (let a = 0; a < m; a++) for (let b = 0; b < m; b++) w[a] += H[a][b] * v[b]; l = Math.sqrt(w.reduce((q, x) => q + x * x, 0)); v = w.map(x => x / l); } return l; }
+  CASES.forEach(c => { if (c.cfg.lr === "high") c.cfg.lr = 1.03 * 2 / lmax(c.cfg.seed, c.cfg.n, c.cfg.degree); });
+  const DXN = { under: "underfitting", over: "overfitting", high: "learning rate too high", low: "learning rate too low" };
+  const RXN = { cap: "add capacity", longer: "train longer", lrup: "raise the rate", lrdown: "cut the rate", wd: "weight decay", early: "stop early", data: "more data" };
+  let cur = 0, dx = null, rxs = [], cleared = CASES.map(() => false), hist0 = null, hist1 = null, early = null;
+  function applyRx(cfg, rx) { const c = Object.assign({}, cfg); if (rx === "cap") c.degree = Math.max(6, c.degree * 2); if (rx === "longer") c.epochs = Math.max(400, c.epochs * 4); if (rx === "lrup") c.lr *= 10; if (rx === "lrdown") c.lr /= 10; if (rx === "wd") c.wd = 0.03; if (rx === "data") c.n = 120; return c; }
+  function compute() { const c = CASES[cur]; hist0 = train(c.cfg); let cfg = c.cfg; early = false; rxs.forEach(r => { if (r === "early") early = true; else cfg = applyRx(cfg, r); }); hist1 = rxs.length ? train(cfg) : null; }
+  function bestEpoch(h) { let b = 0; h.forEach((r, i) => { if (r[1] < h[b][1]) b = i; }); return b; }
+  function panel(h, x0, x1, title, mark) {
+    const y0 = 60, y1 = 440; const n = h.length; const lo = -1.6, hi = 1;
+    const px = i => x0 + i / Math.max(1, n - 1) * (x1 - x0), py = v => y1 - (Math.max(lo, Math.min(hi, Math.log10(Math.max(v, 1e-9)))) - lo) / (hi - lo) * (y1 - y0);
+    board.label(title, x0, y0 - 12, css("--ink"), "left", 12);
+    board.line(x0, y1, x1, y1, css("--line"), 1); board.line(x0, y0, x0, y1, css("--line"), 1);
+    [-1.5, -1, -0.5, 0, 0.5, 1].forEach(e => { board.line(x0, py(Math.pow(10, e)), x1, py(Math.pow(10, e)), css("--line"), 1, [2, 4]); board.label(Math.pow(10, e).toFixed(2), x0 - 6, py(Math.pow(10, e)) + 4, css("--muted"), "right", 10, true); });
+    board.label("epoch 1", x0, y1 + 14, css("--muted"), "left", 10, true); board.label("epoch " + n, x1, y1 + 14, css("--muted"), "right", 10, true);
+    board.path(h.map((r, i) => [px(i), py(r[0])]), css("--ink"), 2); board.path(h.map((r, i) => [px(i), py(r[1])]), css("--red"), 2);
+    if (mark !== null && mark !== undefined) { board.line(px(mark), y0, px(mark), y1, "#2E7D5B", 2, [5, 4]); board.label("stop here: epoch " + (mark + 1), px(mark) + 4, y0 + 14, "#2E7D5B", "left", 11); board.dot(px(mark), py(h[mark][1]), 5, "#2E7D5B", "#fff"); }
+    board.label("black: training   red: validation   log scale", x0, y1 + 30, css("--muted"), "left", 11);
+  }
+  function draw() {
+    board.clear("case " + CASES[cur].name + ": the chart as presented, and the chart after your prescription");
+    panel(hist0, 70, 560, "as presented", null);
+    if (hist1) panel(hist1, 680, 1170, "after: " + rxs.map(r => RXN[r]).join(" + "), early ? bestEpoch(hist1) : null);
+    else { board.label("no prescription yet", 680, 60, css("--muted"), "left", 12); }
+    const v0 = hist0[hist0.length - 1][1]; let v1 = null, t1 = null; if (hist1) { const e = early ? bestEpoch(hist1) : hist1.length - 1; v1 = hist1[e][1]; t1 = hist1[e][2]; }
+    document.getElementById("clV0").textContent = isFinite(v0) ? v0.toFixed(3) : "diverged"; document.getElementById("clV1").textContent = v1 === null ? "-" : (isFinite(v1) ? v1.toFixed(3) : "diverged"); document.getElementById("clT1").textContent = t1 === null ? "-" : (isFinite(t1) ? t1.toFixed(3) : "diverged");
+    const c = CASES[cur]; const dxOk = dx === c.dx; const rxOk = rxs.length > 0 && rxs.every(r => c.rx.indexOf(r) >= 0); const improved = v1 !== null && isFinite(v1) && v1 < v0 * 0.9;
+    if (dxOk && rxOk && improved) cleared[cur] = true;
+    document.getElementById("clScore").textContent = cleared.filter(Boolean).length + " of 6";
+    document.querySelectorAll("#clCases button").forEach((b, i) => { b.className = (i === cur ? "on " : "") + (cleared[i] ? "ok" : ""); });
+    document.querySelectorAll("#clinic [data-dx]").forEach(b => b.setAttribute("aria-pressed", b.dataset.dx === dx ? "true" : "false"));
+    document.querySelectorAll("#clinic [data-rx]").forEach(b => b.setAttribute("aria-pressed", rxs.indexOf(b.dataset.rx) >= 0 ? "true" : "false"));
+    let msg;
+    if (!dx) msg = '<p>Read the two curves and name the pathology.</p>';
+    else if (!dxOk) msg = '<div class="ask no">Not ' + DXN[dx] + '. Look again: ' + (c.dx === "over" ? 'is the red curve turning back up while the black one keeps falling?' : c.dx === "under" ? 'are both curves stalled high and close together?' : c.dx === "high" ? 'is the loss thrashing or climbing?' : 'is the loss still creeping down with no turn in sight?') + '</div>';
+    else if (!rxs.length) msg = '<div class="ask ok">' + DXN[dx] + ', yes. Now prescribe.</div>';
+    else if (!rxOk) msg = '<div class="ask no">' + rxs.map(r => RXN[r]).join(' + ') + ' does not treat ' + DXN[c.dx] + '. Validation ' + (v1 === null ? '' : (isFinite(v1) ? 'went from ' + v0.toFixed(3) + ' to ' + v1.toFixed(3) : 'diverged')) + '. Choose the case again to clear the chart.</div>';
+    else if (!improved) msg = '<div class="ask">Right idea, small effect: validation ' + v0.toFixed(3) + ' to ' + v1.toFixed(3) + '. Add a second prescription; they combine.</div>';
+    else msg = '<div class="ask ok">Cleared: validation ' + v0.toFixed(3) + ' to ' + v1.toFixed(3) + '. ' + (early ? 'The stopping epoch was chosen by looking at the validation curve, so that number is now a fitted quantity; the third split says ' + t1.toFixed(3) + '.' : 'The third split, never consulted, says ' + t1.toFixed(3) + '.') + '</div>';
+    stepEl.innerHTML = '<span class="k">case ' + c.name + '</span>' + msg;
+  }
+  const casesEl = document.getElementById("clCases"); CASES.forEach((c, i) => { const b = document.createElement("button"); b.textContent = "case " + c.name; b.addEventListener("click", () => { cur = i; dx = null; rxs = []; compute(); draw(); }); casesEl.appendChild(b); });
+  document.querySelectorAll("#clinic [data-dx]").forEach(b => b.addEventListener("click", () => { dx = b.dataset.dx; draw(); }));
+  document.querySelectorAll("#clinic [data-rx]").forEach(b => b.addEventListener("click", () => { if (rxs.indexOf(b.dataset.rx) < 0) rxs.push(b.dataset.rx); compute(); draw(); }));
+  quiz(document.getElementById("clQuiz"), { q: "You stopped at the epoch where the validation loss was lowest and report that validation loss as the model's error. What is wrong?", options: ["Nothing, that is the purpose of validation", "The epoch was chosen by looking at that curve, so the number is optimistically biased; a third split that never influenced any decision gives the honest figure", "Early stopping needs a larger learning rate"], answer: 1, why: "Choosing the stopping epoch from the validation curve turns the validation score into a fitted quantity. Slide 10: a final claim needs a split that neither curve ever touched." });
+  window.addEventListener("themechange", draw);
+  compute(); draw();
+})();
+
+/* ================= 4. BEAT THE LEARNED FILTER ================= */
+(function kernel() {
+  const S = 48; const board = new Board(document.getElementById("knPlot"));
+  const stepEl = document.getElementById("knStep");
+  let seed = 7, img = null, mask = null, K = [0, 0, 0, 0, 1, 0, 0, 0, 0], KL = null, bL = 0;
+  function makePatch() {
+    const rng = mulberry32(seed), g = randn(rng, S * S * 2); img = new Float64Array(S * S); mask = new Uint8Array(S * S);
+    const nc = 4; const cs = []; for (let k = 0; k < nc; k++) cs.push([rng() * 0.25, rng() * 0.25, rng() * 6.28, 0.04 + 0.08 * rng()]);
+    const stains = []; for (let k = 0; k < 3; k++) stains.push([S * rng(), S * rng(), 4 + 6 * rng(), -0.25 - 0.2 * rng()]);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { let v = 0.55; cs.forEach(c => { v += c[3] * Math.cos(c[0] * x + c[1] * y + c[2]); }); stains.forEach(s => { const d = Math.hypot(x - s[0], y - s[1]); v += s[3] * Math.exp(-d * d / (2 * s[2] * s[2])); }); v += 0.05 * g[y * S + x]; img[y * S + x] = v; }
+    // crack: a wobbly polyline across the patch
+    const pts = []; let yy = 10 + 28 * rng(); for (let x = 0; x < S; x++) { yy += 0.8 * g[S * S + x]; yy = Math.max(2, Math.min(S - 3, yy)); pts.push(yy); }
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const d = Math.abs(y - pts[x]); if (d < 0.9) { img[y * S + x] -= 0.28 * (1 - d * 0.5); mask[y * S + x] = 1; } }
+  }
+  function conv(k, b) { const out = new Float64Array(S * S); for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { let s = b || 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = Math.min(S - 1, Math.max(0, y + dy)), xx = Math.min(S - 1, Math.max(0, x + dx)); s += k[(dy + 1) * 3 + (dx + 1)] * img[yy * S + xx]; } out[y * S + x] = s; } return out; }
+  function score(r) { const c = [], p = []; for (let i = 0; i < S * S; i++) (mask[i] ? c : p).push(r[i]); const s = sd(p); return s < 1e-9 ? 0 : Math.abs(mean(c) - mean(p)) / s; }
+  function learn() {
+    const k = new Float64Array(9); let b = 0; const m = new Float64Array(10), v = new Float64Array(10); const lr = 0.05; let t = 0;
+    const pos = []; for (let i = 0; i < S * S; i++) if (mask[i]) pos.push(i); const wpos = (S * S - pos.length) / pos.length;
+    for (let it = 0; it < 300; it++) {
+      t++; const r = conv(k, b); const gk = new Float64Array(9); let gb = 0;
+      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const i = y * S + x; const p = sigmoid(r[i]); const wgt = mask[i] ? wpos : 1; const e = wgt * (p - mask[i]) / (S * S); gb += e; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = Math.min(S - 1, Math.max(0, y + dy)), xx = Math.min(S - 1, Math.max(0, x + dx)); gk[(dy + 1) * 3 + (dx + 1)] += e * img[yy * S + xx]; } }
+      for (let j = 0; j < 10; j++) { const gr = j < 9 ? gk[j] : gb; m[j] = 0.9 * m[j] + 0.1 * gr; v[j] = 0.999 * v[j] + 0.001 * gr * gr; const st = lr * (m[j] / (1 - Math.pow(0.9, t))) / (Math.sqrt(v[j] / (1 - Math.pow(0.999, t))) + 1e-8); if (j < 9) k[j] -= st; else b -= st; }
+    }
+    KL = Array.from(k); bL = b;
+  }
+  function drawImage(arr, x0, y0, size, mode) {
+    const ctx = board.ctx; const cell = size / S; let lo = Infinity, hi = -Infinity; for (let i = 0; i < S * S; i++) { lo = Math.min(lo, arr[i]); hi = Math.max(hi, arr[i]); }
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const v = arr[y * S + x]; let col; if (mode === "gray") { const g = Math.round(255 * Math.max(0, Math.min(1, v))); col = "rgb(" + g + "," + g + "," + g + ")"; } else if (mode === "mask") { col = v ? css("--red") : css("--bg"); } else { const t = hi > lo ? (v - lo) / (hi - lo) : 0.5; col = mix(mix("#14171C", "#F6F7F9", t), css("--panel"), 0); } ctx.fillStyle = col; ctx.fillRect(x0 + x * cell, y0 + y * cell, cell + 0.5, cell + 0.5); }
+    ctx.strokeStyle = css("--line"); ctx.strokeRect(x0, y0, size, size);
+  }
+  function drawKernel(k, b, x0, y0, title) { board.label(title, x0, y0 - 8, css("--ink"), "left", 12); for (let i = 0; i < 9; i++) { const cx = x0 + (i % 3) * 58, cy = y0 + Math.floor(i / 3) * 30; board.ctx.fillStyle = css("--bg"); board.ctx.fillRect(cx, cy, 54, 26); board.ctx.strokeStyle = css("--line"); board.ctx.strokeRect(cx, cy, 54, 26); board.label(k[i].toFixed(2), cx + 27, cy + 18, css("--ink"), "center", 12, true); } if (b !== null) board.label("bias " + b.toFixed(2), x0, y0 + 108, css("--muted"), "left", 11, true); }
+  function draw() {
+    board.clear("pavement patch, the traced crack map, your response, the learned response");
+    const size = 220, y0 = 50; const xs = [40, 330, 620, 910];
+    drawImage(img, xs[0], y0, size, "gray"); board.label("patch, 48 by 48", xs[0], y0 - 8, css("--ink"), "left", 12);
+    drawImage(mask, xs[1], y0, size, "mask"); board.label("traced crack map, the target", xs[1], y0 - 8, css("--ink"), "left", 12);
+    const r = conv(K, 0); drawImage(r, xs[2], y0, size, "resp"); const sMine = score(r); board.label("your kernel's response, score " + sMine.toFixed(2), xs[2], y0 - 8, css("--ink"), "left", 12);
+    let sL = null; if (KL) { const rl = conv(KL, bL); drawImage(rl, xs[3], y0, size, "resp"); sL = score(rl); board.label("learned kernel's response, score " + sL.toFixed(2), xs[3], y0 - 8, css("--ink"), "left", 12); } else { board.ctx.fillStyle = css("--bg"); board.ctx.fillRect(xs[3], y0, size, size); board.label("press learn", xs[3] + size / 2, y0 + size / 2, css("--muted"), "center", 12); }
+    drawKernel(K, null, xs[2], 320, "your nine numbers"); if (KL) drawKernel(KL, bL, xs[3], 320, "the nine numbers gradient descent found");
+    board.label("score: distance between the mean response on crack pixels and on pavement, in pavement spreads", 40, 320, css("--muted"), "left", 11);
+    board.label("the response map is shown with its own full range, dark to light", 40, 340, css("--muted"), "left", 11);
+    board.label("a dense layer mapping this patch to a map of the same size: (48 x 48) x (48 x 48) weights", 40, 372, css("--muted"), "left", 11);
+    board.label("= " + (S * S * S * S).toLocaleString() + " weights, learned separately for every crack position", 40, 390, css("--muted"), "left", 11);
+    board.label("this kernel: 9 weights and a bias, the same ten numbers at every position", 40, 408, css("--muted"), "left", 11);
+    document.getElementById("knMine").textContent = sMine.toFixed(2); document.getElementById("knTheirs").textContent = sL === null ? "-" : sL.toFixed(2); document.getElementById("knP2").textContent = (S * S * S * S).toLocaleString();
+    const isId = K.every((v, i) => v === (i === 4 ? 1 : 0));
+    stepEl.innerHTML = '<span class="k">score ' + sMine.toFixed(2) + (sL !== null ? ' against ' + sL.toFixed(2) : '') + '</span>' + (isId ? '<p>The identity kernel returns the patch itself. Dark pixels are not enough: the stains are as dark as the crack. Type a kernel that answers to thin lines rather than to dark areas.</p>' : (sL === null ? '<div class="ask">Your kernel scores ' + sMine.toFixed(2) + '. Press learn when you want to see what nine numbers the gradient finds for the same target.</div>' : (sMine > sL ? '<div class="ask ok">You beat the learned kernel, ' + sMine.toFixed(2) + ' to ' + sL.toFixed(2) + '. <span class="badge done">handbook wins this patch</span> Try a new patch; the learned one is refitted to each.</div>' : '<div class="ask">The learned kernel wins, ' + sL.toFixed(2) + ' to ' + sMine.toFixed(2) + '. Read its nine numbers: a row of one sign between rows of the other, a second derivative taken across the crack, which nobody told it about.</div>')));
+  }
+  const grid = document.getElementById("knGrid"); const inputs = [];
+  for (let i = 0; i < 9; i++) { const inp = document.createElement("input"); inp.type = "text"; inp.inputMode = "decimal"; inp.value = K[i]; inp.setAttribute("aria-label", "kernel entry " + (i + 1)); inp.addEventListener("input", () => { const v = parseFloat(inp.value); K[i] = isFinite(v) ? v : 0; draw(); }); grid.appendChild(inp); inputs.push(inp); }
+  function setK(k) { K = k.slice(); inputs.forEach((inp, i) => inp.value = K[i]); draw(); }
+  const PRESETS = { id: [0, 0, 0, 0, 1, 0, 0, 0, 0], blur: [0.11, 0.11, 0.11, 0.11, 0.12, 0.11, 0.11, 0.11, 0.11], sx: [-1, 0, 1, -2, 0, 2, -1, 0, 1], sy: [-1, -2, -1, 0, 0, 0, 1, 2, 1], lap: [0, 1, 0, 1, -4, 1, 0, 1, 0] };
+  document.querySelectorAll("#kernel [data-k]").forEach(b => b.addEventListener("click", () => setK(PRESETS[b.dataset.k])));
+  document.getElementById("knLearn").addEventListener("click", () => { learn(); draw(); });
+  document.getElementById("knNew").addEventListener("click", () => { seed++; makePatch(); KL = null; draw(); });
+  quiz(document.getElementById("knQuiz"), { q: "A trained crack detector's first layer contains a kernel that looks like a Laplacian. Nobody put it there. Why does that happen?", options: ["The framework initializes kernels to Laplacians", "Gradient descent chose the nine numbers that best predict the traced map, and for a thin dark line in textured pavement a second-derivative detector is what works; the handbook was rediscovered from data", "Convolution always produces edge detectors"], answer: 1, why: "A convolutional layer is the handbook's sliding window with the entries made trainable, slide 14. What the layer learns is whatever filters the task rewards, and decades of hand design sit at the bottom of every trained network." });
+  window.addEventListener("themechange", draw);
+  makePatch(); draw();
+})();
+
+/* ================= 5. STACK FOR REACH ================= */
+(function stack() {
+  const S = 128, board = new Board(document.getElementById("stPlot"));
+  const stepEl = document.getElementById("stStep");
+  const LAYERS = { c3: { name: "conv 3x3", k: 3, s: 1 }, c5: { name: "conv 5x5", k: 5, s: 1 }, c7: { name: "conv 7x7", k: 7, s: 1 }, c3s2: { name: "conv 3x3 stride 2", k: 3, s: 2 }, p2: { name: "max pool 2", k: 2, s: 2, pool: true } };
+  let layers = [], center = [64, 64], best = null;
+  // the deck image
+  const rng = mulberry32(12), g = randn(rng, S * S); const img = new Float64Array(S * S);
+  const sp = [78, 62, 30]; const crack = []; let cy = 20; for (let x = 0; x < S; x++) { cy += 0.5 * g[x]; crack.push(cy); }
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { let v = 0.62 + 0.04 * g[y * S + x] + 0.03 * Math.cos(x * 0.21) * Math.cos(y * 0.17); const d = Math.hypot(x - sp[0], (y - sp[1]) * 1.2); const edge = sp[2] + 4 * Math.cos(Math.atan2(y - sp[1], x - sp[0]) * 5); if (d < edge) v -= 0.18 + 0.06 * Math.min(1, (edge - d) / 6) + 0.03 * g[(y * 7 + x * 13) % (S * S)]; if (Math.abs(y - crack[x]) < 1.2) v -= 0.2; img[y * S + x] = v; }
+  function stats() { let rf = 1, jump = 1, n = S, params = 0, cin = 1; layers.forEach(l => { const L = LAYERS[l]; rf += (L.k - 1) * jump; jump *= L.s; n = Math.ceil(n / L.s); if (!L.pool) { params += L.k * L.k * cin * 16 + 16; cin = 16; } }); return { rf, n, params }; }
+  function draw() {
+    const st = stats(); const ctx = board.ctx;
+    board.clear("the deck: click to move the unit; the square is everything one top unit can see");
+    const x0 = 40, y0 = 50, size = 420, cell = size / S;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const gg = Math.round(255 * Math.max(0, Math.min(1, img[y * S + x]))); ctx.fillStyle = "rgb(" + gg + "," + gg + "," + gg + ")"; ctx.fillRect(x0 + x * cell, y0 + y * cell, cell + 0.5, cell + 0.5); }
+    ctx.strokeStyle = css("--line"); ctx.strokeRect(x0, y0, size, size);
+    board.label("spall, about 60 px across", x0 + sp[0] * cell, y0 + (sp[1] + sp[2] + 12) * cell, css("--orange"), "center", 11); board.label("crack, 2 px wide", x0 + 60 * cell, y0 + (crack[60] - 4) * cell, css("--orange"), "center", 11);
+    const half = (st.rf - 1) / 2; const rx0 = x0 + (center[0] - half) * cell, ry0 = y0 + (center[1] - half) * cell, rw = st.rf * cell;
+    ctx.strokeStyle = css("--red"); ctx.lineWidth = 2.5; ctx.strokeRect(Math.max(x0, rx0), Math.max(y0, ry0), Math.min(rw, x0 + size - Math.max(x0, rx0)), Math.min(rw, y0 + size - Math.max(y0, ry0))); ctx.fillStyle = "rgba(179,38,30,0.12)"; ctx.fillRect(Math.max(x0, rx0), Math.max(y0, ry0), Math.min(rw, x0 + size - Math.max(x0, rx0)), Math.min(rw, y0 + size - Math.max(y0, ry0)));
+    board.dot(x0 + center[0] * cell, y0 + center[1] * cell, 4, css("--red"), "#fff");
+    board.label("receptive field " + st.rf + " px", Math.max(x0, rx0) + 4, Math.max(y0, ry0) - 6, css("--red"), "left", 11);
+    // the stack diagram: nested squares with the reach at each layer
+    const DX = 560, DY = 70; board.label("reach, layer by layer", DX, DY - 12, css("--ink"), "left", 12);
+    let rf = 1, jump = 1, n = S; const rows = [{ name: "input", rf: 1, n: S, jump: 1 }]; layers.forEach(l => { const L = LAYERS[l]; rf += (L.k - 1) * jump; jump *= L.s; n = Math.ceil(n / L.s); rows.push({ name: L.name, rf, n, jump }); });
+    const scale = 2.2; board.line(DX + 64 * scale, DY - 4, DX + 64 * scale, DY + rows.length * 36, css("--orange"), 1.5, [5, 4]); board.label("spall width", DX + 64 * scale + 4, DY + rows.length * 36 + 24, css("--orange"), "left", 10);
+    rows.forEach((r, i) => { const y = DY + i * 36; const w = Math.min(560, r.rf * scale); ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.12 + 0.05 * i); ctx.fillRect(DX, y, w, 24); ctx.strokeStyle = css("--blue"); ctx.lineWidth = 1; ctx.strokeRect(DX, y, w, 24); board.label(r.name + ":  sees " + r.rf + " px,  map " + r.n + " x " + r.n + ",  stride so far " + r.jump, DX + w + 8, y + 16, css("--ink"), "left", 11, true); });
+    board.label("each layer adds (kernel - 1) x (product of strides below), slide 16", DX, DY + rows.length * 36 + 10, css("--muted"), "left", 11);
+    document.getElementById("stRF").textContent = st.rf + " px"; document.getElementById("stOut").textContent = st.n + " x " + st.n; document.getElementById("stPar").textContent = st.params.toLocaleString();
+    const covers = st.rf >= 64 && st.n >= 8;
+    if (covers && (!best || st.params < best.params)) best = { params: st.params, desc: layers.map(l => LAYERS[l].name).join(", "), depth: layers.length };
+    document.getElementById("stBest").textContent = best ? best.params.toLocaleString() + " weights, " + best.depth + " layers" : "-";
+    const stackEl = document.getElementById("stStack"); stackEl.innerHTML = ""; layers.forEach((l, i) => { const b = document.createElement("button"); b.textContent = (i + 1) + ". " + LAYERS[l].name; b.title = "remove"; b.addEventListener("click", () => { layers.splice(i, 1); draw(); }); stackEl.appendChild(b); });
+    stepEl.innerHTML = '<span class="k">' + layers.length + (layers.length === 1 ? ' layer' : ' layers') + ', reach ' + st.rf + ' px</span>' + (layers.length === 0 ? '<p>A unit with no layers above it sees one pixel. Add layers; the red square grows.</p>' : (covers ? '<div class="ask ok">The top unit sees across the spall with a ' + st.n + ' x ' + st.n + ' map, for ' + st.params.toLocaleString() + ' weights. <span class="badge done">covers the spall</span> Can a different stack do it with fewer?</div>' : (st.rf < 64 ? '<div class="ask">Reach ' + st.rf + ' px, the spall is about 60. A pool or a stride doubles what every layer above it adds.</div>' : '<div class="ask no">Reach is enough but the map is ' + st.n + ' x ' + st.n + ': too much stride and there is nothing left to locate the spall on.</div>')));
+  }
+  document.querySelectorAll("#stack [data-l]").forEach(b => b.addEventListener("click", () => { if (layers.length >= 10) return; layers.push(b.dataset.l); draw(); }));
+  document.getElementById("stClear").addEventListener("click", () => { layers = []; draw(); });
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const x0 = 40, y0 = 50, cell = 420 / S; if (mx < x0 || mx > x0 + 420 || my < y0 || my > y0 + 420) return; center = [Math.round((mx - x0) / cell), Math.round((my - y0) / cell)]; draw(); });
+  quiz(document.getElementById("stQuiz"), { q: "Two stacked 3 by 3 convolutions reach as far as one 5 by 5. Why prefer the pair?", options: ["They are always faster", "18 weights per channel pair instead of 25, and a nonlinearity between them, for the same reach", "They have a larger receptive field"], answer: 1, why: "Reach is the same, five pixels; the pair costs fewer weights and adds a decision between the two filters, which is the VGG argument and the reason modern stacks are deep and narrow, slide 16." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 6. FIFTY LABELS ================= */
+(function labels() {
+  const D = 8, board = new Board(document.getElementById("lbPlot"));
+  const stepEl = document.getElementById("lbStep");
+  const NS = [5, 10, 20, 50, 100, 200, 500, 1000, 2000];
+  let gap = 0, drag = false;
+  const rngR = mulberry32(5); const RF = []; for (let k = 0; k < 80; k++) RF.push(Array.from(randn(rngR, D)).map(v => v / Math.sqrt(D))); const RB = Array.from(randn(rngR, 80)).map(v => v * 0.5);
+  function sample(rng, n) { const X = [], Y = []; for (let i = 0; i < n; i++) { const x = Array.from(randn(rng, D)); X.push(x); Y.push(x[0] * x[1] + 0.6 * x[0] - 0.3 > 0 ? 1 : 0); } return { X, Y }; }
+  const phiTrue = x => [1, x[0], x[1], x[0] * x[1], x[0] * x[0] - x[1] * x[1]];
+  const phiNuis = x => [1, x[2], x[3], x[2] * x[3], x[2] * x[2] - x[3] * x[3]];
+  function phiGap(x, a) { const t = phiTrue(x), u = phiNuis(x); return t.map((v, i) => i === 0 ? 1 : Math.cos(a) * v + Math.sin(a) * u[i]); }
+  const phiScratch = x => [1].concat(RF.map((w, k) => Math.max(0, w.reduce((s, v, j) => s + v * x[j], 0) + RB[k])));
+  function logistic(F, y, lam) { const d = F[0].length; const w = new Float64Array(d); for (let it = 0; it < 10; it++) { const gr = new Float64Array(d), H = []; for (let i = 0; i < d; i++) H.push(new Float64Array(d)); F.forEach((f, i) => { const p = sigmoid(f.reduce((s, v, j) => s + v * w[j], 0)); const r = p - y[i], q = p * (1 - p) + 1e-6; for (let a = 0; a < d; a++) { gr[a] += r * f[a]; const qa = q * f[a]; const row = H[a]; for (let b = 0; b < d; b++) row[b] += qa * f[b]; } }); for (let a = 0; a < d; a++) { gr[a] += lam * w[a]; H[a][a] += lam; } const st = solve(H, Array.from(gr)); let mx = 0; for (let a = 0; a < d; a++) { w[a] -= st[a]; mx = Math.max(mx, Math.abs(st[a])); } if (mx < 1e-4) break; } return w; }
+  const test = sample(mulberry32(999), 1500);
+  function acc(w, phi) { let c = 0; test.X.forEach((x, i) => { if ((phi(x).reduce((s, v, j) => s + v * w[j], 0) > 0 ? 1 : 0) === test.Y[i]) c++; }); return c / test.X.length; }
+  const cache = {}; let scratch = null;
+  function curve(phi, lam, key) { if (cache[key]) return cache[key]; const out = NS.map(n => { let s = 0; const R = n <= 200 ? 3 : 1; for (let r = 0; r < R; r++) { const tr = sample(mulberry32(1000 * r + n), n); s += acc(logistic(tr.X.map(phi), tr.Y, lam), phi); } return s / R; }); cache[key] = out; return out; }
+  function draw() {
+    const a = gap * Math.PI / 180; const pre = curve(x => phiGap(x, a), 0.1, "p" + gap); if (!scratch) scratch = curve(phiScratch, 0.3, "s");
+    const ctx = board.ctx; board.clear("accuracy on unseen patches against the number of labels, two ways of training");
+    const L = 70, R = 800, TOP = 50, BOT = 440; const px = n => L + (Math.log10(n) - Math.log10(5)) / (Math.log10(2000) - Math.log10(5)) * (R - L), py = v => BOT - (v - 0.5) / 0.5 * (BOT - TOP);
+    board.line(L, BOT, R, BOT, css("--line"), 1); board.line(L, TOP, L, BOT, css("--line"), 1);
+    NS.forEach(n => board.label(String(n), px(n), BOT + 16, css("--muted"), "center", 10, true)); [0.5, 0.6, 0.7, 0.8, 0.9, 1].forEach(v => { board.line(L, py(v), R, py(v), css("--line"), 1, [2, 4]); board.label((100 * v).toFixed(0) + " %", L - 6, py(v) + 4, css("--muted"), "right", 10, true); });
+    board.label("labelled patches, log scale", (L + R) / 2, BOT + 32, css("--muted"), "center", 11);
+    board.line(px(50), TOP, px(50), BOT, css("--grey"), 1, [4, 4]); board.label("fifty labels", px(50) + 4, TOP + 12, css("--grey"), "left", 11);
+    board.path(NS.map((n, i) => [px(n), py(scratch[i])]), css("--ink"), 2.5); NS.forEach((n, i) => board.dot(px(n), py(scratch[i]), 4, css("--ink")));
+    board.path(NS.map((n, i) => [px(n), py(pre[i])]), css("--blue"), 2.5); NS.forEach((n, i) => board.dot(px(n), py(pre[i]), 4, css("--blue")));
+    board.label("from scratch", px(2000) + 6, py(scratch[8]) + 4, css("--ink"), "left", 11); board.label("pretrained trunk, head only", px(2000) + 6, py(pre[8]) + 4, css("--blue"), "left", 11);
+    // the dial
+    const DX = 1080, DY = 330, DR = 100; ctx.strokeStyle = css("--line"); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(DX, DY, DR, Math.PI, 1.5 * Math.PI); ctx.stroke();
+    for (let d = 0; d <= 90; d += 15) { const th = Math.PI + d / 90 * Math.PI / 2; board.line(DX + (DR - 8) * Math.cos(th), DY + (DR - 8) * Math.sin(th), DX + DR * Math.cos(th), DY + DR * Math.sin(th), css("--muted"), 1); board.label(d + "", DX + (DR + 14) * Math.cos(th), DY + (DR + 14) * Math.sin(th) + 4, css("--muted"), "center", 10, true); }
+    const th = Math.PI + gap / 90 * Math.PI / 2; board.line(DX, DY, DX + (DR - 14) * Math.cos(th), DY + (DR - 14) * Math.sin(th), css("--orange"), 4); board.dot(DX, DY, 9, css("--orange"), "#fff");
+    board.label("domain gap: " + gap + " degrees", DX, DY + 30, css("--ink"), "center", 13); board.label("drag the needle", DX, DY + 48, css("--muted"), "center", 11);
+    board.label("0: the trunk saw images like yours", DX, DY + 80, css("--muted"), "center", 11); board.label("90: its features are blind to your task", DX, DY + 96, css("--muted"), "center", 11);
+    const s50 = scratch[3], p50 = pre[3]; let cross = null; for (let i = 0; i < NS.length; i++) if (scratch[i] >= pre[i]) { cross = NS[i]; break; } let n90 = null; for (let i = 0; i < NS.length; i++) if (pre[i] >= 0.9) { n90 = NS[i]; break; }
+    document.getElementById("lbS50").textContent = (100 * s50).toFixed(1) + " %"; document.getElementById("lbP50").textContent = (100 * p50).toFixed(1) + " %"; document.getElementById("lbCross").textContent = cross === null ? "never, up to 2000" : (cross <= 5 ? "already at 5" : "about " + cross); document.getElementById("lb90").textContent = n90 === null ? "not reached" : String(n90);
+    stepEl.innerHTML = '<span class="k">gap ' + gap + ' degrees</span>' + (gap === 0 ? '<div class="ask ok">Fifty labels: ' + (100 * p50).toFixed(0) + ' % on the borrowed trunk against ' + (100 * s50).toFixed(0) + ' % from scratch, the slide 20 numbers in a toy. From scratch needs ' + (cross === null ? 'more than two thousand' : 'about ' + cross) + ' labels to catch up.</div>' : (cross !== null && cross <= 200 ? '<div class="ask no">At ' + gap + ' degrees the trunk still helps below ' + cross + ' labels and then plateaus: a frozen trunk cannot learn features it was never shown. Past that point the scratch model, which can, wins. Fine-tuning at a small rate is the middle road.</div>' : '<div class="ask">At ' + gap + ' degrees the trunk still pays: ' + (100 * p50).toFixed(0) + ' % against ' + (100 * s50).toFixed(0) + ' % at fifty labels, and scratch catches up only around ' + (cross === null ? 'beyond two thousand' : cross) + '.</div>'));
+  }
+  function setGap(v) { gap = Math.max(0, Math.min(90, Math.round(v / 5) * 5)); document.getElementById("lbGap").value = gap; document.getElementById("lbGapOut").textContent = gap; draw(); }
+  const gapEl = document.getElementById("lbGap"); gapEl.addEventListener("input", () => setGap(+gapEl.value));
+  document.querySelectorAll("#labels [data-gap]").forEach(b => b.addEventListener("click", () => setGap(+b.dataset.gap)));
+  function dialAngle(ev) { const [mx, my] = board.pos(ev); let th = Math.atan2(my - 330, mx - 1080); if (th < 0) th += 2 * Math.PI; const d = (th - Math.PI) / (Math.PI / 2) * 90; return Math.max(0, Math.min(90, d)); }
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (Math.hypot(mx - 1080, my - 330) < 130) { drag = true; setGap(dialAngle(ev)); } });
+  window.addEventListener("mousemove", ev => { if (drag) setGap(dialAngle(ev)); });
+  window.addEventListener("mouseup", () => { drag = false; });
+  quiz(document.getElementById("lbQuiz"), { q: "A trunk pretrained on photographs gives 0.93 with fifty crack labels. The same recipe on calibrated SAR tiles gives 0.62. What happened?", options: ["SAR needs more epochs", "The domain gap: the trunk's features were learned on photographs and do not describe radar texture, and a frozen trunk cannot learn what it was never shown", "Fifty labels is too few for any method"], answer: 1, why: "Transfer works only when the pretraining task shares structure with yours, slide 20. For a different sensor, pretrain on your own unlabelled archive with self-supervision, slide 22, or fine-tune the trunk rather than freeze it." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 7. THE REVIEW BOARD ================= */
+(function review() {
+  const TASKS = [
+    { name: "crack present, pavement photos", key: "crack", rule: [1, 1, 1, 1, 0, 1], why: ["a crack is a crack mirrored", "and rotated a quarter turn", "and upside down", "exposure varies between photos anyway", "a crop can leave the crack outside the frame and keep the label", "colour carries nothing a crack needs"] },
+    { name: "slope aspect class, hillshade tiles", key: "aspect", rule: [0, 0, 0, 0, 1, 0], why: ["a mirror turns east-facing into west-facing", "a quarter turn changes the aspect", "a half turn swaps north and south", "hillshade brightness is the aspect under a fixed sun", "a crop keeps the aspect", "a single band has no hue to jitter; the value is the quantity"] },
+    { name: "flood extent, calibrated radar band", key: "flood", rule: [1, 1, 1, 0, 1, 0], why: ["water is water mirrored", "and rotated", "and upside down", "the backscatter level is the signal; jitter rewrites the physics", "a crop keeps the water", "a calibrated band has no colour to vary"] },
+    { name: "flow direction class, aerial river imagery", key: "flow", rule: [0, 0, 0, 1, 1, 1], why: ["a mirror reverses the direction", "a quarter turn changes it", "a half turn reverses it", "sunlight varies between flights", "a crop keeps the direction", "water colour varies with sediment anyway"] }
+  ];
+  const AUGS = ["horizontal flip", "rotate 90", "rotate 180", "brightness jitter", "random crop", "hue jitter"];
+  let stamps = TASKS.map(() => AUGS.map(() => null)), revealed = false, selTask = 0;
+  const board = new Board(document.getElementById("bdPlot")); const stepEl = document.getElementById("bdStep");
+  // the experiment: images as feature vectors [o1, o2, r, s, c], with nuisance correlations in a small labelled set
+  function gen(rng, n) { const X = []; for (let i = 0; i < n; i++) { const th = 2 * Math.PI * rng(); const g = randn(rng, 3); X.push([Math.cos(th), Math.sin(th), g[0], g[1], g[2]]); } return X; }
+  function label(key, x) { if (key === "crack") return x[3] + 0.3 * x[0] > 0 ? 1 : 0; if (key === "aspect") return x[0] > 0 ? 1 : 0; if (key === "flood") return x[2] > 0 ? 1 : 0; return x[1] > 0 ? 1 : 0; }
+  function augment(x, j, rng) { const y = x.slice(); if (j === 0) y[0] = -y[0]; if (j === 1) { const a = y[0]; y[0] = -y[1]; y[1] = a; } if (j === 2) { y[0] = -y[0]; y[1] = -y[1]; } if (j === 3) y[2] += 1.2 * (rng() - 0.5) * 2; if (j === 4) y[3] = y[3] * (0.3 + 0.7 * rng()) - 0.6 * rng(); if (j === 5) { y[4] += rng() - 0.5; y[2] += 0.4 * (rng() - 0.5); } return y; }
+  function logistic(F, y, lam) { const d = F[0].length; const w = new Float64Array(d); for (let it = 0; it < 12; it++) { const gr = new Float64Array(d), H = []; for (let i = 0; i < d; i++) H.push(new Float64Array(d)); F.forEach((f, i) => { const p = sigmoid(f.reduce((s, v, j) => s + v * w[j], 0)); const r = p - y[i], q = p * (1 - p) + 1e-6; for (let a = 0; a < d; a++) { gr[a] += r * f[a]; for (let b = 0; b < d; b++) H[a][b] += q * f[a] * f[b]; } }); for (let a = 0; a < d; a++) { gr[a] += lam * w[a]; H[a][a] += lam; } const st = solve(H, Array.from(gr)); let mx = 0; for (let a = 0; a < d; a++) { w[a] -= st[a]; mx = Math.max(mx, Math.abs(st[a])); } if (mx < 1e-4) break; } return w; }
+  const feat = x => [1].concat(x);
+  function experiment(key, approved) {
+    const rng = mulberry32(31); const n = 24; const X0 = gen(rng, n);
+    // a small set drawn with a spurious correlation between orientation and the label, as small sets have
+    const Y0 = X0.map(x => label(key, x)); const X = [], Y = []; X0.forEach((x, i) => { const z = x.slice(); if (key === "crack" || key === "flood") { z[0] = 0.8 * (Y0[i] ? 1 : -1) + 0.4 * z[0]; z[1] = 0.6 * (Y0[i] ? 1 : -1) + 0.4 * z[1]; } X.push(z); Y.push(Y0[i]); });
+    const XA = X.slice(), YA = Y.slice(); approved.forEach(j => { X.forEach((x, i) => { XA.push(augment(x, j, rng)); YA.push(Y[i]); }); });
+    const w = logistic(XA.map(feat), YA, 0.05); const T = gen(mulberry32(77), 1500); let c = 0; T.forEach(x => { if ((feat(x).reduce((s, v, j) => s + v * w[j], 0) > 0 ? 1 : 0) === label(key, x)) c++; });
+    return { acc: c / T.length, n: XA.length };
+  }
+  function draw() {
+    const t = TASKS[selTask]; const mine = AUGS.map((a, j) => j).filter(j => stamps[selTask][j] === 1); const theirs = AUGS.map((a, j) => j).filter(j => t.rule[j] === 1);
+    const e0 = experiment(t.key, []), e1 = experiment(t.key, mine), e2 = experiment(t.key, theirs);
+    board.clear("the experiment for the selected task: 24 labelled images, then the copies your stamps add, scored on 1500 untouched images");
+    const rows = [["no augmentation", e0, css("--grey")], ["your approved stamps", e1, css("--blue")], ["the board's rulings", e2, "#2E7D5B"]];
+    const L = 260, R = 1100; rows.forEach((r, i) => { const y = 70 + i * 60; board.label(r[0], L - 10, y + 16, css("--ink"), "right", 12); board.ctx.fillStyle = css("--bg"); board.ctx.fillRect(L, y, R - L, 24); board.ctx.fillStyle = r[2]; board.ctx.fillRect(L, y, (r[1].acc - 0.5) / 0.5 * (R - L), 24); board.label((100 * r[1].acc).toFixed(0) + " % correct on untouched images, trained on " + r[1].n + " labels", L + 8, y + 16, "#fff", "left", 11); });
+    [0.5, 0.6, 0.7, 0.8, 0.9, 1].forEach(v => board.label((100 * v).toFixed(0), L + (v - 0.5) / 0.5 * (R - L), 262, css("--muted"), "center", 10, true));
+    board.label("task: " + t.name + " (click a task name to change)", L, 44, css("--muted"), "left", 11);
+    document.getElementById("bdLab").textContent = e1.n + " from 24"; document.getElementById("bdAcc").textContent = (100 * e1.acc).toFixed(0) + " %";
+    const nS = stamps.flat().filter(s => s !== null).length; document.getElementById("bdN").textContent = nS + " of 24";
+    let agree = 0; TASKS.forEach((tk, i) => AUGS.forEach((a, j) => { if (stamps[i][j] !== null && stamps[i][j] === tk.rule[j]) agree++; })); document.getElementById("bdAgree").textContent = revealed ? agree + " of 24" : "-";
+    // table
+    const T = document.getElementById("bdTable"); let html = '<tr><th>task</th>' + AUGS.map(a => '<th class="aug">' + a + '</th>').join('') + '</tr>';
+    TASKS.forEach((tk, i) => { html += '<tr><td><button class="small" data-task="' + i + '" style="width:auto;text-align:left;font-size:13px;' + (i === selTask ? 'border-color:var(--blue);color:var(--blue)' : '') + '">' + tk.name + '</button></td>' + AUGS.map((a, j) => { const s = stamps[i][j]; const cls = s === 1 ? 'yes' : (s === 0 ? 'no' : ''); const miss = revealed && s !== null && s !== tk.rule[j] ? ' miss' : ''; return '<td><button class="' + cls + miss + '" data-i="' + i + '" data-j="' + j + '" title="' + (revealed ? tk.why[j] : 'click to cycle') + '">' + (s === 1 ? 'approve' : (s === 0 ? 'refuse' : 'stamp')) + (revealed ? (tk.rule[j] ? ' (yes)' : ' (no)') : '') + '</button></td>'; }).join('') + '</tr>'; });
+    T.innerHTML = html;
+    T.querySelectorAll("button[data-j]").forEach(b => b.addEventListener("click", () => { const i = +b.dataset.i, j = +b.dataset.j; stamps[i][j] = stamps[i][j] === null ? 1 : (stamps[i][j] === 1 ? 0 : null); selTask = i; draw(); }));
+    T.querySelectorAll("button[data-task]").forEach(b => b.addEventListener("click", () => { selTask = +b.dataset.task; draw(); }));
+    stepEl.innerHTML = '<span class="k">' + nS + ' of 24 stamped</span>' + (revealed ? '<div class="ask ' + (agree >= 22 ? 'ok' : '') + '">You agreed with the board on ' + agree + ' of 24. Hover a stamped cell for the board\'s reason; orange outlines are the disagreements.</div>' : (nS < 24 ? '<p>Click a cell to cycle approve, refuse, blank. For each one ask: does the label survive this transformation, physically?</p>' : '<div class="ask">All stamped. Reveal the rulings.</div>')) + '<p>Experiment on <em>' + t.name + '</em>: ' + (e1.acc < e0.acc - 0.03 ? 'your stamps cost ' + (100 * (e0.acc - e1.acc)).toFixed(0) + ' points, because an approved augmentation manufactures wrong labels for this task.' : (e1.acc > e0.acc + 0.02 ? 'your stamps gain ' + (100 * (e1.acc - e0.acc)).toFixed(0) + ' points over no augmentation: the copies erased a spurious correlation that twenty-four images happened to carry.' : 'your stamps change little here; the board\'s rulings reach ' + (100 * e2.acc).toFixed(0) + ' %.')) + '</p>';
+  }
+  document.getElementById("bdReveal").addEventListener("click", () => { revealed = true; draw(); });
+  document.getElementById("bdClear").addEventListener("click", () => { stamps = TASKS.map(() => AUGS.map(() => null)); revealed = false; draw(); });
+  quiz(document.getElementById("bdQuiz"), { q: "Random rotations improved a crack detector, so a colleague applies them to a landslide model that uses slope aspect. What happens?", options: ["The same improvement", "The rotated copies keep their old aspect labels, so the training set now says aspect does not matter; the model learns that falsehood and loses the signal", "Nothing; rotations are label-preserving"], answer: 1, why: "Every augmentation asserts an invariance, slide 21. A crack is a crack rotated; an aspect is not. Assert only the invariances the physics of your problem has." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ---------- tabs ---------- */
+const tabs = Array.from(document.querySelectorAll("nav [role=tab]"));
+function show(name, push) {
+  if (!document.getElementById(name)) name = "relay";
+  tabs.forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false"));
+  document.querySelectorAll("section.demo").forEach(s => s.classList.toggle("active", s.id === name));
+  if (push) { try { history.replaceState(null, "", "#" + name); } catch (e) {} }
+}
+tabs.forEach(b => b.addEventListener("click", () => show(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => show(location.hash.slice(1), false));
+show(location.hash.slice(1) || "relay", false);
+
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
+new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
