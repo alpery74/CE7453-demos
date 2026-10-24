@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Week 11 Demos</title>
-<meta name="description" content="CE 7453 Week 11: bet on a compute budget, grade a skill two ways, build a prompt for a frozen model, buy adapter ranks on a bench, and set a refusal policy a client would sign.">
+<meta name="description" content="CE 7453 Week 11: bet on a compute budget, drag a grader's bracket across a skill graded two ways, build a prompt for a frozen model, buy adapter ranks on a bench, and set a refusal policy for a model you pick by its reliability diagram.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -205,15 +205,14 @@ canvas.grab { cursor: ew-resize; }
   <h2>The grading sheet: one skill, graded token by token or all or nothing</h2>
   <p class="lead">Six models of increasing size answer the same twelve questions. Each answer is a row of tokens, coloured right or wrong. Per-token accuracy rises smoothly with size. Now grade the way leaderboards do, with exact match over the whole answer, and watch where the skill appears to switch on.</p>
   <div class="stage">
-    <div class="plot"><canvas id="emSheet" width="1200" height="600"></canvas></div>
+    <div class="plot"><canvas id="emSheet" class="grab" width="1200" height="600"></canvas></div>
     <div class="side">
       <div class="panel step" id="emStep"></div>
       <div class="panel">
-        <h3>answer length graded</h3>
-        <div class="bet" id="emLen"><button data-l="1" aria-pressed="true">1 token</button><button data-l="5" aria-pressed="false">5 tokens</button><button data-l="20" aria-pressed="false">20 tokens</button></div>
-        <h3 style="margin-top:12px">your prediction</h3>
-        <p style="margin:0 0 6px;font-size:14px">Smallest model that will score at least 50 % exact match on 20-token answers:</p>
-        <div class="ranks" id="emPred"><button data-m="0">10^7</button><button data-m="1">10^8</button><button data-m="2">10^9</button><button data-m="3">10^10</button><button data-m="4">10^11</button><button data-m="5">10^12</button></div>
+        <dl class="readout">
+          <dt>tokens graded (drag the bracket)</dt><dd id="emLv">1</dd>
+          <dt>your prediction (click a model label)</dt><dd id="emPv">-</dd>
+        </dl>
         <div class="btns" style="margin-top:10px"><button class="primary" id="emCheck" disabled>Check</button><button id="emNew">New test set</button></div>
       </div>
       <div class="panel quiz" id="emQuiz"></div>
@@ -287,13 +286,11 @@ canvas.grab { cursor: ew-resize; }
   <h2>Set the refusal policy that a client would sign</h2>
   <p class="lead">Two hundred held-out items from your task, laid out by the model's stated confidence; blue was answered correctly, red was not. Drag the threshold: everything to its left is refused. The client's terms are on the right. Find a threshold that meets them, for a calibrated model and then for an overconfident one.</p>
   <div class="stage">
-    <div class="plot"><canvas id="abStrip" class="grab" width="1200" height="520"></canvas></div>
+    <div class="plot"><canvas id="abStrip" class="grab" width="1200" height="640"></canvas></div>
     <div class="side">
       <div class="panel">
         <h3>the client's terms</h3>
         <div class="spec"><div><span>accuracy on answered items, lower 95 % bound</span><b>at least 82 %</b></div><div><span>items refused</span><b>at most 40 %</b></div></div>
-        <h3 style="margin-top:12px">the model</h3>
-        <div class="bet"><button id="abCal" aria-pressed="true">calibrated</button><button id="abOver" aria-pressed="false">overconfident</button></div>
         <div class="btns" style="margin-top:10px"><button class="primary" id="abSubmit">Submit this policy</button><button id="abNew">New sample</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>threshold</dt><dd id="abTau">0.00</dd>
@@ -397,30 +394,39 @@ function quiz(el, spec) {
   const LGS = [7, 8, 9, 10, 11, 12], Q = 12, LMAX = 20;
   const ptok = lg => 0.05 + 0.95 / (1 + Math.exp(-1.5 * (lg - 9)));
   const board = new Board(document.getElementById("emSheet"));
-  let seed = 2, tok = null, Lg = 1, pred = null, checked = false;
+  let seed = 2, tok = null, Lg = 1, pred = null, checked = false, dragB = false;
+  const RX = 110, RY = 24, RW = 16;
   function make() { const rng = mulberry32(seed); tok = LGS.map(lg => { const p = ptok(lg), rows = []; for (let q = 0; q < Q; q++) { const r = []; for (let t = 0; t < LMAX; t++) r.push(rng() < p); rows.push(r); } return rows; }); }
   function scores(mi, Lq) { let right = 0, exact = 0; for (let q = 0; q < Q; q++) { let all = true; for (let t = 0; t < Lq; t++) { if (tok[mi][q][t]) right++; else all = false; } if (all) exact++; } return { tok: right / (Q * Lq), exact: exact / Q }; }
   const stepEl = document.getElementById("emStep");
-  function text() { stepEl.innerHTML = '<span class="k">how to read it</span><p>Each row of tiles is one model\'s twelve answers. A tile is one token: blue right, red wrong. The two bars at the right are the same answers scored two ways.</p><p>Step through 1, 5 and 20 tokens. Before you press 20, predict which model is the first to clear 50 % on exact match.</p>'; }
+  function text() { stepEl.innerHTML = '<span class="k">how to read it</span><p>Each row of tiles is one model\'s twelve answers. A tile is one token: blue right, red wrong. The two bars at the right are the same answers scored two ways.</p><p>Drag the grader\'s bracket at the top to grade more of each answer. It stops at 10 tokens until you click the label of the model you predict will be the first to clear 50 % exact match on 20 tokens, then press Check.</p>'; }
   function draw() {
     board.clear(""); const ctx = board.ctx;
-    const top = 50, rowH = 86, x0 = 110, tileW = Math.min(8, 640 / (Q * Lg + Q)), gap = 6;
+    const top = 60, rowH = 84, x0 = 110, tileW = Math.min(8, 640 / (Q * Lg + Q)), gap = 6;
+    // the grader's bracket on a 20-token ruler
+    for (let t = 0; t < LMAX; t++) { ctx.fillStyle = t < Lg ? css("--orange") : css("--bg"); ctx.fillRect(RX + t * RW, RY - 8, RW - 2, 12); ctx.strokeStyle = css("--line"); ctx.strokeRect(RX + t * RW, RY - 8, RW - 2, 12); }
+    ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(RX + Lg * RW, RY - 2, 8, 0, 2 * Math.PI); ctx.fill();
+    board.label("grader's bracket: " + Lg + " of 20 tokens graded (drag)", RX + LMAX * RW + 16, RY + 2, css("--orange"), "left", 12);
+    if (pred === null && !checked) board.label("stops at 10 until you predict", RX + LMAX * RW + 16, RY + 18, css("--muted"), "left", 11);
     board.label("model", x0 - 12, top - 14, css("--muted"), "right", 12); board.label("twelve answers, " + Lg + (Lg === 1 ? " token each" : " tokens each"), x0, top - 14, css("--muted"), "left", 12);
     board.label("per-token accuracy", 800, top - 14, css("--blue"), "left", 12); board.label("exact match", 1000, top - 14, css("--red"), "left", 12);
     LGS.forEach((lg, mi) => {
       const y = top + mi * rowH, s = scores(mi, Lg);
-      board.label("10^" + lg, x0 - 12, y + 30, css("--ink"), "right", 14, true);
+      if (pred === mi) { ctx.fillStyle = mix(css("--panel"), css("--orange"), 0.35); ctx.fillRect(x0 - 80, y + 10, 70, 30); }
+      board.label("10^" + lg, x0 - 12, y + 30, pred === mi ? css("--orange") : css("--ink"), "right", 14, true);
       for (let q = 0; q < Q; q++) { const bx = x0 + q * (Lg * tileW + gap); let all = true; for (let t = 0; t < Lg; t++) { const ok = tok[mi][q][t]; if (!ok) all = false; ctx.fillStyle = ok ? css("--blue") : css("--red"); ctx.fillRect(bx + t * tileW, y + 8, tileW - 1, 22); } ctx.strokeStyle = all ? "#2E7D5B" : css("--line"); ctx.lineWidth = all ? 2 : 1; ctx.strokeRect(bx - 1, y + 6, Lg * tileW + 1, 26); }
       const barY = y + 40, bw = 130;
       ctx.fillStyle = css("--bg"); ctx.fillRect(800, barY, bw, 14); ctx.fillStyle = css("--blue"); ctx.fillRect(800, barY, bw * s.tok, 14); board.label((100 * s.tok).toFixed(0) + " %", 800 + bw + 8, barY + 12, css("--ink"), "left", 13, true);
       ctx.fillStyle = css("--bg"); ctx.fillRect(1000, barY, bw, 14); ctx.fillStyle = css("--red"); ctx.fillRect(1000, barY, bw * s.exact, 14); board.label((100 * s.exact).toFixed(0) + " %", 1000 + bw + 8, barY + 12, css("--ink"), "left", 13, true);
       if (checked && Lg === 20 && pred === mi) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.strokeRect(x0 - 70, y + 2, 1120, rowH - 10); }
     });
-    board.label("green outline: an answer with every token right, the only kind exact match counts", x0, top + LGS.length * rowH - 8, css("--muted"), "left", 12);
+    board.label("green outline: an answer with every token right, the only kind exact match counts. click a model label to predict the first past 50 % exact match at 20 tokens", x0 - 80, top + LGS.length * rowH - 4, css("--muted"), "left", 12);
+    document.getElementById("emLv").textContent = String(Lg); document.getElementById("emPv").textContent = pred === null ? "-" : "10^" + LGS[pred];
   }
-  function setL(l) { Lg = l; document.querySelectorAll("#emLen button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.l === l ? "true" : "false")); draw(); }
-  document.querySelectorAll("#emLen button").forEach(b => b.addEventListener("click", () => { const l = +b.dataset.l; if (l === 20 && pred === null && !checked) { stepEl.innerHTML = '<span class="k">predict first</span><p>Pick the smallest model you expect to clear 50 % exact match on 20-token answers, press Check, and the 20-token grading unlocks.</p>'; return; } setL(l); }));
-  document.querySelectorAll("#emPred button").forEach(b => b.addEventListener("click", () => { if (checked) return; pred = +b.dataset.m; document.querySelectorAll("#emPred button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); document.getElementById("emCheck").disabled = false; }));
+  function setL(l) { Lg = l; draw(); }
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (my >= RY - 16 && my <= RY + 12 && mx >= RX - 10 && mx <= RX + LMAX * RW + 12) { dragB = true; return; } if (mx >= 30 && mx <= 100 && !checked) { const mi = Math.floor((my - 60) / 84); if (mi >= 0 && mi < LGS.length) { pred = mi; document.getElementById("emCheck").disabled = false; draw(); } } });
+  window.addEventListener("mousemove", ev => { if (!dragB) return; const [mx] = board.pos(ev); let l = Math.max(1, Math.min(LMAX, Math.round((mx - RX) / RW))); if (l > 10 && pred === null && !checked) { l = 10; stepEl.innerHTML = '<span class="k">predict first</span><p>Click the label of the smallest model you expect to clear 50 % exact match on 20-token answers, press Check, and the bracket goes all the way.</p>'; } if (l !== Lg) setL(l); });
+  window.addEventListener("mouseup", () => { dragB = false; });
   document.getElementById("emCheck").addEventListener("click", () => {
     if (pred === null) return; checked = true; setL(20);
     let first = -1; for (let mi = 0; mi < LGS.length; mi++) if (scores(mi, 20).exact >= 0.5) { first = mi; break; }
@@ -526,6 +532,8 @@ function quiz(el, spec) {
   let seed = 9, items = null, over = false, tau = 0, dragging = false;
   function make() { const rng = mulberry32(seed); items = []; for (let i = 0; i < n; i++) { const easy = rng() < 0.5, p = easy ? 0.88 + 0.11 * rng() : 0.35 + 0.4 * rng(); const correct = rng() < p; const jitter = 0.2 * (rng() - 0.5); items.push({ p: p, correct: correct, cOver: Math.min(0.99, Math.max(0.3, 0.6 + 0.4 * Math.pow(p, 0.6) + jitter)) }); } }
   const conf = it => over ? it.cOver : it.p;
+  const CY = 536, CH = 96, CARDS = [["calibrated model", false, 60], ["overconfident model", true, 640]];
+  function reliability(useOver) { const bins = []; for (let b = 0; b < 10; b++) bins.push([0, 0]); for (const it of items) { const c = useOver ? it.cOver : it.p; const b = Math.min(9, Math.floor(c * 10)); bins[b][0] += it.correct ? 1 : 0; bins[b][1] += 1; } return bins; }
   function wilson(k, m) { if (m === 0) return null; const z = 1.96, ph = k / m, den = 1 + z * z / m, cen = (ph + z * z / (2 * m)) / den, half = z * Math.sqrt(ph * (1 - ph) / m + z * z / (4 * m * m)) / den; return [cen - half, cen + half]; }
   function stats(t) { let k = 0, m = 0; for (const it of items) if (conf(it) >= t) { m++; if (it.correct) k++; } return { k, m, acc: m ? k / m : null, ref: 1 - m / n, ci: wilson(k, m) }; }
   const board = new Board(document.getElementById("abStrip"));
@@ -547,8 +555,14 @@ function quiz(el, spec) {
     board.label("stated confidence", (L + R) / 2, BOT + 40, css("--muted"), "center", 12);
     ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx(tau), TOP - 14); ctx.lineTo(cx(tau), BOT + 6); ctx.stroke();
     board.label("refused: " + (100 * s.ref).toFixed(0) + " %", cx(tau) - 8, TOP - 20, css("--orange"), "right", 13); board.label("answered: " + s.m + " items, " + (s.acc === null ? "-" : (100 * s.acc).toFixed(0) + " % right"), cx(tau) + 8, TOP - 20, css("--orange"), "left", 13);
+    // the two model cards: reliability diagrams, click to pick
+    CARDS.forEach(cd => { const on = over === cd[1], x = cd[2], w = 500; ctx.fillStyle = on ? mix(css("--panel"), css("--blue"), 0.12) : css("--bg"); ctx.fillRect(x, CY, w, CH); ctx.strokeStyle = on ? css("--blue") : css("--line"); ctx.lineWidth = on ? 2.5 : 1; ctx.strokeRect(x, CY, w, CH); ctx.lineWidth = 1;
+      board.label(cd[0] + (on ? "  (in use)" : "  (click to use)"), x + 10, CY + 16, on ? css("--blue") : css("--ink"), "left", 12); board.label("stated confidence against the share actually right, by decile", x + 10, CY + 32, css("--muted"), "left", 10);
+      const gx = x + 300, gy = CY + CH - 8, gw = 180, gh = 50; ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + gw, gy); ctx.moveTo(gx, gy); ctx.lineTo(gx, gy - gh); ctx.stroke(); ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + gw, gy - gh); ctx.stroke(); ctx.setLineDash([]);
+      const bins = reliability(cd[1]); ctx.fillStyle = cd[1] ? css("--red") : css("--blue"); bins.forEach((b, i) => { if (!b[1]) return; const px = gx + (i + 0.5) / 10 * gw, py = gy - b[0] / b[1] * gh; ctx.beginPath(); ctx.arc(px, py, 4, 0, 2 * Math.PI); ctx.fill(); });
+      board.label("dashed: honest", gx + gw + 6, gy - gh + 10, css("--muted"), "left", 9); board.label(cd[1] ? "its confidence runs ahead of its accuracy" : "its confidence matches its accuracy", x + 10, CY + 70, css("--muted"), "left", 11); });
     // selective curve below
-    const cT = 400, cB = board.H - 30, cL = 60, cR = board.W - 40; board.label("accuracy on answered items (with its interval) against the share refused", cL, cT - 12, css("--muted"), "left", 12);
+    const cT = 400, cB = 510, cL = 60, cR = board.W - 40; board.label("accuracy on answered items (with its interval) against the share refused", cL, cT - 12, css("--muted"), "left", 12);
     ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(cL, cT); ctx.lineTo(cL, cB); ctx.lineTo(cR, cB); ctx.stroke();
     const ay = a => cB - (cB - cT) * (a - 0.5) / 0.5, rx = r => cL + (cR - cL) * r;
     ctx.strokeStyle = css("--grey"); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(cL, ay(0.82)); ctx.lineTo(cR, ay(0.82)); ctx.moveTo(rx(0.4), cT); ctx.lineTo(rx(0.4), cB); ctx.stroke(); ctx.setLineDash([]);
@@ -558,7 +572,7 @@ function quiz(el, spec) {
     board.label("lower bound", cR - 4, ay(0.52), css("--blue"), "right", 11);
     if (s.m >= 5) { ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(rx(s.ref), ay(Math.max(0.5, s.acc)), 6, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(rx(s.ref), ay(Math.max(0.5, s.ci[0]))); ctx.lineTo(rx(s.ref), ay(Math.min(1, s.ci[1]))); ctx.stroke(); }
   }
-  board.c.addEventListener("mousedown", ev => { dragging = true; move(ev); });
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (my >= CY && my <= CY + CH) { CARDS.forEach(cd => { if (mx >= cd[2] && mx <= cd[2] + 500) { over = cd[1]; document.getElementById("abVerdict").hidden = true; draw(); } }); return; } if (my > 360) return; dragging = true; move(ev); });
   function move(ev) { const [mx] = board.pos(ev); tau = Math.max(0, Math.min(0.99, (mx - L) / (R - L))); document.getElementById("abVerdict").hidden = true; draw(); }
   window.addEventListener("mousemove", ev => { if (dragging) move(ev); });
   window.addEventListener("mouseup", () => { dragging = false; });
@@ -569,8 +583,6 @@ function quiz(el, spec) {
     v.className = "ask " + (ok ? "ok" : "no");
     v.textContent = (ok ? "Signed. " : "Rejected: ") + (ok ? "" : (!okAcc ? "the lower bound on accuracy is " + (s.ci ? (100 * s.ci[0]).toFixed(0) : "-") + " %, under 82 %" : "") + (!okAcc && !okRef ? ", and " : "") + (!okRef ? "the refusal rate is " + (100 * s.ref).toFixed(0) + " %, over 40 %" : "") + ". ") + (exists ? "A threshold meeting both terms exists for this model." : "No threshold meets both terms for the " + (over ? "overconfident" : "calibrated") + " model on this sample: its stated confidence does not rank the items well enough to buy 82 % accuracy by refusing 40 %.");
   });
-  document.getElementById("abCal").addEventListener("click", () => { over = false; document.getElementById("abCal").setAttribute("aria-pressed", "true"); document.getElementById("abOver").setAttribute("aria-pressed", "false"); document.getElementById("abVerdict").hidden = true; draw(); });
-  document.getElementById("abOver").addEventListener("click", () => { over = true; document.getElementById("abCal").setAttribute("aria-pressed", "false"); document.getElementById("abOver").setAttribute("aria-pressed", "true"); document.getElementById("abVerdict").hidden = true; draw(); });
   document.getElementById("abNew").addEventListener("click", () => { seed += 1; make(); document.getElementById("abVerdict").hidden = true; draw(); });
   quiz(document.getElementById("abQuiz"), { q: "The vendor's benchmark reports 92 % accuracy. On your 200 held-out items the model scores 84 % with no refusals. What is the defensible claim about your task?", options: ["The model is 92 % accurate; the sample is too small to matter", "Accuracy is 84 % with a 95 % interval of roughly 78 to 89 %, and that is the number that goes in the report", "The model is broken"], answer: 1, why: "A held-out sample from the deployment distribution is the only evidence about the deployment distribution. The interval is what 200 items can support; the benchmark figure describes a different population of inputs." });
   window.addEventListener("themechange", draw);
