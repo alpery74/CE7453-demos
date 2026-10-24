@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Week 10 Demos</title>
-<meta name="description" content="CE 7453 Week 10: follow a message-passing pulse through a pipe network, try to break a permutation-invariant model, design a repair policy and compare it with the optimum, and bet on an exploration race.">
+<meta name="description" content="CE 7453 Week 10: follow a message-passing pulse through a pipe network, try to break a permutation-invariant model, design a repair policy and set the discount on a coin row, and bet on an exploration race by clicking a crew.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -210,11 +210,11 @@ canvas.hit { cursor: pointer; }
 <!-- ============ 3. VALUE ITERATION: design the policy ============ -->
 <section class="demo" id="bellman" role="tabpanel">
   <h2>Design the operating policy, then see how close you got</h2>
-  <p class="lead">A pump crew moves across a 6 by 6 site. The pump station pays +1, the three spillway cells pay -1, and a move slips sideways one time in ten. Click cells to set the direction the crew takes from each one. Then evaluate your policy exactly and compare it with the optimum.</p>
+  <p class="lead">A pump crew moves across a 6 by 6 site. The pump station pays +1, the three spillway cells pay -1, and a move slips sideways one time in ten. Click cells to set the direction the crew takes from each one. Then evaluate your policy exactly and compare it with the optimum. The coin row at the right is the discount: drag its marker to decide how fast a future reward fades, and reveal the optimum again.</p>
   <div class="stage">
     <div class="plot two">
       <canvas id="viGrid" class="hit" width="800" height="500"></canvas>
-      <canvas id="viConv" width="400" height="500"></canvas>
+      <canvas id="viConv" class="grab" width="400" height="500"></canvas>
     </div>
     <div class="side">
       <div class="panel">
@@ -228,11 +228,10 @@ canvas.hit { cursor: pointer; }
         </dl>
       </div>
       <div class="panel">
-        <div class="ctl">
-          <label for="viGamma">discount gamma <output id="viGammaOut">0.90</output></label>
-          <input type="range" id="viGamma" min="0.50" max="0.99" step="0.01" value="0.90">
-          <div class="hint">changes the optimum, so reveal it again</div>
-        </div>
+        <dl class="readout">
+          <dt>discount gamma (drag the coin row's marker)</dt><dd id="viGammaOut">0.90</dd>
+          <dt>half-life of a reward, in steps</dt><dd id="viHalf">6.6</dd>
+        </dl>
       </div>
       <div class="panel quiz" id="viQuiz"></div>
     </div>
@@ -245,17 +244,16 @@ canvas.hit { cursor: pointer; }
 <!-- ============ 4. Q-LEARNING: the race ============ -->
 <section class="demo" id="qlearn" role="tabpanel">
   <h2>The exploration race</h2>
-  <p class="lead">Two crews learn the same site from experience with Q-learning. The left crew always takes its current best guess. The right crew acts at random a fraction of the time. Place your bet, then start the race.</p>
+  <p class="lead">Two crews learn the same site from experience with Q-learning. The left crew always takes its current best guess. The right crew acts at random a fraction of the time, set by the sector on the coin between the two grids: drag its edge. Place your bet by clicking a crew's grid, or the tie flag under the coin, then start the race.</p>
   <div class="stage">
-    <div class="plot"><canvas id="qlRace" width="1200" height="520"></canvas></div>
+    <div class="plot"><canvas id="qlRace" class="hit" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel">
         <h3>your bet: after 150 episodes, whose greedy policy is better?</h3>
-        <div class="bet"><button id="betL" aria-pressed="false">Left, greedy</button><button id="betT" aria-pressed="false">About the same</button><button id="betR" aria-pressed="false">Right, exploring</button></div>
-        <div class="ctl" style="margin-top:10px">
-          <label for="qlEps">right crew's exploration rate <output id="qlEpsOut">0.10</output></label>
-          <input type="range" id="qlEps" min="0.02" max="0.5" step="0.01" value="0.10">
-        </div>
+        <dl class="readout">
+          <dt>your bet (click a crew's grid, or the tie flag between them)</dt><dd id="qlBet">-</dd>
+          <dt>right crew's exploration rate (drag the coin's sector)</dt><dd id="qlEpsOut">0.10</dd>
+        </dl>
         <div class="btns" style="margin-top:10px"><button class="primary" id="qlStart">Start the race</button><button id="qlReset">New site</button></div>
       </div>
       <div class="panel">
@@ -291,6 +289,7 @@ const PAL = ["#1F5C99", "#C9731F", "#2E7D5B", "#8E44AD", "#B3261E", "#0E8A8A", "
 function Board(canvas) { this.c = canvas; this.ctx = canvas.getContext("2d"); const dpr = window.devicePixelRatio || 1; this.W = canvas.width; this.H = canvas.height; canvas.width = this.W * dpr; canvas.height = this.H * dpr; this.ctx.scale(dpr, dpr); }
 Board.prototype.clear = function (title) { const ctx = this.ctx; ctx.clearRect(0, 0, this.W, this.H); ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, this.W, this.H); if (title) { ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(title, 16, 20); } };
 Board.prototype.pos = function (ev) { const r = this.c.getBoundingClientRect(); return [(ev.clientX - r.left) * this.W / r.width, (ev.clientY - r.top) * this.H / r.height]; };
+Board.prototype.label = function (s, x, y, color, align, size, mono) { const ctx = this.ctx; ctx.fillStyle = color || css("--muted"); ctx.font = (size || 13) + "px " + css(mono ? "--mono" : "--sans"); ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(s, x, y); };
 function quiz(el, spec) {
   el.innerHTML = '<h3>concept check</h3><p class="q">' + spec.q + '</p><div class="opts"></div><p class="why"></p>';
   const opts = el.querySelector(".opts"), why = el.querySelector(".why");
@@ -444,7 +443,9 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
 (function bellman() {
   const board = new Board(document.getElementById("viGrid")), conv = new Board(document.getElementById("viConv"));
   const s = Math.min((board.W - 40) / G, (board.H - 60) / G), ox = (board.W - s * G) / 2, oy = 40;
-  const sg = document.getElementById("viGamma");
+  let gammaV = 0.9, dragG = false;
+  const sg = { get value() { return gammaV; } };
+  const CX0 = 30, CX1 = 370, CYC = 70, halfLife = g => Math.log(0.5) / Math.log(g);
   let pol = [], Vmine = null, Vopt = null, polOpt = null, hist = [], revealed = false, anim = null;
   function clear() { pol = []; for (let y = 0; y < G; y++) { pol.push([]); for (let x = 0; x < G; x++) pol[y].push(null); } Vmine = null; Vopt = null; polOpt = null; hist = []; revealed = false; draw(); }
   function evaluate(gamma) {
@@ -460,15 +461,21 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
       (x, y) => terminal(x, y) ? null : (pol[y][x] === null ? null : pol[y][x]),
       (x, y) => Vmine ? Vmine[y][x].toFixed(2) : null,
       (x, y, X, Y) => { if (revealed && polOpt && !terminal(x, y)) { const d = polOpt[y][x], L = s * 0.18, cx = X + s - 14, cy = Y + 14, dx = ACTS[d][0] * L, dy = ACTS[d][1] * L; ctx.strokeStyle = "#2E7D5B"; ctx.fillStyle = "#2E7D5B"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx - dx, cy - dy); ctx.lineTo(cx + dx, cy + dy); ctx.stroke(); const ang = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(cx + dx, cy + dy); ctx.lineTo(cx + dx - 6 * Math.cos(ang - 0.5), cy + dy - 6 * Math.sin(ang - 0.5)); ctx.lineTo(cx + dx - 6 * Math.cos(ang + 0.5), cy + dy - 6 * Math.sin(ang + 0.5)); ctx.closePath(); ctx.fill(); if (pol[y][x] !== null && pol[y][x] !== d) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.strokeRect(X + 2, Y + 2, s - 4, s - 4); } } });
-    conv.clear("value iteration, largest change per sweep");
-    const cx2 = conv.ctx, L = 50, R = conv.W - 16, T = 40, B = conv.H - 40;
+    conv.clear("the discount: how fast a future reward fades");
+    const cx2 = conv.ctx, L = 50, R = conv.W - 16, T = 190, B = conv.H - 40;
+    const h = halfLife(gammaV); for (let k = 0; k < 12; k++) { const step = k * 6, a = Math.pow(gammaV, step), x = CX0 + 14 + k * 28; cx2.fillStyle = mix(css("--panel"), css("--orange"), Math.max(0.06, a)); cx2.beginPath(); cx2.arc(x, CYC, 11, 0, 2 * Math.PI); cx2.fill(); cx2.strokeStyle = css("--line"); cx2.stroke(); if (k % 2 === 0) conv.label(String(step), x, CYC + 28, css("--muted"), "center", 9, true); }
+    conv.label("a reward this many steps ahead, as it counts today", CX0, CYC - 26, css("--muted"), "left", 11);
+    const hx = CX0 + 14 + Math.min(70, h) / 6 * 28; cx2.strokeStyle = css("--blue"); cx2.lineWidth = 2; cx2.beginPath(); cx2.moveTo(hx, CYC - 18); cx2.lineTo(hx, CYC + 18); cx2.stroke(); cx2.lineWidth = 1; cx2.fillStyle = css("--blue"); cx2.beginPath(); cx2.arc(hx, CYC + 44, 8, 0, 2 * Math.PI); cx2.fill();
+    conv.label("half gone after " + h.toFixed(1) + " steps: gamma " + gammaV.toFixed(2) + " (drag)", CX0, CYC + 68, css("--blue"), "left", 11, true);
+    conv.label("the optimum changes with gamma: reveal it again", CX0, CYC + 86, css("--muted"), "left", 10);
+    conv.label("value iteration, largest change per sweep", L, T - 12, css("--ink"), "left", 13);
     cx2.strokeStyle = css("--line"); cx2.beginPath(); cx2.moveTo(L, T); cx2.lineTo(L, B); cx2.lineTo(R, B); cx2.stroke();
     cx2.fillStyle = css("--muted"); cx2.font = "12px " + css("--mono"); cx2.textAlign = "right"; cx2.textBaseline = "middle"; for (let e = 0; e >= -6; e -= 2) { const y = B - (B - T) * (e + 6) / 6; cx2.fillText("1e" + e, L - 6, y); }
     cx2.textAlign = "center"; cx2.textBaseline = "top"; cx2.fillText("sweep", (L + R) / 2, B + 8);
     if (hist.length) { cx2.strokeStyle = css("--ink"); cx2.lineWidth = 2; cx2.beginPath(); hist.forEach((d, i) => { const x = L + (R - L) * i / Math.max(20, hist.length - 1), y = B - (B - T) * (Math.max(-6, Math.log10(Math.max(d, 1e-12))) + 6) / 6; if (i === 0) cx2.moveTo(x, y); else cx2.lineTo(x, y); }); cx2.stroke(); }
   }
   function update() {
-    const gamma = +sg.value; document.getElementById("viGammaOut").textContent = gamma.toFixed(2);
+    const gamma = +sg.value; document.getElementById("viGammaOut").textContent = gamma.toFixed(2); document.getElementById("viHalf").textContent = halfLife(gamma).toFixed(1);
     const setCount = pol.flat().filter(a => a !== null).length;
     if (Vmine) document.getElementById("viMine").textContent = Vmine[START[1]][START[0]].toFixed(3) + (setCount < 33 ? "  (" + (33 - setCount) + " cells unset)" : "");
     if (Vopt) { document.getElementById("viOpt").textContent = Vopt[START[1]][START[0]].toFixed(3); if (Vmine) { document.getElementById("viScore").textContent = (100 * Math.max(0, Vmine[START[1]][START[0]]) / Vopt[START[1]][START[0]]).toFixed(0) + " %"; let diff = 0; for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) if (!terminal(x, y) && pol[y][x] !== null && pol[y][x] !== polOpt[y][x]) diff++; document.getElementById("viDiff").textContent = diff; } }
@@ -476,9 +483,12 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
   }
   board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const x = Math.floor((mx - ox) / s), y = Math.floor((my - oy) / s); if (x < 0 || y < 0 || x >= G || y >= G || terminal(x, y)) return; pol[y][x] = pol[y][x] === null ? 0 : (pol[y][x] + 1) % 4; Vmine = null; document.getElementById("viMine").textContent = "-"; document.getElementById("viScore").textContent = "-"; update(); });
   document.getElementById("viEval").addEventListener("click", () => { Vmine = evaluate(+sg.value); update(); });
+  conv.c.addEventListener("mousedown", ev => { const [mx, my] = conv.pos(ev); if (my >= CYC - 24 && my <= CYC + 56 && mx >= CX0 && mx <= CX1) { dragG = true; moveG(mx); } });
+  function moveG(mx) { const steps = Math.max(1, Math.min(70, (mx - CX0 - 14) / 28 * 6)); gammaV = Math.pow(0.5, 1 / steps); Vopt = null; polOpt = null; revealed = false; hist = []; document.getElementById("viOpt").textContent = "-"; document.getElementById("viScore").textContent = "-"; document.getElementById("viDiff").textContent = "-"; update(); }
+  window.addEventListener("mousemove", ev => { if (!dragG) return; const [mx] = conv.pos(ev); moveG(mx); });
+  window.addEventListener("mouseup", () => { dragG = false; });
   document.getElementById("viReveal").addEventListener("click", () => { if (anim) clearTimeout(anim); const gamma = +sg.value; const frames = []; valueIteration(gamma, 400, (V, h) => frames.push({ V: V.map(r => Float64Array.from(r)), h: h.slice() })); let i = 0; revealed = true; (function play() { const f = frames[Math.min(i, frames.length - 1)]; Vopt = f.V; hist = f.h; polOpt = greedyFrom(Vopt, gamma); update(); i++; if (i < frames.length) anim = setTimeout(play, 120); })(); });
   document.getElementById("viClear").addEventListener("click", clear);
-  sg.addEventListener("input", () => { Vopt = null; polOpt = null; revealed = false; hist = []; document.getElementById("viOpt").textContent = "-"; document.getElementById("viScore").textContent = "-"; document.getElementById("viDiff").textContent = "-"; if (Vmine) Vmine = evaluate(+sg.value); update(); });
   quiz(document.getElementById("viQuiz"), { q: "Lowering the discount gamma from 0.95 to 0.6 makes the optimal policy", options: ["More willing to take a short path past the spillway", "More cautious, since the -1 cells matter more", "Unchanged: the ordering of actions does not depend on gamma"], answer: 0, why: "A small discount shrinks everything more than a few steps away, including the far-off +1, so the planner weighs the near risk and the near reward by the same short yardstick and tends to cut corners. The ordering of actions does depend on gamma." });
   window.addEventListener("themechange", draw);
   clear();
@@ -489,7 +499,7 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
   const board = new Board(document.getElementById("qlRace"));
   const s = Math.min((board.W / 2 - 60) / G, (board.H - 80) / G), oy = 60, oxL = board.W / 4 - s * G / 2, oxR = 3 * board.W / 4 - s * G / 2;
   const ALPHA = 0.1, GAMMA = 0.95, EPIS = 150;
-  const se = document.getElementById("qlEps");
+  let epsV = 0.1, dragCoin = false; const se = { get value() { return epsV; } }, COIN = [600, 250, 52];
   let seed = 1, agents = [], running = false, bet = null, timer = null, episodes = 0;
   function mkAgent(eps, seedOff) { const Q = [], visits = []; for (let y = 0; y < G; y++) { Q.push([]); visits.push(new Float64Array(G)); for (let x = 0; x < G; x++) Q[y].push(new Float64Array(4)); } return { eps, Q, visits, rng: mulberry32(seed + seedOff), x: START[0], y: START[1], steps: 0, trail: [], greedy: null }; }
   function argmax(arr, rng) { let b = [0]; for (let i = 1; i < 4; i++) { if (arr[i] > arr[b[0]]) b = [i]; else if (arr[i] === arr[b[0]]) b.push(i); } return b[Math.floor(rng() * b.length)]; }
@@ -507,6 +517,15 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
       ag.trail.forEach((p, k) => { ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.2 + 0.6 * k / 12); ctx.beginPath(); ctx.arc(ox + p[0] * s + s / 2, oy + p[1] * s + s / 2, 5, 0, 2 * Math.PI); ctx.fill(); });
       ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(ox + ag.x * s + s / 2, oy + ag.y * s + s / 2, 9, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
     });
+    // the exploration coin
+    const [cxC, cyC, rC] = COIN; ctx.fillStyle = css("--bg"); ctx.beginPath(); ctx.arc(cxC, cyC, rC, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--line"); ctx.stroke();
+    ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.moveTo(cxC, cyC); ctx.arc(cxC, cyC, rC, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * epsV); ctx.closePath(); ctx.fill();
+    const ea = -Math.PI / 2 + 2 * Math.PI * epsV; ctx.fillStyle = css("--ink"); ctx.beginPath(); ctx.arc(cxC + rC * Math.cos(ea), cyC + rC * Math.sin(ea), 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = css("--ink"); ctx.font = "500 12px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText("the right crew's coin", cxC, cyC - rC - 14); ctx.font = "12px " + css("--mono"); ctx.fillText("explore " + (100 * epsV).toFixed(0) + " %", cxC, cyC + rC + 18); ctx.font = "10px " + css("--sans"); ctx.fillStyle = css("--muted"); ctx.fillText("drag the edge of the sector", cxC, cyC + rC + 34);
+    ctx.font = "500 12px " + css("--sans"); ctx.fillStyle = bet === "T" ? css("--blue") : css("--muted"); ctx.fillText(bet === "T" ? "your bet: a tie" : "click here to bet on a tie", cxC, cyC + rC + 100);
+    ctx.fillStyle = bet === "L" ? css("--blue") : css("--muted"); ctx.fillText(bet === "L" ? "your bet: the greedy crew" : "click this grid to bet on it", oxL + s * G / 2, oy + s * G + 22);
+    ctx.fillStyle = bet === "R" ? css("--blue") : css("--muted"); ctx.fillText(bet === "R" ? "your bet: the exploring crew" : "click this grid to bet on it", oxR + s * G / 2, oy + s * G + 22);
+    document.getElementById("qlBet").textContent = bet === null ? "-" : (bet === "L" ? "left, greedy" : (bet === "R" ? "right, exploring" : "about the same"));
     document.getElementById("qlN").textContent = episodes + " / " + EPIS;
     document.getElementById("qlL").textContent = agents[0].greedy === null ? "-" : agents[0].greedy.toFixed(3);
     document.getElementById("qlR").textContent = agents[1].greedy === null ? "-" : agents[1].greedy.toFixed(3);
@@ -533,10 +552,12 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
     v.innerHTML = (bet === null ? "You did not place a bet. " : (ok ? "Your bet was right. " : "Your bet was wrong. ")) + text + " Run it again with New site: the greedy crew locks onto whichever route it found first, so over many sites it loses on average and wins on the lucky ones. Exploration pays in return during learning for a better policy afterwards, which is the trade on slide 17.";
     document.getElementById("qlStart").textContent = "Race again";
   }
-  ["betL", "betT", "betR"].forEach((id, i) => document.getElementById(id).addEventListener("click", () => { bet = ["L", "T", "R"][i]; ["betL", "betT", "betR"].forEach(j => document.getElementById(j).setAttribute("aria-pressed", j === id ? "true" : "false")); }));
+  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const [cxC, cyC, rC] = COIN; if (Math.hypot(mx - cxC, my - cyC) < rC + 12) { if (running) return; dragCoin = true; moveCoin(mx, my); return; } if (my >= cyC + rC + 80 && my <= cyC + rC + 112 && Math.abs(mx - cxC) < 90) { bet = "T"; draw(); return; } if (my >= oy && my <= oy + s * G + 30) { if (mx >= oxL && mx <= oxL + s * G) bet = "L"; else if (mx >= oxR && mx <= oxR + s * G) bet = "R"; draw(); } });
+  function moveCoin(mx, my) { const [cxC, cyC] = COIN; let a = Math.atan2(my - cyC, mx - cxC) + Math.PI / 2; if (a < 0) a += 2 * Math.PI; epsV = Math.max(0.02, Math.min(0.5, a / (2 * Math.PI))); document.getElementById("qlEpsOut").textContent = epsV.toFixed(2); if (!running) { agents[1].eps = epsV; } draw(); }
+  window.addEventListener("mousemove", ev => { if (!dragCoin) return; const [mx, my] = board.pos(ev); moveCoin(mx, my); });
+  window.addEventListener("mouseup", () => { dragCoin = false; });
   document.getElementById("qlStart").addEventListener("click", () => { if (running) return; if (episodes >= EPIS) { seed += 1; reset(); } running = true; agents[1].eps = +se.value; document.getElementById("qlStart").textContent = "Racing..."; tick(); });
   document.getElementById("qlReset").addEventListener("click", () => { seed += 1; reset(); });
-  se.addEventListener("input", () => { document.getElementById("qlEpsOut").textContent = (+se.value).toFixed(2); if (!running) { agents[1].eps = +se.value; draw(); } });
   quiz(document.getElementById("qlQuiz"), { q: "Q-learning is called off-policy because", options: ["It never explores", "Its update target uses the best next action, whatever action the crew actually took", "It needs a model of the transitions"], answer: 1, why: "The target r + gamma max Q(s', .) scores the greedy continuation, so the crew can behave with exploration and still learn the greedy policy. Convergence needs every state and action to keep being visited, which is what the exploration buys." });
   window.addEventListener("themechange", draw);
   reset();
