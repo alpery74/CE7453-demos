@@ -321,7 +321,7 @@ canvas.grab { cursor: grab; }
 <!-- ============ 5b. RELIABILITY: is your 0.9 a 0.9 ============ -->
 <section class="demo" id="reliability" role="tabpanel">
   <h2>Is your 0.9 a 0.9: bin the three hundred probabilities by hand</h2>
-  <p class="lead">The line you drew on the previous tab gives every commuter a probability of taking transit. Sort the three hundred into ten bins of predicted probability. For each bin, click the height you expect: the share of commuters in that bin who actually took transit. Then reveal the observed shares and the diagonal. A calibrated model puts every bar on the diagonal, which is slide 18.</p>
+  <p class="lead">The line you drew on the previous tab gives every commuter a probability of taking transit. Sort the three hundred into ten bins of predicted probability. For each bin, click the height you expect: the share of commuters in that bin who actually took transit. Then reveal the observed shares and the diagonal. A calibrated model puts every bar on the diagonal, which is slide 18. After the reveal the bin count unlocks: the same three hundred commuters and the same model, re-binned four ways.</p>
   <div class="stage">
     <div class="plot"><canvas id="rePlot" class="hit" width="1200" height="560"></canvas></div>
     <div class="side">
@@ -330,9 +330,14 @@ canvas.grab { cursor: grab; }
         <h3>whose probabilities</h3>
         <div class="btns"><button id="reYours" aria-pressed="true">Your line</button><button id="reML" aria-pressed="false">Maximum likelihood fit</button></div>
         <div class="btns" style="margin-top:10px"><button class="primary" id="reReveal" disabled>Reveal the observed shares</button><button id="reReset">Clear the guesses</button></div>
+        <h3 style="margin-top:14px">how many bins</h3>
+        <div class="btns" id="reBinRow"><button data-b="4" disabled>4</button><button data-b="5" disabled>5</button><button data-b="10" aria-pressed="true" disabled>10</button><button data-b="20" disabled>20</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>commuters binned</dt><dd id="reN">300</dd>
           <dt>bins with at least five commuters</dt><dd id="reBins">-</dd>
+          <dt>commuters per bin, on average</dt><dd id="rePer">-</dd>
+          <dt>sampling band, typical half width</dt><dd id="reBand">-</dd>
+          <dt>bins outside their band</dt><dd id="reOut">-</dd>
           <dt>calibration gap, mean |share - p|</dt><dd id="reGap">-</dd>
           <dt>your guesses, mean |guess - share|</dt><dd id="reGuess">-</dd>
           <dt>verdict</dt><dd id="reVerdict">-</dd>
@@ -342,7 +347,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>The reliability diagram is the check behind slide 18: among all commuters given 0.9, about 90 percent should have taken transit. A ramp that is too steep gives confident probabilities that come true less often than they claim, and the bars bow toward the middle; a ramp that is too shallow does the opposite. Only confidence is wrong in either case, the ranking of commuters is untouched, which is why temperature scaling, one constant dividing every score, is enough to repair it. Switch to the maximum likelihood fit to see a line whose steepness was chosen by the data.</p>
+    <p>The reliability diagram is the check behind slide 18: among all commuters given 0.9, about 90 percent should have taken transit. A ramp that is too steep gives confident probabilities that come true less often than they claim, and the bars bow toward the middle; a ramp that is too shallow does the opposite. Only confidence is wrong in either case, the ranking of commuters is untouched, which is why temperature scaling, one constant dividing every score, is enough to repair it. Switch to the maximum likelihood fit to see a line whose steepness was chosen by the data. The bin count is a reporting choice, not a property of the model: twenty bins hold about fifteen commuters each, so a share of fifteen outcomes is noisy and the bars scatter around the diagonal even for a calibrated line; four bins average that noise away and flatter a line that is genuinely bowed. Read the mean gap as the bins change and treat any single number from a reliability diagram as a number with a bin count attached.</p>
   </div>
 </section>
 
@@ -789,45 +794,71 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
 /* ================= 5b. IS YOUR 0.9 A 0.9 ================= */
 (function reliability() {
   const board = new Board(document.getElementById("rePlot"));
-  let src = "yours", guess = new Array(10).fill(null), revealed = false;
-  const X0 = 90, X1 = 690, Y0 = 60, Y1 = 470; const bx = i => X0 + i / 10 * (X1 - X0), bw = (X1 - X0) / 10, yOf = s => Y1 - s * (Y1 - Y0);
-  const stepEl = document.getElementById("reStep");
-  function data() { const pts = (src === "yours" ? shared.modeProbs : shared.mlProbs)(); const bins = []; for (let b = 0; b < 10; b++) bins.push({ n: 0, pos: 0, psum: 0 }); pts.forEach(q => { const b = Math.min(9, Math.floor(q.p * 10)); bins[b].n++; bins[b].pos += q.y; bins[b].psum += q.p; }); return bins; }
+  const BINS = [4, 5, 10, 20], NG = 10;
+  let src = "yours", guess = new Array(NG).fill(null), revealed = false, B = NG;
+  const X0 = 90, X1 = 690, Y0 = 60, Y1 = 470; const bx = i => X0 + i / B * (X1 - X0), bwOf = () => (X1 - X0) / B, yOf = s => Y1 - s * (Y1 - Y0);
+  const stepEl = document.getElementById("reStep"), binRow = document.getElementById("reBinRow");
+  function data() { const pts = (src === "yours" ? shared.modeProbs : shared.mlProbs)(); const bins = []; for (let b = 0; b < B; b++) bins.push({ n: 0, pos: 0, psum: 0 }); pts.forEach(q => { const b = Math.min(B - 1, Math.floor(q.p * B)); bins[b].n++; bins[b].pos += q.y; bins[b].psum += q.p; }); return bins; }
   function draw() {
-    const bins = data(), live = bins.map(b => b.n >= 5), nLive = live.filter(Boolean).length, guessed = live.filter((l, i) => l && guess[i] !== null).length;
-    board.clear("reliability diagram: predicted probability of transit across, share of the bin who took transit up; click a height in each bin"); const ctx = board.ctx;
+    const bins = data(), live = bins.map(b => b.n >= 5), nLive = live.filter(Boolean).length;
+    const tight = B > 12, bw = bwOf(), showGuess = B === NG;
+    const guessed = showGuess ? live.filter((l, i) => l && guess[i] !== null).length : 0;
+    board.clear(showGuess && !revealed
+      ? "reliability diagram: predicted probability of transit across, share of the bin who took transit up; click a height in each bin"
+      : "reliability diagram at " + B + " bins: the same three hundred commuters, the same model, a different reporting choice");
+    const ctx = board.ctx;
     board.line(X0, Y1, X1, Y1, css("--line"), 1); board.line(X0, Y0, X0, Y1, css("--line"), 1);
-    for (let k = 0; k <= 10; k += 2) { board.label((k / 10).toFixed(1), bx(k), Y1 + 16, css("--muted"), "center", 11, true); board.label((k / 10).toFixed(1), X0 - 8, yOf(k / 10) + 4, css("--muted"), "right", 11, true); board.line(X0, yOf(k / 10), X1, yOf(k / 10), css("--line"), 0.5); }
-    board.label("predicted probability, in bins of 0.1", (X0 + X1) / 2, Y1 + 34, css("--muted"), "center", 12); ctx.save(); ctx.translate(X0 - 44, (Y0 + Y1) / 2); ctx.rotate(-Math.PI / 2); board.label("share who took transit", 0, 0, css("--muted"), "center", 12); ctx.restore();
-    // ten empty boxes
+    for (let k = 0; k <= 10; k += 2) { board.label((k / 10).toFixed(1), X0 + k / 10 * (X1 - X0), Y1 + 16, css("--muted"), "center", 11, true); board.label((k / 10).toFixed(1), X0 - 8, yOf(k / 10) + 4, css("--muted"), "right", 11, true); board.line(X0, yOf(k / 10), X1, yOf(k / 10), css("--line"), 0.5); }
+    board.label("predicted probability, in bins of " + (1 / B).toFixed(2), (X0 + X1) / 2, Y1 + 34, css("--muted"), "center", 12); ctx.save(); ctx.translate(X0 - 44, (Y0 + Y1) / 2); ctx.rotate(-Math.PI / 2); board.label("share who took transit", 0, 0, css("--muted"), "center", 12); ctx.restore();
+    // the sampling band: what a perfectly calibrated model would scatter by at this bin width
+    let band = 0, nBand = 0, outside = 0;
+    const se = b => { const p = b.psum / b.n; return Math.sqrt(Math.max(1e-9, p * (1 - p) / b.n)); };
+    if (revealed) { bins.forEach((b, i) => { if (!live[i]) return; const p = b.psum / b.n, obs = b.pos / b.n, h = 1.96 * se(b); band += h; nBand++; if (Math.abs(obs - p) > h) outside++; }); band /= nBand || 1; }
     bins.forEach((b, i) => { const x = bx(i); ctx.fillStyle = live[i] ? mix(css("--panel"), css("--blue-soft"), 0.5) : css("--panel"); ctx.fillRect(x + 1, Y0, bw - 2, Y1 - Y0); ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(x + 1, Y0, bw - 2, Y1 - Y0);
-      board.label("n = " + b.n, x + bw / 2, Y0 - 8, live[i] ? css("--ink") : css("--muted"), "center", 12, true);
-      if (!live[i]) board.label("too few", x + bw / 2, (Y0 + Y1) / 2, css("--muted"), "center", 12);
-      if (revealed && live[i]) { const obs = b.pos / b.n; ctx.fillStyle = mix(css("--panel"), css("--orange"), 0.55); ctx.fillRect(x + 8, yOf(obs), bw - 16, Y1 - yOf(obs)); board.line(x + 8, yOf(obs), x + bw - 8, yOf(obs), css("--orange"), 3); board.label(obs.toFixed(2), x + bw / 2, obs < 0.08 ? yOf(obs) - 8 : yOf(obs) + 17, css("--ink"), "center", 12, true); }
-      if (guess[i] !== null) { board.line(x + 4, yOf(guess[i]), x + bw - 4, yOf(guess[i]), css("--blue"), 4); if (!revealed) board.label(guess[i].toFixed(2), x + bw / 2, yOf(guess[i]) - 8, css("--blue"), "center", 12, true); } });
-    if (revealed) board.line(X0, Y1, X1, Y0, css("--grey"), 1.5, [6, 4]);
-    board.label("blue bar: your guess   orange: observed share" + (revealed ? "   dashed diagonal: perfectly calibrated" : ""), X0, Y1 + 56, css("--muted"), "left", 12);
-    // right side: the numbers behind each bin
-    const TX = 760; board.label("bin", TX, 60, css("--muted"), "left", 12); board.label("commuters", TX + 110, 60, css("--muted"), "left", 12); board.label("mean p", TX + 210, 60, css("--muted"), "left", 12); board.label("took transit", TX + 300, 60, css("--muted"), "left", 12);
-    bins.forEach((b, i) => { const y = 84 + i * 26; board.label((i / 10).toFixed(1) + " to " + ((i + 1) / 10).toFixed(1), TX, y, css("--ink"), "left", 12, true); board.label(String(b.n), TX + 110, y, css("--ink"), "left", 12, true); board.label(b.n ? (b.psum / b.n).toFixed(2) : "-", TX + 210, y, css("--ink"), "left", 12, true); board.label(revealed && live[i] ? b.pos + " = " + (b.pos / b.n).toFixed(2) : (live[i] ? "hidden" : "-"), TX + 300, y, revealed && live[i] ? css("--orange") : css("--muted"), "left", 12, true); });
-    board.label(src === "yours" ? "probabilities from the line on the previous tab" : "probabilities from the maximum likelihood fit", TX, 370, css("--ink"), "left", 13);
-    // the verdict
-    let gap = 0, gerr = 0, sxy = 0, sxx = 0; bins.forEach((b, i) => { if (!live[i]) return; const obs = b.pos / b.n, p = b.psum / b.n; gap += Math.abs(obs - p); gerr += Math.abs((guess[i] === null ? 0.5 : guess[i]) - obs); sxy += b.n * (p - 0.5) * (obs - 0.5); sxx += b.n * (p - 0.5) * (p - 0.5); }); gap /= nLive || 1; gerr /= nLive || 1; const slope = sxx > 0 ? sxy / sxx : 1;
+      board.label(tight ? String(b.n) : "n = " + b.n, x + bw / 2, Y0 - 8, live[i] ? css("--ink") : css("--muted"), "center", tight ? 10 : 12, true);
+      if (!live[i] && !tight) board.label("too few", x + bw / 2, (Y0 + Y1) / 2, css("--muted"), "center", 12);
+      if (revealed && live[i]) { const obs = b.pos / b.n, inset = tight ? 3 : 8; ctx.fillStyle = mix(css("--panel"), css("--orange"), 0.55); ctx.fillRect(x + inset, yOf(obs), bw - 2 * inset, Y1 - yOf(obs)); board.line(x + inset, yOf(obs), x + bw - inset, yOf(obs), css("--orange"), tight ? 2 : 3); if (!tight) board.label(obs.toFixed(2), x + bw / 2, obs < 0.08 ? yOf(obs) - 8 : yOf(obs) + 17, css("--ink"), "center", 12, true); }
+      if (showGuess && guess[i] !== null) { board.line(x + 4, yOf(guess[i]), x + bw - 4, yOf(guess[i]), css("--blue"), 4); if (!revealed) board.label(guess[i].toFixed(2), x + bw / 2, yOf(guess[i]) - 8, css("--blue"), "center", 12, true); } });
+    if (revealed) {
+      const edge = side => { ctx.beginPath(); let started = false; bins.forEach((b, i) => { if (!live[i]) { started = false; return; } const p = b.psum / b.n, h = 1.96 * se(b), v = side > 0 ? Math.min(1, p + h) : Math.max(0, p - h), x = bx(i); if (!started) { ctx.moveTo(x, yOf(v)); started = true; } else ctx.lineTo(x, yOf(v)); ctx.lineTo(x + bw, yOf(v)); }); };
+      ctx.save(); ctx.globalAlpha = 0.3; ctx.fillStyle = css("--grey");
+      bins.forEach((b, i) => { if (!live[i]) return; const p = b.psum / b.n, h = 1.96 * se(b), hi = Math.min(1, p + h), lo = Math.max(0, p - h); ctx.fillRect(bx(i), yOf(hi), bw, yOf(lo) - yOf(hi)); });
+      ctx.restore();
+      ctx.strokeStyle = css("--grey"); ctx.lineWidth = 1.5; edge(1); ctx.stroke(); edge(-1); ctx.stroke();
+      board.line(X0, Y1, X1, Y0, css("--grey"), 1.5, [6, 4]);
+    }
+    board.label((showGuess ? "blue bar: your guess   orange: observed share" : "orange: observed share   your guesses belong to the ten-bin diagram") + (revealed ? "   dashed diagonal: perfectly calibrated   grey band: where a calibrated model would scatter at this bin width" : ""), X0, Y1 + 56, css("--muted"), "left", 12);
+    const TX = 760, rowH = tight ? 22 : 26;
+    board.label("bin", TX, 60, css("--muted"), "left", 12); board.label("commuters", TX + 110, 60, css("--muted"), "left", 12); board.label("mean p", TX + 210, 60, css("--muted"), "left", 12); board.label("took transit", TX + 300, 60, css("--muted"), "left", 12);
+    bins.forEach((b, i) => { const y = 84 + i * rowH, fs = tight ? 11 : 12; board.label((i / B).toFixed(2) + " to " + ((i + 1) / B).toFixed(2), TX, y, css("--ink"), "left", fs, true); board.label(String(b.n), TX + 110, y, css("--ink"), "left", fs, true); board.label(b.n ? (b.psum / b.n).toFixed(2) : "-", TX + 210, y, css("--ink"), "left", fs, true); board.label(revealed && live[i] ? b.pos + " = " + (b.pos / b.n).toFixed(2) : (live[i] ? "hidden" : "-"), TX + 300, y, revealed && live[i] ? css("--orange") : css("--muted"), "left", fs, true); });
+    board.label(src === "yours" ? "probabilities from the line on the previous tab" : "probabilities from the maximum likelihood fit", TX, 84 + B * rowH + 22, css("--ink"), "left", 13);
+    let gap = 0, gerr = 0, sxy = 0, sxx = 0; bins.forEach((b, i) => { if (!live[i]) return; const obs = b.pos / b.n, p = b.psum / b.n; gap += Math.abs(obs - p); sxy += b.n * (p - 0.5) * (obs - 0.5); sxx += b.n * (p - 0.5) * (p - 0.5); }); gap /= nLive || 1;
+    if (showGuess) { let n = 0; bins.forEach((b, i) => { if (!live[i]) return; n++; gerr += Math.abs((guess[i] === null ? 0.5 : guess[i]) - b.pos / b.n); }); gerr /= n || 1; }
+    const slope = sxx > 0 ? sxy / sxx : 1;
     const verdict = slope < 0.85 ? "overconfident" : (slope > 1.15 ? "underconfident" : "calibrated");
-    document.getElementById("reBins").textContent = nLive + " of 10"; document.getElementById("reGap").textContent = revealed ? gap.toFixed(3) : "-"; document.getElementById("reGuess").textContent = revealed ? gerr.toFixed(3) : "-"; document.getElementById("reVerdict").textContent = revealed ? verdict : "-";
-    document.getElementById("reReveal").disabled = revealed || guessed < nLive;
+    document.getElementById("reBins").textContent = nLive + " of " + B;
+    document.getElementById("rePer").textContent = (300 / B).toFixed(0);
+    document.getElementById("reBand").textContent = revealed ? "+/- " + band.toFixed(3) : "-";
+    document.getElementById("reOut").textContent = revealed ? outside + " of " + nLive : "-";
+    document.getElementById("reGap").textContent = revealed ? gap.toFixed(3) : "-";
+    document.getElementById("reGuess").textContent = revealed && showGuess ? gerr.toFixed(3) : "-";
+    document.getElementById("reVerdict").textContent = revealed ? verdict : "-";
+    document.getElementById("reReveal").disabled = revealed || !showGuess || guessed < nLive;
+    binRow.querySelectorAll("button").forEach(b => { b.disabled = !revealed; b.setAttribute("aria-pressed", +b.dataset.b === B ? "true" : "false"); });
     let html = '<p class="prompt">Is a 0.9 from your line really a 0.9?</p>';
-    if (!revealed) html += '<span class="k">' + guessed + ' of ' + nLive + ' bins guessed</span><p>Each box holds the commuters whose predicted probability falls in that range. Click the height you expect for the share of them who actually took transit. Bins with fewer than five commuters are skipped. Reveal unlocks when every populated bin has a guess.</p>';
-    else html += '<span class="k">revealed</span><div class="ask ' + (gerr < 0.1 ? 'ok' : 'no') + '">' + (gerr < 0.1 ? 'Your guesses sit within ' + gerr.toFixed(2) + ' of the observed shares on average. ' : 'Your guesses miss the observed shares by ' + gerr.toFixed(2) + ' on average. ') + 'The ' + (src === "yours" ? 'line' : 'maximum likelihood fit') + ' is ' + verdict + ': ' + (slope < 0.85 ? 'its ramp is too steep, its confident probabilities come true less often than they claim, and the bars bow toward the middle.' : (slope > 1.15 ? 'its ramp is too shallow, its probabilities are more cautious than the outcomes warrant, and the bars bow away from the middle.' : 'the bars follow the diagonal within the noise of 300 commuters, and a 0.9 is a 0.9.')) + ' Mean gap between predicted and observed: ' + gap.toFixed(3) + '.</div><p>Only the confidence is wrong when the bars bow; the ranking of commuters is untouched, so one constant dividing every score repairs it. Switch to the maximum likelihood fit to compare.</p>';
+    if (!revealed) html += '<span class="k">' + guessed + ' of ' + nLive + ' bins guessed</span><p>Each box holds the commuters whose predicted probability falls in that range. Click the height you expect for the share of them who actually took transit. Bins with fewer than five commuters are skipped. Reveal unlocks when every populated bin has a guess, and the bin count unlocks with it.</p>';
+    else if (showGuess) html += '<span class="k">revealed</span><div class="ask ' + (gerr < 0.1 ? 'ok' : 'no') + '">' + (gerr < 0.1 ? 'Your guesses sit within ' + gerr.toFixed(2) + ' of the observed shares on average. ' : 'Your guesses miss the observed shares by ' + gerr.toFixed(2) + ' on average. ') + 'The ' + (src === "yours" ? 'line' : 'maximum likelihood fit') + ' is ' + verdict + ': ' + (slope < 0.85 ? 'its ramp is too steep, its confident probabilities come true less often than they claim, and the bars bow toward the middle.' : (slope > 1.15 ? 'its ramp is too shallow, its probabilities are more cautious than the outcomes warrant, and the bars bow away from the middle.' : 'the bars follow the diagonal within the noise of 300 commuters, and a 0.9 is a 0.9.')) + ' Mean gap between predicted and observed: ' + gap.toFixed(3) + ', against a sampling band of ' + band.toFixed(3) + ' at this width: ' + (gap > band ? 'the gap is larger than the band, so this is real miscalibration and not the noise of 300 commuters.' : 'the gap is inside the band, so these bars are what a calibrated model scatters like on 300 commuters.') + ' ' + outside + ' of ' + nLive + ' bins fall outside their own band.</div><p>Now change the bin count. Nothing about the model or the commuters changes, only how the same outcomes are grouped. Watch the grey band breathe as the bins narrow, and watch whether the gap keeps up with it.</p>';
+    else html += '<span class="k">' + B + ' bins, about ' + (300 / B).toFixed(0) + ' commuters each</span><div class="ask ' + (gap > band ? 'no' : 'ok') + '">Mean gap ' + gap.toFixed(3) + ' against a sampling band of ' + band.toFixed(3) + '. ' + (gap > band ? 'The gap is larger than the band: this line really is miscalibrated, and no bin width hides it.' : 'The gap is inside the band: at this width the bars are indistinguishable from a calibrated model.') + ' ' + outside + ' of ' + nLive + ' bins fall outside their own band, and ' + nLive + ' of ' + B + ' bins hold at least five commuters.</div><p>' + (B > NG ? 'The band widened because each bin now holds about ' + (300 / B).toFixed(0) + ' commuters. A bar that leaves the diagonal at this width has to leave the band too before it means anything.' : 'The band narrowed because each bin now holds about ' + (300 / B).toFixed(0) + ' commuters, so wide bins are a sharper test of calibration. They are also a blunter picture: a bow that shows across ten bins can average out inside four.') + '</p><p>Compare the gap with the band, not with zero. A calibration number means nothing without the bin width beside it.</p>';
     stepEl.innerHTML = html;
   }
-  board.c.addEventListener("pointerdown", ev => { if (revealed) return; const [mx, my] = board.pos(ev); if (mx < X0 || mx > X1 || my < Y0 - 10 || my > Y1 + 10) return; const i = Math.min(9, Math.floor((mx - X0) / (X1 - X0) * 10)); const live = data()[i].n >= 5; if (!live) return; guess[i] = Math.max(0, Math.min(1, (Y1 - my) / (Y1 - Y0))); draw(); });
-  function setSrc(s) { src = s; guess = new Array(10).fill(null); revealed = false; document.getElementById("reYours").setAttribute("aria-pressed", s === "yours" ? "true" : "false"); document.getElementById("reML").setAttribute("aria-pressed", s === "ml" ? "true" : "false"); draw(); }
+  board.c.addEventListener("pointerdown", ev => { if (revealed || B !== NG) return; const [mx, my] = board.pos(ev); if (mx < X0 || mx > X1 || my < Y0 - 10 || my > Y1 + 10) return; const i = Math.min(B - 1, Math.floor((mx - X0) / (X1 - X0) * B)); if (data()[i].n < 5) return; guess[i] = Math.max(0, Math.min(1, (Y1 - my) / (Y1 - Y0))); draw(); });
+  function setSrc(s) { src = s; guess = new Array(NG).fill(null); revealed = false; B = NG; document.getElementById("reYours").setAttribute("aria-pressed", s === "yours" ? "true" : "false"); document.getElementById("reML").setAttribute("aria-pressed", s === "ml" ? "true" : "false"); draw(); }
   document.getElementById("reYours").addEventListener("click", () => setSrc("yours"));
   document.getElementById("reML").addEventListener("click", () => setSrc("ml"));
   document.getElementById("reReveal").addEventListener("click", () => { revealed = true; draw(); });
-  document.getElementById("reReset").addEventListener("click", () => { guess = new Array(10).fill(null); revealed = false; draw(); });
-  quiz(document.getElementById("reQuiz"), { q: "A network's reliability diagram bows below the diagonal at high probabilities: its 0.9 comes true 70 % of the time. Temperature scaling", options: ["Retrains the network so the ranking of cases changes", "Divides every score by one constant fitted on held-out data, which pulls the curve back without changing which case ranks above which", "Removes the cases the network got wrong"], answer: 1, why: "One constant rescales every logit, so the order of the predictions is untouched and only their confidence changes. It is fitted on held-out data, since fitting it on the training set would inherit the overconfidence it is meant to remove, slide 18." });
+  document.getElementById("reReset").addEventListener("click", () => { guess = new Array(NG).fill(null); revealed = false; B = NG; draw(); });
+  binRow.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { if (!revealed) return; B = +b.dataset.b; draw(); }));
+  quiz(document.getElementById("reQuiz"), { q: "A reliability diagram of 300 cases is redrawn from 10 bins to 40. The bars now scatter well off the diagonal. What changed?", options: ["The model became less calibrated", "Only the bin width: each bin holds about 8 cases, so its observed share is noisy on its own", "The probabilities were rescaled"], answer: 1, why: "A bin's observed share is an average over the cases in it, and its standard error is about 0.5 divided by the square root of that count. Narrow bins hold few cases, so they scatter even for a perfectly calibrated model. A calibration gap is only meaningful beside the bin count and the cases per bin, which is why slide 18's diagram fixes both." });
   window.addEventListener("themechange", draw);
   window.addEventListener("tabshow", ev => { if (ev.detail === "reliability") draw(); });
   draw();
