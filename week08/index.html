@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CE 7453 Week 8: Uncertainty and the first generative models</title>
-<meta name="description" content="Seven interactive exercises on epistemic and aleatoric uncertainty, Gaussian process kernels and kriging weights, calibration and conformal prediction, and the latent space of autoencoders and VAEs.">
+<meta name="description" content="Nine interactive exercises on epistemic and aleatoric uncertainty, Gaussian process kernels and kriging weights, ensembles and dropout, calibration and conformal prediction under a region shift, and the latent space of autoencoders and VAEs.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -87,6 +87,7 @@ section.demo.active { display: block; }
   border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
 }
 .btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btns button:disabled, .step .btns button:disabled { opacity: 0.45; cursor: default; }
 .readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
 .readout dt { color: var(--muted); }
 .readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
@@ -97,6 +98,23 @@ section.demo.active { display: block; }
 .caption p { margin: 0 0 6px; }
 footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* classroom mode and touch (shared patch) */
+canvas { touch-action: none; -webkit-user-select: none; user-select: none; }
+#classroomBtn { position: fixed; right: 14px; bottom: 14px; z-index: 50; font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; opacity: 0.85; }
+#classroomBtn:hover { opacity: 1; color: var(--ink); }
+body.classroom #classroomBtn { background: var(--blue); border-color: var(--blue); color: #fff; }
+body.classroom header, body.classroom .lead, body.classroom .caption, body.classroom footer, body.classroom .ask-note { display: none; }
+body.classroom nav { padding-block: 6px 4px; }
+body.classroom nav button { font-size: 17px; padding: 9px 16px; }
+body.classroom main { padding-block: 0 8px; }
+body.classroom .demo h2 { font-size: 26px; margin: 4px 0 8px; }
+body.classroom .step, body.classroom .ask, body.classroom .quiz, body.classroom .quiz button, body.classroom .readout, body.classroom .ctl label, body.classroom .choice button, body.classroom .bet button, body.classroom .btns button, body.classroom .legend, body.classroom .board { font-size: 18px; }
+body.classroom .step .k, body.classroom .ctl .hint, body.classroom .badge { font-size: 15px; }
+body.classroom .panel h3 { font-size: 15px; }
+body.classroom .stage { grid-template-columns: minmax(0, 1fr) 400px; }
+body.classroom .grid { grid-template-columns: minmax(0, 1fr) 360px; }
+@media (max-width: 1100px) { body.classroom .stage, body.classroom .grid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -146,8 +164,10 @@ canvas.pen { cursor: crosshair; }
 <nav role="tablist" aria-label="Demos">
   <button role="tab" data-tab="drill" aria-selected="true">Drill the site<span class="slide">slide 4</span></button>
   <button role="tab" data-tab="sketch" aria-selected="false">The kernel lineup<span class="slide">slide 8</span></button>
+  <button role="tab" data-tab="ensemble" aria-selected="false">Three bands for a network<span class="slide">slide 9</span></button>
   <button role="tab" data-tab="weights" aria-selected="false">Weigh the neighbors<span class="slide">slides 6, 7</span></button>
-  <button role="tab" data-tab="promise" aria-selected="false">Keep the promise<span class="slide">slides 10, 11, 12</span></button>
+  <button role="tab" data-tab="promise" aria-selected="false">Keep the promise<span class="slide">slides 10, 11</span></button>
+  <button role="tab" data-tab="shift" aria-selected="false">Change the region<span class="slide">slide 12</span></button>
   <button role="tab" data-tab="holes" aria-selected="false">Find the holes<span class="slide">slides 15, 20</span></button>
   <button role="tab" data-tab="blobs" aria-selected="false">Pack the blobs<span class="slide">slides 16, 18, 21</span></button>
   <button role="tab" data-tab="route" aria-selected="false">Route the gradient<span class="slide">slide 19</span></button>
@@ -158,7 +178,7 @@ canvas.pen { cursor: crosshair; }
 <!-- ============ 1. DRILL THE SITE ============ -->
 <section class="demo active" id="drill" role="tabpanel">
   <h2>Drill the site: spend eight boreholes on two kinds of not knowing</h2>
-  <p class="lead">A pier goes in at 70 m along the transect and the design needs the undrained strength there to within 5 kPa. You have eight boreholes. Click the ground to drill. Two tanks on the right hold the two uncertainties; watch which one your boreholes drain.</p>
+  <p class="lead">A pier goes in at 70 m along the transect and the design needs the undrained strength there to within 5 kPa. You have eight boreholes. Type a guess at how many holes the pier needs, then click the ground to drill. Two tanks on the right hold the two uncertainties; watch which one your boreholes drain.</p>
   <div class="stage">
     <div class="plot"><canvas id="drPlot" class="hit" width="1200" height="560"></canvas></div>
     <div class="side">
@@ -205,16 +225,42 @@ canvas.pen { cursor: crosshair; }
   </div>
 </section>
 
+<!-- ============ 2b. THREE BANDS FOR A NETWORK ============ -->
+<section class="demo" id="ensemble" role="tabpanel">
+  <h2>Three bands for a network: ensemble, dropout and the Gaussian process on one transect</h2>
+  <p class="lead">The same transect as the drill, with eight boreholes already in the ground. Three ways to put a band on a prediction are trained in your browser: five small networks with different random seeds, one network with dropout kept on at test time, and the Gaussian process from the drill. Commit to a prediction, then train and compare.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="enPlot" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="enStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="enTrain" disabled>Train and draw</button><button id="enView">Overlay the bands</button><button id="enReset">Start again</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>training time</dt><dd id="enTime">-</dd>
+          <dt>half width away from the holes: ensemble</dt><dd id="enWE">-</dd>
+          <dt>half width away from the holes: dropout</dt><dd id="enWD">-</dd>
+          <dt>half width away from the holes: GP</dt><dd id="enWG">-</dd>
+          <dt>share of the truth inside each band</dt><dd id="enCov">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="enQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Each network has one hidden layer of twelve tanh units and is fitted to the eight readings by a few hundred Adam steps. The deep ensemble trains five of them from different seeds and reports their mean plus or minus 1.645 standard deviations; the members agree near the holes and drift apart in the gaps, so the band widens there for free. Monte Carlo dropout trains one network with twenty percent of its hidden units switched off at random, keeps the switching on at prediction time, and reads the spread of twenty forward passes. The Gaussian process band is the one from the drill tab, and in the gaps it returns to the prior width of plus or minus 25 kPa. Both network approximations are cheap and neither is calibrated by construction: the share of the truth each band actually covers is on the right, and it is set by architecture and training length as much as by the data. Slide 9. That gap between a band and a promise is what the next tabs close.</p>
+  </div>
+</section>
+
 <!-- ============ 3. WEIGH THE NEIGHBORS ============ -->
 <section class="demo" id="weights" role="tabpanel">
   <h2>Weigh the neighbors: kriging weights on a plan of the site</h2>
-  <p class="lead">Seven boreholes are plotted on a plan of a 200 by 100 m site with their strengths. Drag the crosshair to where you need an estimate: each borehole grows or shrinks with the weight it gets, and the ring around the crosshair is the kriging standard deviation. Click an empty spot to add a borehole of your own. Three things to find are listed on the right.</p>
+  <p class="lead">Seven boreholes are plotted on a plan of a 200 by 100 m site with their strengths. Drag the crosshair to where you need an estimate: each borehole grows or shrinks with the weight it gets, and the ring around the crosshair is the kriging standard deviation. Click an empty spot to mark where you would add a borehole, lock it in, and the page scores your spot against a grid of alternatives. Three things to find are listed on the right.</p>
   <div class="stage">
     <div class="plot"><canvas id="wtPlot" class="grab" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel step" id="wtStep"></div>
       <div class="panel">
-        <div class="btns"><button id="wtReset">Remove my boreholes</button></div>
+        <div class="btns"><button class="primary" id="wtLock" disabled>Lock in the spot</button><button id="wtReset">Remove my boreholes</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>estimate at the crosshair</dt><dd id="wtEst">-</dd>
           <dt>kriging standard deviation</dt><dd id="wtSd">-</dd>
@@ -233,7 +279,7 @@ canvas.pen { cursor: crosshair; }
 <!-- ============ 4. KEEP THE PROMISE ============ -->
 <section class="demo" id="promise" role="tabpanel">
   <h2>Keep the promise: count the catches, then cut the quantile</h2>
-  <p class="lead">A settlement model claims a 90 percent band. One hundred held-out cases are laid out as cards. Bet on how many the band will catch by clicking the scale, then flip the cards. In the second step drag the cut through the sorted calibration residuals to build a conformal band, and flip again. In the third, calibrate on one region and test on the other.</p>
+  <p class="lead">A settlement model claims a 90 percent band. One hundred held-out cases are laid out as cards. Bet on how many the band will catch by clicking the scale, then flip the cards. In the second step drag the cut through the sorted calibration residuals to build a conformal band, and flip again. The next tab takes that band to another region.</p>
   <div class="stage">
     <div class="plot"><canvas id="prPlot" class="grab" width="1200" height="560"></canvas></div>
     <div class="side">
@@ -252,14 +298,39 @@ canvas.pen { cursor: crosshair; }
     </div>
   </div>
   <div class="caption">
-    <p>The model's own band is a Gaussian with the noise level it fitted, and it fitted too small a noise, so its nominal 90 percent catches about three quarters of the truth. Nothing in the fit warns you; only counting on held-out cases does. The conformal wrap, slide 11, is the staircase: sixty calibration residuals in absolute value, sorted. Cutting at rank k promises coverage k over 61 and charges the k-th residual as the half width, so the staircase is also slide 12's width-against-coverage curve, and its last few steps are the expensive ones. The promise holds for any model, with no distributional assumption, as long as the test cases are exchangeable with the calibration cases. Calibrating on the clay region and testing on the sand region breaks that, and the count shows it.</p>
+    <p>The model's own band is a Gaussian with the noise level it fitted, and it fitted too small a noise, so its nominal 90 percent catches about three quarters of the truth. Nothing in the fit warns you; only counting on held-out cases does. The conformal wrap, slide 11, is the staircase: sixty calibration residuals in absolute value, sorted. Cutting at rank k promises coverage k over 61 and charges the k-th residual as the half width, so the staircase is also a width-against-coverage curve, and its last few steps are the expensive ones. The promise holds for any model, with no distributional assumption, as long as the test cases are exchangeable with the calibration cases. The next tab breaks that assumption on purpose.</p>
+  </div>
+</section>
+
+<!-- ============ 4b. CHANGE THE REGION ============ -->
+<section class="demo" id="shift" role="tabpanel">
+  <h2>Change the region: a band calibrated on clay, tested on sand</h2>
+  <p class="lead">The conformal band from the previous tab was calibrated on sixty clay cases. Two tiles of one hundred held-out cards wait below, one from the clay region and one from the sand region. Commit to a prediction, flip both tiles, then drag the band width on the right and watch the coverage of each region move.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="shPlot" class="grab" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="shStep"></div>
+      <div class="panel">
+        <div class="btns"><button id="shReset">Reset</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>half width of the band</dt><dd id="shWidth">-</dd>
+          <dt>coverage promised by the clay calibration</dt><dd id="shProm">-</dd>
+          <dt>caught in the clay region</dt><dd id="shClay">-</dd>
+          <dt>caught in the sand region</dt><dd id="shSand">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="shQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The curve on the right is the width-against-coverage curve of slide 12: the sorted clay calibration residuals read as the half width that buys each level of coverage. The orange line is the width in use, and the two dots on it are the coverage that width actually achieves on the clay cards and on the sand cards. On clay the dot tracks the promise up to sampling noise. On sand the residuals come from a wider distribution, the cases are no longer exchangeable with the calibration set, and the dot sits well below the promise at every width. Dragging the line wider buys sand coverage at a price in width that the clay calibration never quoted. Week 2's remedy applies: calibrate on data drawn the way the deployment will be, or keep one calibration set per region.</p>
   </div>
 </section>
 
 <!-- ============ 5. FIND THE HOLES ============ -->
 <section class="demo" id="holes" role="tabpanel">
   <h2>Find the holes: walk two latent spaces with the mouse</h2>
-  <p class="lead">Two models were given the same forty strain profiles and the same two latent coordinates. Move the mouse over either map and the decoded profile for that point draws underneath. The plain autoencoder's map has holes, points that decode to nonsense. Click where you think one is. The variational autoencoder's map has none inside the prior; decode a grid of it to check.</p>
+  <p class="lead">Two models were given the same forty strain profiles and the same two latent coordinates. Commit to a prediction on the right, then move the mouse over either map and the decoded profile for that point draws underneath. The plain autoencoder's map has holes, points that decode to nonsense. Click where you think one is. The variational autoencoder's map has none inside the prior; decode a grid of it to check.</p>
   <div class="stage">
     <div class="plot pair">
       <div><canvas id="hoAE" class="hit" width="590" height="420"></canvas><p class="cap">autoencoder: click to test a point</p></div>
@@ -287,7 +358,7 @@ canvas.pen { cursor: crosshair; }
 <!-- ============ 6. PACK THE BLOBS ============ -->
 <section class="demo" id="blobs" role="tabpanel">
   <h2>Pack the blobs: be the encoder and feel the two terms pull</h2>
-  <p class="lead">Six training fields, six blobs on the latent plane. Drag a blob by its center to move it, drag its rim to change its spread. A balance on the right weighs the reconstruction term against the prior term. Three rounds change what the balance counts: reconstruction alone, both terms, then the prior term weighted eight times. In each round pack the blobs for the lowest total, then draw samples from the prior and see what they decode to.</p>
+  <p class="lead">Six training fields, six blobs on the latent plane. Drag a blob by its center to move it, drag its rim to change its spread. A balance on the right weighs the reconstruction term against the prior term. Three rounds change what the balance counts: both terms (the opening round), then the prior term weighted eight times, then reconstruction alone. In each round pack the blobs for the lowest total, let the optimizer finish the job, then draw samples from the prior and see what they decode to.</p>
   <div class="stage">
     <div class="plot"><canvas id="blPlot" class="grab" width="1200" height="560"></canvas></div>
     <div class="side">
@@ -372,7 +443,7 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
   const X0 = 70, X1 = 980, Y0 = 70, Y1 = 470, SMIN = 10, SMAX = 110;
   const px = x => X0 + (X1 - X0) * x / 100, py = s => Y1 - (Y1 - Y0) * (s - SMIN) / (SMAX - SMIN);
   const GRID = []; for (let i = 0; i <= 100; i++) GRID.push(i);
-  let obs = [], rng = mulberry32(11), twice = false, revealed = false;
+  let obs = [], rng = mulberry32(11), twice = false, revealed = false, guess = null, verdict = null;
   function posterior() {
     const n = obs.length, mean = GRID.map(() => MEAN), sd = GRID.map(() => SF);
     if (n === 0) return { mean, sd };
@@ -383,7 +454,7 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
   }
   function draw() {
     const P = posterior(), ctx = board.ctx;
-    board.clear("undrained strength along the transect (kPa against distance in m): click the ground to drill");
+    board.clear(guess === null ? "undrained strength along the transect (kPa against distance in m): type your guess on the right before drilling" : "undrained strength along the transect (kPa against distance in m): click the ground to drill");
     // bands
     ctx.beginPath(); GRID.forEach((x, g) => { const y = py(P.mean[g] + Z90 * Math.sqrt(P.sd[g] ** 2 + SN * SN)); if (g) ctx.lineTo(px(x), y); else ctx.moveTo(px(x), y); }); for (let g = GRID.length - 1; g >= 0; g--) ctx.lineTo(px(GRID[g]), py(P.mean[g] - Z90 * Math.sqrt(P.sd[g] ** 2 + SN * SN))); ctx.closePath(); ctx.fillStyle = alpha(css("--grey") || "#7C838D", 0.22); ctx.fill();
     ctx.beginPath(); GRID.forEach((x, g) => { const y = py(P.mean[g] + Z90 * P.sd[g]); if (g) ctx.lineTo(px(x), y); else ctx.moveTo(px(x), y); }); for (let g = GRID.length - 1; g >= 0; g--) ctx.lineTo(px(GRID[g]), py(P.mean[g] - Z90 * P.sd[g])); ctx.closePath(); ctx.fillStyle = alpha(css("--blue"), 0.28); ctx.fill();
@@ -412,20 +483,25 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
     document.getElementById("drMean").textContent = "+/- " + (Z90 * meanSd).toFixed(1) + " kPa";
     const met = Z90 * sdF <= 5;
     badges(document.getElementById("drBadges"), [{ text: "pier strength within 5 kPa", done: met }, { text: "a spot drilled twice", done: twice }, { text: "budget spent", done: obs.length >= BUDGET }]);
-    let txt;
-    if (obs.length === 0) txt = '<span class="k">before the first hole</span><p>The blue band is the prior: 15 kPa either way, everywhere. Both tanks are full. Drill near the pier first and watch what each hole does to each tank.</p>';
-    else if (!met && obs.length < BUDGET) txt = '<span class="k">' + obs.length + ' drilled</span><p>The blue band at the pier is +/- ' + (Z90 * sdF).toFixed(1) + ' kPa; the design wants 5. The grey band is +/- ' + (Z90 * sdY).toFixed(1) + ' and no number of holes brings it under +/- ' + (Z90 * SN).toFixed(1) + '. ' + (twice ? 'Your repeated hole read a different number: that difference is the aleatoric tank, and it did not move.' : 'Drill the same spot a second time to see the two bands part company.') + '</p>';
-    else if (met) txt = '<span class="k">target met</span><p>The true strength at the pier is pinned to +/- ' + (Z90 * sdF).toFixed(1) + ' kPa with ' + obs.length + ' holes. That was an epistemic target, so boreholes could reach it. A target of +/- 5 on a single reading would have been aleatoric and out of reach at any budget.</p>';
-    else txt = '<span class="k">budget spent</span><p>The pier band is +/- ' + (Z90 * sdF).toFixed(1) + ' kPa. The holes went elsewhere; the epistemic tank drained where you drilled, not where the design needed it. Start over and put three or four holes at the pier.</p>';
+    if (met && verdict === null) { const near = obs.filter(o => Math.abs(o.x - PIER) <= 5).length; const ok = guess === 3 || guess === near; verdict = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + 'You guessed ' + guess + '; the band fell under 5 kPa with ' + near + ' hole' + (near === 1 ? '' : 's') + ' within 5 m of the pier and ' + obs.length + ' in all. At the pier itself one reading gives +/- 7.8, two give 5.7 and three give 4.7 kPa: each repeat divides the noise variance by the count, so three holes are enough.</div>'; }
+    let txt = '<p><b>How many holes at the pier bring the 90 percent band under 5 kPa? Guess first.</b></p>';
+    if (guess === null) txt += '<p><input type="number" id="drGuess" min="1" max="8" step="1" style="width:70px;font:inherit;padding:4px 6px" aria-label="your guess"> <button id="drLock" style="font:inherit;font-size:14px;padding:5px 10px;border-radius:6px;border:1px solid var(--line);background:var(--blue);color:#fff;cursor:pointer">Lock in</button></p><p>Drilling opens once the guess is locked in. The blue band is the prior: 15 kPa either way, everywhere. Both tanks are full.</p>';
+    else if (obs.length === 0) txt += '<span class="k">guess ' + guess + ', before the first hole</span><p>The blue band is the prior: 15 kPa either way, everywhere. Both tanks are full. Drill near the pier first and watch what each hole does to each tank.</p>';
+    else if (!met && obs.length < BUDGET) txt += '<span class="k">' + obs.length + ' drilled</span><p>The blue band at the pier is +/- ' + (Z90 * sdF).toFixed(1) + ' kPa; the design wants 5. The grey band is +/- ' + (Z90 * sdY).toFixed(1) + ' and no number of holes brings it under +/- ' + (Z90 * SN).toFixed(1) + '. ' + (twice ? 'Your repeated hole read a different number: that difference is the aleatoric tank, and it did not move.' : 'Drill the same spot a second time to see the two bands part company.') + '</p>';
+    else if (met) txt += '<span class="k">target met</span><p>The true strength at the pier is pinned to +/- ' + (Z90 * sdF).toFixed(1) + ' kPa with ' + obs.length + ' holes. That was an epistemic target, so boreholes could reach it. A target of +/- 5 on a single reading would have been aleatoric and out of reach at any budget.</p>';
+    else txt += '<span class="k">budget spent</span><p>The pier band is +/- ' + (Z90 * sdF).toFixed(1) + ' kPa. The holes went elsewhere; the epistemic tank drained where you drilled, not where the design needed it. Start over and put three or four holes at the pier.</p>';
+    if (verdict) txt += verdict;
     if (obs.length > 0) txt += '<p class="k">the dashed orange line is the true field, shown once you have drilled.</p>';
     stepEl.innerHTML = txt;
   }
+  stepEl.addEventListener("click", ev => { if (!ev.target || ev.target.id !== "drLock") return; const inp = document.getElementById("drGuess"); const v = parseInt(inp && inp.value, 10); if (!(v >= 1 && v <= 8)) { inp.focus(); return; } guess = v; draw(); });
+  stepEl.addEventListener("keydown", ev => { if (ev.key === "Enter" && ev.target && ev.target.id === "drGuess") { const b = document.getElementById("drLock"); if (b) b.click(); } });
   board.c.addEventListener("click", ev => {
-    const [mx, my] = board.pos(ev); if (mx < X0 || mx > X1 || my < Y0 - 20 || my > Y1 + 10 || obs.length >= BUDGET) return;
+    const [mx, my] = board.pos(ev); if (guess === null || mx < X0 || mx > X1 || my < Y0 - 20 || my > Y1 + 10 || obs.length >= BUDGET) return;
     const x = Math.round((mx - X0) / (X1 - X0) * 100); if (obs.some(o => Math.abs(o.x - x) <= 2)) twice = true;
     obs.push({ x, y: truth(x) + SN * gauss(rng) }); revealed = true; draw();
   });
-  document.getElementById("drReset").addEventListener("click", () => { obs = []; twice = false; revealed = false; rng = mulberry32(11 + Math.floor(Math.random() * 1000)); draw(); });
+  document.getElementById("drReset").addEventListener("click", () => { obs = []; twice = false; revealed = false; guess = null; verdict = null; rng = mulberry32(11 + Math.floor(Math.random() * 1000)); draw(); });
   quiz(document.getElementById("drQuiz"), { q: "You drill the pier location four times and the readings are 61, 68, 55 and 64 kPa. What do the four holes buy you?", options: ["A narrower band on the next reading at the pier", "A narrower band on the true strength at the pier; the spread of readings is the noise and stays", "Nothing, since the readings disagree"], answer: 1, why: "Repeated readings average the sensor noise out of the estimate of the true strength, so the epistemic band shrinks like one over the square root of four. The next reading still carries its own noise, so the band on it never drops below the sensor's spread." });
   window.addEventListener("themechange", draw); draw();
 })();
@@ -457,25 +533,111 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
       ctx.fillStyle = win ? alpha(css("--blue"), 0.12) : css("--bg"); ctx.fillRect(x, PY0, PW, PH); ctx.strokeStyle = pick === j ? css("--orange") : (win ? css("--blue") : css("--line")); ctx.lineWidth = pick === j || win ? 2.5 : 1; ctx.strokeRect(x, PY0, PW, PH); ctx.lineWidth = 1;
       samples[j].forEach((s, k) => { const mx = Math.max.apply(null, s.map(Math.abs)) || 1; board.line(s.map((v, i) => [x + PW / 2 + v / mx * (PW / 2 - 8), PY0 + 8 + (PH - 16) * i / (ND - 1)]), [css("--blue"), css("--ink"), css("--orange")][k], 1.3); });
       board.label("l = " + ell + " m", x + PW / 2, PY0 - 10, css("--ink"), "center", 12, true);
-      if (result) { const rel = result.ll[j] - result.ll[result.best]; const bw = Math.max(2, (PW - 8) * Math.exp(rel / 10)); ctx.fillStyle = win ? css("--blue") : css("--line"); ctx.fillRect(x + 4, PY0 + PH + 12, bw, 10); board.label(rel.toFixed(0), x + PW / 2, PY0 + PH + 38, css("--muted"), "center", 11, true); }
-      else if (pick === j) board.label("your suspect", x + PW / 2, PY0 + PH + 24, css("--orange"), "center", 12);
+      if (pick === j) { ctx.fillStyle = css("--panel"); ctx.fillRect(x + 2, PY0 + 2, PW - 4, 18); board.label("your suspect", x + PW / 2, PY0 + 15, css("--orange"), "center", 12); }
     });
-    if (result) board.label("bar: likelihood relative to the winner (log units below it)", PX0, PY0 + PH + 58, css("--muted"), "left", 12);
+    // horizontal bars: log marginal likelihood of each suspect relative to the best
+    const BX0 = PX0 + 70, BX1 = PX0 + 5 * PW + 4 * PGAP - 36, BY = PY0 + PH + 22, BP = 22, GMAX = 3000;
+    board.label(result ? "log marginal likelihood relative to the best (0 = the winner; bars shorten with the gap on a compressed scale)" : "log marginal likelihood relative to the best: hidden until you name a suspect", PX0, BY - 8, css("--muted"), "left", 12);
+    ELLS.forEach((ell, j) => {
+      const y = BY + j * BP; board.label(ell + " m", BX0 - 8, y + 12, j === pick ? css("--orange") : css("--ink"), "right", 12, true);
+      if (!result) { ctx.strokeStyle = css("--line"); ctx.setLineDash([3, 3]); ctx.strokeRect(BX0, y + 2, BX1 - BX0, BP - 6); ctx.setLineDash([]); return; }
+      const rel = result.ll[j] - result.ll[result.best]; const frac = Math.max(0, 1 - Math.log10(1 - rel + 1) / Math.log10(GMAX)); const bw = Math.max(3, (BX1 - BX0) * frac);
+      ctx.fillStyle = j === result.best ? css("--blue") : (j === pick ? alpha(css("--orange"), 0.75) : alpha(css("--grey"), 0.5)); ctx.fillRect(BX0, y + 2, bw, BP - 6);
+      board.label(j === result.best ? "0" : rel.toFixed(1), BX0 + bw + 6, y + 12, css("--ink"), "left", 12, true);
+    });
     document.getElementById("skPick").textContent = pick < 0 ? "-" : ELLS[pick] + " m";
     document.getElementById("skBest").textContent = result ? ELLS[result.best] + " m" : "-";
     document.getElementById("skGap").textContent = result && pick >= 0 ? (result.ll[result.best] - result.ll[pick]).toFixed(1) : "-";
-    let txt;
-    if (pts.length < 2) txt = '<span class="k">step 1</span><p>Draw a profile in the left box. A straight, slowly varying line and a jagged saw are both fine; the question is which kernel would have produced it.</p>';
-    else if (!result) txt = '<span class="k">step 2</span><p>Click the lineup panel whose random profiles look most like yours, then ask the likelihood. ' + (pick < 0 ? 'No suspect picked yet.' : 'Suspect: lengthscale ' + ELLS[pick] + ' m.') + '</p>';
-    else { const g = pick >= 0 ? result.ll[result.best] - result.ll[pick] : null; txt = '<span class="k">verdict</span><p>The marginal likelihood names lengthscale ' + ELLS[result.best] + ' m. ' + (pick < 0 ? '' : (g < 0.5 ? 'That is your suspect: the eye and the likelihood agree.' : 'Your suspect sits ' + g.toFixed(0) + ' log units below it, which is a probability ratio of about ' + (g > 12 ? 'e to the ' + g.toFixed(0) : Math.round(Math.exp(g)).toLocaleString('en-US')) + ' to one.')) + '</p><p>Clear the sketch and draw a different kind of profile: the lineup is the same, the verdict moves.</p>'; }
+    let txt = '<p><b>Sketch what you expect. Which suspect drew it?</b></p>';
+    if (pts.length < 2) txt += '<span class="k">step 1</span><p>Draw a profile in the left box. A straight, slowly varying line and a jagged saw are both fine; the question is which kernel would have produced it.</p>';
+    else if (!result) txt += '<span class="k">step 2</span><p>Click the lineup panel whose random profiles look most like yours. The likelihood answers only once a suspect is named. ' + (pick < 0 ? 'No suspect picked yet.' : 'Suspect: lengthscale ' + ELLS[pick] + ' m.') + '</p>';
+    else { const g = result.ll[result.best] - result.ll[pick]; const ok = g < 0.5; txt += '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. The likelihood names lengthscale ' + ELLS[result.best] + ' m, your suspect: the eye and the likelihood agree.' : 'No. The likelihood names lengthscale ' + ELLS[result.best] + ' m. Your suspect sits ' + g.toFixed(0) + ' log units below it, a probability ratio of about ' + (g > 12 ? 'e to the ' + g.toFixed(0) : Math.round(Math.exp(g)).toLocaleString('en-US')) + ' to one.') + '</div><p>The bars under the lineup are each suspect\'s log marginal likelihood relative to the winner. Clear the sketch and draw a different kind of profile: the lineup is the same, the verdict moves.</p>'; }
+    stepEl.innerHTML = txt;
+    document.getElementById("skReveal").disabled = !(enabled && pick >= 0);
+  }
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (mx >= LX0 && mx <= LX1 && my >= LY0 && my <= LY1) { drawing = true; pts = [[mx, my]]; result = null; enabled = false; draw(); return; } if (result) return; ELLS.forEach((e, j) => { const x = PX0 + j * (PW + PGAP); if (mx >= x && mx <= x + PW && my >= PY0 && my <= PY0 + PH) { pick = j; draw(); } }); });
+  window.addEventListener("pointermove", ev => { if (!drawing) return; const [mx, my] = board.pos(ev); const last = pts[pts.length - 1]; const cx = Math.max(LX0, Math.min(LX1, mx)), cy = Math.max(LY0, Math.min(LY1, my)); if (cy > last[1] + 1) { pts.push([cx, cy]); draw(); } });
+  window.addEventListener("pointerup", () => { if (!drawing) return; drawing = false; if (pts.length >= 10 && pts[pts.length - 1][1] - pts[0][1] > 150) enabled = true; draw(); });
+  document.getElementById("skReveal").addEventListener("click", () => { if (!enabled || pick < 0) return; const y = resample(); const ll = ELLS.map(e => lml(y, e)); let best = 0; ll.forEach((v, i) => { if (v > ll[best]) best = i; }); result = { ll, best }; draw(); });
+  document.getElementById("skClear").addEventListener("click", () => { pts = []; result = null; pick = -1; enabled = false; draw(); });
+  quiz(document.getElementById("skQuiz"), { q: "A geotechnical engineer fits a variogram by eye to the sample pairs. What has she chosen, in the language of this page?", options: ["A kernel, and so a lengthscale: the smoothness she believes the site has", "The number of boreholes", "The posterior mean"], answer: 0, why: "The variogram is the kernel seen from the other side, and its range is the lengthscale. Fitting it by eye and maximizing the marginal likelihood are two routes to the same assumption about how far one sounding informs the soil around it." });
+  window.addEventListener("themechange", draw); draw();
+})();
+
+/* ================= 2b. THREE BANDS FOR A NETWORK ================= */
+(function ensemble() {
+  const board = new Board(document.getElementById("enPlot")), stepEl = document.getElementById("enStep");
+  const ELL = 15, SF = 15, SN = 5, MEAN = 60, Z90 = 1.645, NH = 12, NE = 5, NPASS = 20, PDROP = 0.2;
+  const truth = x => MEAN + 12 * Math.sin(x / 9) + 8 * Math.sin(x / 23 + 1) + 5 * Math.cos(x / 5.5);
+  const HX = [4, 12, 20, 29, 37, 45, 87, 96], rngH = mulberry32(11), holes = HX.map(x => ({ x, y: truth(x) + SN * gauss(rngH) }));
+  const GRID = []; for (let i = 0; i <= 100; i++) GRID.push(i);
+  const FAR = GRID.map(x => Math.min.apply(null, HX.map(h => Math.abs(x - h))) > 10);
+  const NAMES = { ens: "deep ensemble", drop: "MC dropout", gp: "Gaussian process" };
+  let pick = null, res = null, overlay = false, seedBase = 200, verdict = null;
+  const uOf = x => (x - 50) / 50, tOf = y => (y - MEAN) / 15;
+  function newNet(rng) { const W1 = [], b1 = [], W2 = []; for (let j = 0; j < NH; j++) { W1.push(5 * (2 * rng() - 1)); b1.push(3.5 * (2 * rng() - 1)); W2.push(gauss(rng)); } return { W1, b1, W2, b2: 0 }; }
+  function fwd(net, u, mask) { let o = net.b2; for (let j = 0; j < NH; j++) { const m = mask ? mask[j] : 1; if (m === 0) continue; o += net.W2[j] * m * Math.tanh(net.W1[j] * u + net.b1[j]); } return o; }
+  function train(seed, steps, pdrop) {
+    const rng = mulberry32(seed), net = newNet(rng), n = holes.length, U = holes.map(h => uOf(h.x)), T = holes.map(h => tOf(h.y));
+    const P = 3 * NH + 1, mom = new Array(P).fill(0), vel = new Array(P).fill(0), lr = 0.03, B1 = 0.9, B2 = 0.999;
+    for (let it = 1; it <= steps; it++) {
+      const g = new Array(P).fill(0); const mask = pdrop > 0 ? net.W1.map(() => rng() < pdrop ? 0 : 1 / (1 - pdrop)) : null;
+      for (let i = 0; i < n; i++) { const h = [], u = U[i]; let o = net.b2; for (let j = 0; j < NH; j++) { h.push(Math.tanh(net.W1[j] * u + net.b1[j])); o += net.W2[j] * (mask ? mask[j] : 1) * h[j]; } const d = 2 * (o - T[i]) / n; g[3 * NH] += d; for (let j = 0; j < NH; j++) { const m = mask ? mask[j] : 1; g[2 * NH + j] += d * h[j] * m; const dp = d * net.W2[j] * m * (1 - h[j] * h[j]); g[j] += dp * u; g[NH + j] += dp; } }
+      const c1 = 1 - Math.pow(B1, it), c2 = 1 - Math.pow(B2, it);
+      for (let k = 0; k < P; k++) { mom[k] = B1 * mom[k] + (1 - B1) * g[k]; vel[k] = B2 * vel[k] + (1 - B2) * g[k] * g[k]; const upd = lr * (mom[k] / c1) / (Math.sqrt(vel[k] / c2) + 1e-8); if (k < NH) net.W1[k] -= upd; else if (k < 2 * NH) net.b1[k - NH] -= upd; else if (k < 3 * NH) net.W2[k - 2 * NH] -= upd; else net.b2 -= upd; }
+    }
+    return net;
+  }
+  function gp() {
+    const K = holes.map(a => holes.map(b => se((a.x - b.x) ** 2, ELL, SF * SF) + (a === b ? SN * SN : 0))), L = chol(K), al = cholSolve(L, holes.map(o => o.y - MEAN));
+    return GRID.map(x => { const k = holes.map(o => se((x - o.x) ** 2, ELL, SF * SF)); const m = MEAN + k.reduce((s, v, i) => s + v * al[i], 0); const v = cholSolve(L, k); const sd = Math.sqrt(Math.max(1e-9, SF * SF - k.reduce((s, kv, i) => s + kv * v[i], 0))); return { m, sd }; });
+  }
+  function stats(curves) { return GRID.map((x, g) => { const vals = curves.map(c => c[g]); const m = vals.reduce((s, v) => s + v, 0) / vals.length; const sd = Math.sqrt(vals.reduce((s, v) => s + (v - m) ** 2, 0) / Math.max(1, vals.length - 1)); return { m, sd }; }); }
+  function run() {
+    const t0 = performance.now();
+    const nets = []; for (let e = 0; e < NE; e++) nets.push(train(seedBase + e, 600, 0));
+    const ensCurves = nets.map(net => GRID.map(x => MEAN + 15 * fwd(net, uOf(x))));
+    const dnet = train(seedBase + 50, 900, PDROP), rngM = mulberry32(seedBase + 99);
+    const dropCurves = []; for (let p = 0; p < NPASS; p++) { const mask = dnet.W1.map(() => rngM() < PDROP ? 0 : 1 / (1 - PDROP)); dropCurves.push(GRID.map(x => MEAN + 15 * fwd(dnet, uOf(x), mask))); }
+    const out = { ens: { curves: ensCurves, band: stats(ensCurves) }, drop: { curves: dropCurves, band: stats(dropCurves) }, gp: { curves: [], band: gp() } };
+    Object.keys(out).forEach(k => { const b = out[k].band; let w = 0, nf = 0, cov = 0; GRID.forEach((x, g) => { if (FAR[g]) { w += Z90 * b[g].sd; nf++; } if (Math.abs(truth(x) - b[g].m) <= Z90 * b[g].sd) cov++; }); out[k].far = w / nf; out[k].cov = cov / GRID.length; });
+    out.ms = performance.now() - t0; out.widest = ["ens", "drop", "gp"].reduce((a, k) => out[k].far > out[a].far ? k : a, "ens");
+    return out;
+  }
+  function panel(x0, x1, y0, y1, keys, title) {
+    const ctx = board.ctx, px = x => x0 + (x1 - x0) * x / 100, py = s => y1 - (y1 - y0) * (s - 0) / 120;
+    ctx.fillStyle = css("--bg"); ctx.fillRect(x0 - 40, y0 - 24, x1 - x0 + 56, y1 - y0 + (keys.length === 1 ? 84 : 44)); board.label(title, x0, y0 - 8, css("--ink"), "left", 13);
+    GRID.forEach((x, g) => { if (FAR[g] && (g === 0 || !FAR[g - 1])) { let e = g; while (e < GRID.length && FAR[e]) e++; ctx.fillStyle = alpha(css("--grey"), 0.16); ctx.fillRect(px(x), y0, px(GRID[e - 1]) - px(x), y1 - y0); } });
+    const COL = { ens: css("--orange"), drop: "#2E7D5B", gp: css("--blue") };
+    if (res) keys.forEach(k => { const b = res[k].band; ctx.beginPath(); GRID.forEach((x, g) => { const y = py(Math.min(130, b[g].m + Z90 * b[g].sd)); if (g) ctx.lineTo(px(x), y); else ctx.moveTo(px(x), y); }); for (let g = GRID.length - 1; g >= 0; g--) ctx.lineTo(px(GRID[g]), py(Math.max(-10, b[g].m - Z90 * b[g].sd))); ctx.closePath(); ctx.fillStyle = alpha(COL[k], keys.length > 1 ? 0.16 : 0.24); ctx.fill(); });
+    if (res && keys.length === 1) res[keys[0]].curves.forEach(c => board.line(GRID.map((x, g) => [px(x), py(Math.max(-10, Math.min(130, c[g])))]), alpha(COL[keys[0]], keys[0] === "drop" ? 0.35 : 0.6), 1));
+    if (res) keys.forEach(k => board.line(GRID.map((x, g) => [px(x), py(Math.max(-10, Math.min(130, res[k].band[g].m)))]), COL[k], 2));
+    board.line(GRID.map(x => [px(x), py(truth(x))]), css("--ink"), 1.2, [5, 4]);
+    holes.forEach(o => { ctx.fillStyle = css("--ink"); ctx.fillRect(px(o.x) - 4, py(o.y) - 4, 8, 8); });
+    board.line([[x0, y1], [x1, y1]], css("--line")); board.line([[x0, y0], [x0, y1]], css("--line"));
+    for (let s = 20; s <= 100; s += 20) board.label(String(s), x0 - 6, py(s) + 4, css("--muted"), "right", 11, true);
+    for (let x = 0; x <= 100; x += 25) board.label(String(x), px(x), y1 + 14, css("--muted"), "center", 11, true);
+    if (res && keys.length === 1) { board.label("away from the holes: +/- " + res[keys[0]].far.toFixed(1) + " kPa", x0, y1 + 34, COL[keys[0]], "left", 12, true); board.label("truth inside the band " + Math.round(100 * res[keys[0]].cov) + " % of the transect", x0, y1 + 52, COL[keys[0]], "left", 12, true); }
+  }
+  function draw() {
+    board.clear(res ? (overlay ? "the three bands overlaid: 90 percent each, by its own account" : "three bands side by side; grey strips are more than 10 m from any hole") : "the drill transect with eight holes in the ground: commit on the right and the three bands are trained and drawn");
+    if (overlay) { panel(70, 1140, 50, 470, ["ens", "drop", "gp"], "all three bands on one transect (kPa against m)"); board.label("orange: deep ensemble    green: MC dropout    blue: Gaussian process    dashed: the truth    squares: the eight readings", 70, 530, css("--muted"), "left", 12); }
+    else { panel(70, 400, 60, 430, ["ens"], "deep ensemble: five networks, mean +/- 1.645 sd"); panel(460, 790, 60, 430, ["drop"], "MC dropout: one network, 20 passes"); panel(850, 1180, 60, 430, ["gp"], "Gaussian process: the drill's band"); board.label("dashed: the truth    squares: the eight readings    thin lines: ensemble members or dropout passes    grey: more than 10 m from a hole", 70, 536, css("--muted"), "left", 12); }
+    document.getElementById("enTime").textContent = res ? res.ms.toFixed(0) + " ms" : "-";
+    document.getElementById("enWE").textContent = res ? "+/- " + res.ens.far.toFixed(1) + " kPa" : "-"; document.getElementById("enWD").textContent = res ? "+/- " + res.drop.far.toFixed(1) + " kPa" : "-"; document.getElementById("enWG").textContent = res ? "+/- " + res.gp.far.toFixed(1) + " kPa" : "-";
+    document.getElementById("enCov").textContent = res ? Math.round(100 * res.ens.cov) + " / " + Math.round(100 * res.drop.cov) + " / " + Math.round(100 * res.gp.cov) + " %" : "-";
+    document.getElementById("enTrain").disabled = pick === null; document.getElementById("enTrain").textContent = res ? "Retrain with new seeds" : "Train and draw"; document.getElementById("enView").textContent = overlay ? "Side by side" : "Overlay the bands";
+    let txt = '<p><b>Away from the holes, which band is widest: ensemble, dropout or GP?</b></p>';
+    if (pick === null) txt += '<div class="btns" style="margin:8px 0"><button class="primary" data-pick="ens">Ensemble</button><button class="primary" data-pick="drop">Dropout</button><button class="primary" data-pick="gp">GP</button></div><p>Eight readings, one transect, three recipes for a band. Commit, and the networks train in your browser.</p>';
+    else txt += (verdict || '') + '<p>Grey strips mark ground more than 10 m from a hole. The readout gives each band\'s mean half width there and the share of the transect where the truth falls inside the band; a band that calls itself 90 percent should score near 90. Retrain with new seeds and watch the network bands change while the GP band stays.</p>';
     stepEl.innerHTML = txt;
   }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (mx >= LX0 && mx <= LX1 && my >= LY0 && my <= LY1) { drawing = true; pts = [[mx, my]]; result = null; enabled = false; document.getElementById("skReveal").disabled = true; draw(); return; } ELLS.forEach((e, j) => { const x = PX0 + j * (PW + PGAP); if (mx >= x && mx <= x + PW && my >= PY0 && my <= PY0 + PH) { pick = j; draw(); } }); });
-  window.addEventListener("mousemove", ev => { if (!drawing) return; const [mx, my] = board.pos(ev); const last = pts[pts.length - 1]; const cx = Math.max(LX0, Math.min(LX1, mx)), cy = Math.max(LY0, Math.min(LY1, my)); if (cy > last[1] + 1) { pts.push([cx, cy]); draw(); } });
-  window.addEventListener("mouseup", () => { if (!drawing) return; drawing = false; if (pts.length >= 10 && pts[pts.length - 1][1] - pts[0][1] > 150) { enabled = true; document.getElementById("skReveal").disabled = false; } draw(); });
-  document.getElementById("skReveal").addEventListener("click", () => { if (!enabled) return; const y = resample(); const ll = ELLS.map(e => lml(y, e)); let best = 0; ll.forEach((v, i) => { if (v > ll[best]) best = i; }); result = { ll, best }; draw(); });
-  document.getElementById("skClear").addEventListener("click", () => { pts = []; result = null; pick = -1; enabled = false; document.getElementById("skReveal").disabled = true; draw(); });
-  quiz(document.getElementById("skQuiz"), { q: "A geotechnical engineer fits a variogram by eye to the sample pairs. What has she chosen, in the language of this page?", options: ["A kernel, and so a lengthscale: the smoothness she believes the site has", "The number of boreholes", "The posterior mean"], answer: 0, why: "The variogram is the kernel seen from the other side, and its range is the lengthscale. Fitting it by eye and maximizing the marginal likelihood are two routes to the same assumption about how far one sounding informs the soil around it." });
+  function go() { res = run(); if (verdict === null && pick !== null) { const ok = pick === res.widest; verdict = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + 'Away from the holes the ' + NAMES[res.widest] + ' band is widest: ensemble +/- ' + res.ens.far.toFixed(1) + ', dropout +/- ' + res.drop.far.toFixed(1) + ', GP +/- ' + res.gp.far.toFixed(1) + ' kPa. The GP band grows back to its prior by construction. The ensemble widens only as far as five random initializations happen to disagree, and dropout\'s spread is set by the drop rate and the weights, which the gaps never see. Neither network band is calibrated by anything in its training.</div>'; } draw(); }
+  stepEl.addEventListener("click", ev => { const b = ev.target && ev.target.closest ? ev.target.closest("button[data-pick]") : null; if (!b || pick !== null) return; pick = b.dataset.pick; go(); });
+  document.getElementById("enTrain").addEventListener("click", () => { if (pick === null) return; seedBase += 7; go(); });
+  document.getElementById("enView").addEventListener("click", () => { overlay = !overlay; draw(); });
+  document.getElementById("enReset").addEventListener("click", () => { pick = null; res = null; verdict = null; overlay = false; draw(); });
+  quiz(document.getElementById("enQuiz"), { q: "Five ensemble members agree to within 1 kPa at a point 30 m from the nearest borehole. What does that tell you about the true strength there?", options: ["Little: agreement among members is a fact about the initializations and the architecture, and no calibration step tied it to the truth", "The true strength is known to within about 1 kPa", "The ensemble has recovered the Gaussian process posterior"], answer: 0, why: "An ensemble's spread is a useful heuristic, and it often widens where data is scarce, but nothing in training checks it against held-out truth. Treat it as a score to be calibrated, which is what the conformal wrap on the next tabs does." });
   window.addEventListener("themechange", draw); draw();
 })();
 
@@ -485,10 +647,12 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
   const ELL = 30, SF = 12, NUG = 1, MEAN = 50, MX0 = 100, MY0 = 40, SC = 4.6;
   const BASE = [[30, 30, 62], [40, 38, 58], [120, 20, 44], [160, 70, 70], [90, 80, 52], [60, 60, 48], [180, 25, 40]];
   let mine = [], target = [100, 50], drag = false, moved = false, seen = { screen: false, inside: false, far: false };
+  let cand = null, gateDone = false, gridRes = null, verdict = null;
   const px = x => MX0 + x * SC, py = y => MY0 + y * SC;
   const field = (x, y) => 50 + 10 * Math.sin(x / 40) + 8 * Math.cos(y / 25);
-  function solve() {
-    const all = BASE.concat(mine), n = all.length;
+  const GX = [20, 60, 100, 140, 180], GY = [10, 30, 50, 70, 90];
+  function solve(extra) {
+    const all = BASE.concat(mine, extra ? [extra] : []), n = all.length;
     const K = all.map(a => all.map(b => se((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2, ELL, SF * SF) + (a === b ? NUG * NUG : 0)));
     const k = all.map(a => se((a[0] - target[0]) ** 2 + (a[1] - target[1]) ** 2, ELL, SF * SF));
     const L = chol(K), w = cholSolve(L, k);
@@ -510,19 +674,35 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
     // crosshair
     const tx = px(target[0]), ty = py(target[1]); board.line([[tx - 14, ty], [tx + 14, ty]], css("--orange"), 2); board.line([[tx, ty - 14], [tx, ty + 14]], css("--orange"), 2);
     board.label("estimate " + S.est.toFixed(1) + " +/- " + S.sd.toFixed(1), tx, ty + S.sd * 5 + 16, css("--orange"), "center", 12, true);
+    const wsum = S.w.reduce((a, v) => a + v, 0);
+    board.label("sum of weights " + wsum.toFixed(2), tx, ty + S.sd * 5 + 32, css("--orange"), "center", 12, true);
+    // shrink grid from the lock-in, drawn on top so every value stays readable
+    if (gridRes) { GX.forEach((gx, i) => GY.forEach((gy, j) => { const v = gridRes.grid[i][j], f = Math.max(0, v / gridRes.best); const isBest = i === gridRes.bi && j === gridRes.bj; ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.1 + 0.6 * f); ctx.fillRect(px(gx) - 18, py(gy) - 9, 36, 18); ctx.strokeStyle = isBest ? css("--orange") : css("--line"); ctx.lineWidth = isBest ? 2.5 : 1; ctx.strokeRect(px(gx) - 18, py(gy) - 9, 36, 18); ctx.lineWidth = 1; board.label(v.toFixed(1), px(gx), py(gy) + 4, f > 0.5 ? "#fff" : css("--ink"), "center", 11, true); })); }
+    // candidate borehole awaiting the lock-in
+    if (cand) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.arc(px(cand[0]), py(cand[1]), 12, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; board.label("?", px(cand[0]), py(cand[1]) + 5, css("--orange"), "center", 14, true); board.label("your spot: lock it in", px(cand[0]), py(cand[1]) - 18, css("--orange"), "center", 12); }
     // legend
-    board.label("disc area: weight; blue positive, red negative; dashed ring: kriging standard deviation (5 px per kPa)", 100, 548, css("--muted"), "left", 12);
+    board.label(gridRes ? "squares: how much the ring shrinks (kPa) for one hole at each of 25 spots; orange: the best" : "disc area: weight; blue positive, red negative; dashed ring: kriging standard deviation (5 px per kPa)", 100, 548, css("--muted"), "left", 12);
     const minW = Math.min.apply(null, S.w); if (minW < -0.03) seen.screen = true; if (S.sd < 4) seen.inside = true; if (S.sd > 11) seen.far = true;
     document.getElementById("wtEst").textContent = S.est.toFixed(1) + " kPa"; document.getElementById("wtSd").textContent = S.sd.toFixed(1) + " kPa"; document.getElementById("wtSum").textContent = S.w.reduce((s, v) => s + v, 0).toFixed(2);
     badges(document.getElementById("wtBadges"), [{ text: "a negative weight (screening)", done: seen.screen }, { text: "ring under 4 kPa (inside the data)", done: seen.inside }, { text: "ring over 11 kPa (past the data)", done: seen.far }]);
     const pair = S.w[0] + S.w[1], lone = S.w[2];
-    stepEl.innerHTML = '<span class="k">reading the plan</span><p>The pair at the top left carries ' + pair.toFixed(2) + ' between them; the lone borehole at (120, 20) carries ' + lone.toFixed(2) + '. Drag the crosshair to a spot equally far from the pair and from that borehole and compare: the pair shares what one hole would have had.</p><p>To see screening, put the crosshair so that one borehole sits directly behind another, or add a borehole between the crosshair and an existing one. The hidden one goes red.</p><p>Sum of weights ' + S.w.reduce((s, v) => s + v, 0).toFixed(2) + ': under 1 inside the data means the estimate leans on the mean of 50; ordinary kriging would force the sum to 1 and widen the ring.</p>';
+    document.getElementById("wtLock").disabled = !(cand && !gateDone);
+    stepEl.innerHTML = '<p><b>Add one borehole. Where does the ring shrink most?</b></p>' + (gateDone ? verdict : (cand ? '<p>Spot marked at (' + cand[0] + ', ' + cand[1] + '). Press Lock in the spot; the page then scores a 5 by 5 grid of alternatives.</p>' : '<p>Click empty ground to mark the spot where you would drill. Move the crosshair first if you want the estimate somewhere else.</p>')) + '<span class="k">reading the plan</span><p>The pair at the top left carries ' + pair.toFixed(2) + ' between them; the lone borehole at (120, 20) carries ' + lone.toFixed(2) + '. Drag the crosshair to a spot equally far from the pair and from that borehole and compare: the pair shares what one hole would have had.</p><p>To see screening, put the crosshair so that one borehole sits directly behind another, or add a borehole between the crosshair and an existing one. The hidden one goes red.</p><p>Sum of weights ' + S.w.reduce((s, v) => s + v, 0).toFixed(2) + ': under 1 inside the data means the estimate leans on the mean of 50; ordinary kriging would force the sum to 1 and widen the ring.</p>';
   }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (Math.hypot(mx - px(target[0]), my - py(target[1])) < 24) { drag = true; moved = false; } });
-  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); target = [Math.max(0, Math.min(200, (mx - MX0) / SC)), Math.max(0, Math.min(100, (my - MY0) / SC))]; moved = true; draw(); });
-  window.addEventListener("mouseup", () => { drag = false; });
-  board.c.addEventListener("click", ev => { if (moved) { moved = false; return; } const [mx, my] = board.pos(ev); const x = (mx - MX0) / SC, y = (my - MY0) / SC; if (x < 0 || x > 200 || y < 0 || y > 100 || Math.hypot(mx - px(target[0]), my - py(target[1])) < 24 || mine.length >= 3) return; mine.push([Math.round(x), Math.round(y), Math.round(field(x, y))]); draw(); });
-  document.getElementById("wtReset").addEventListener("click", () => { mine = []; draw(); });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (Math.hypot(mx - px(target[0]), my - py(target[1])) < 24) { drag = true; moved = false; } });
+  window.addEventListener("pointermove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); target = [Math.max(0, Math.min(200, (mx - MX0) / SC)), Math.max(0, Math.min(100, (my - MY0) / SC))]; moved = true; draw(); });
+  window.addEventListener("pointerup", () => { drag = false; });
+  board.c.addEventListener("click", ev => { if (moved) { moved = false; return; } const [mx, my] = board.pos(ev); const x = (mx - MX0) / SC, y = (my - MY0) / SC; if (x < 0 || x > 200 || y < 0 || y > 100 || Math.hypot(mx - px(target[0]), my - py(target[1])) < 24 || mine.length >= 3) return; if (!gateDone) { cand = [Math.round(x), Math.round(y)]; draw(); return; } gridRes = null; mine.push([Math.round(x), Math.round(y), Math.round(field(x, y))]); draw(); });
+  document.getElementById("wtLock").addEventListener("click", () => {
+    if (!cand || gateDone) return;
+    const sd0 = solve().sd, shrinkAt = (x, y) => sd0 - solve([x, y, MEAN]).sd;
+    const grid = GX.map(gx => GY.map(gy => shrinkAt(gx, gy))); let bi = 0, bj = 0; GX.forEach((gx, i) => GY.forEach((gy, j) => { if (grid[i][j] > grid[bi][bj]) { bi = i; bj = j; } }));
+    const best = grid[bi][bj], mineShrink = shrinkAt(cand[0], cand[1]); const inCell = Math.abs(cand[0] - GX[bi]) <= 20 && Math.abs(cand[1] - GY[bj]) <= 10; const ok = inCell || mineShrink >= 0.85 * best;
+    gridRes = { grid, best, bi, bj };
+    verdict = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + 'Your spot shrinks the ring by ' + mineShrink.toFixed(1) + ' kPa; the best of the 25 grid spots, at (' + GX[bi] + ', ' + GY[bj] + '), shrinks it by ' + best.toFixed(1) + '. ' + (ok ? 'The hole that helps most sits on the crosshair itself, where the new reading is the quantity being estimated.' : 'A hole far from the crosshair, or beside an existing borehole, is largely redundant; the ring shrinks most for a hole on the crosshair.') + '</div>';
+    mine.push([cand[0], cand[1], Math.round(field(cand[0], cand[1]))]); cand = null; gateDone = true; draw();
+  });
+  document.getElementById("wtReset").addEventListener("click", () => { mine = []; cand = null; gateDone = false; gridRes = null; verdict = null; draw(); });
   quiz(document.getElementById("wtQuiz"), { q: "A borehole gets a weight of minus 0.08. Which statement is right?", options: ["The reading must have been an outlier", "It is hidden behind a nearer borehole as seen from the crosshair; the weights depend only on positions", "The kernel has a bug; weights are probabilities"], answer: 1, why: "Simple kriging weights solve K w = k* and never look at the readings. A borehole screened by a nearer one is partly redundant, and the solve corrects for the double counting with a small negative weight. Kriging is linear, but not a convex average." });
   window.addEventListener("themechange", draw); draw();
 })();
@@ -530,23 +710,22 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
 /* ================= 4. KEEP THE PROMISE ================= */
 (function promise() {
   const board = new Board(document.getElementById("prPlot")), stepEl = document.getElementById("prStep");
-  const NC = 60, NT = 100, SD_CLAY = 7.3, SD_SAND = 13, SD_CLAIM = 5.0, Z90 = 1.645, PRED = 42;
-  const CX0 = 40, CY0 = 60, CELL = 36, SX0 = 480, SX1 = 1160, SY0 = 60, SY1 = 400, SCALE_Y = 470, MAPY = 440;
-  const rngC = mulberry32(51), rngT = mulberry32(120), rngS = mulberry32(16);
+  const NC = 60, NT = 100, SD_CLAY = 7.3, SD_CLAIM = 5.0, Z90 = 1.645, PRED = 42;
+  const CX0 = 40, CY0 = 60, CELL = 36, SX0 = 480, SX1 = 1160, SY0 = 60, SY1 = 400, SCALE_Y = 470;
+  const rngC = mulberry32(51), rngT = mulberry32(120);
   const calib = []; for (let i = 0; i < NC; i++) calib.push(Math.abs(SD_CLAY * gauss(rngC)));
   const sorted = calib.slice().sort((a, b) => a - b);
-  const testClay = [], testSand = []; for (let i = 0; i < NT; i++) { testClay.push(SD_CLAY * gauss(rngT)); testSand.push(SD_SAND * gauss(rngS)); }
-  let step = 1, bet = null, half = Z90 * SD_CLAIM, rank = 40, region = "clay", flipped = 0, anim = null, dragCut = false, caught = null;
-  const test = () => region === "clay" ? testClay : testSand;
+  const T = []; for (let i = 0; i < NT; i++) T.push(SD_CLAY * gauss(rngT));
+  let step = 1, bet = null, half = Z90 * SD_CLAIM, rank = 40, flipped = 0, anim = null, dragCut = false, caught = null;
   function draw() {
-    const ctx = board.ctx, T = test();
-    board.clear(step === 1 ? "the model's own 90 percent band: bet on the catches, then flip" : (step === 2 ? "the conformal band: drag the cut through the sorted calibration residuals" : "exchangeability: choose the region to test on, then flip"));
+    const ctx = board.ctx;
+    board.clear(step === 1 ? "the model's own 90 percent band: bet on the catches, then flip" : "the conformal band: drag the cut through the sorted calibration residuals");
     // cards
     for (let i = 0; i < NT; i++) { const r = Math.floor(i / 10), c = i % 10, x = CX0 + c * CELL, y = CY0 + r * CELL; const on = i < flipped; const hit = Math.abs(T[i]) <= half; ctx.fillStyle = on ? (hit ? "#2E7D5B" : css("--red")) : css("--bg"); ctx.fillRect(x + 2, y + 2, CELL - 4, CELL - 4); ctx.strokeStyle = css("--line"); ctx.strokeRect(x + 2, y + 2, CELL - 4, CELL - 4); if (on) board.label(hit ? "ok" : "miss", x + CELL / 2, y + CELL / 2 + 4, "#fff", "center", 10, true); }
-    board.label("100 held-out cases from the " + region + " region", CX0, CY0 - 10, css("--ink"), "left", 12);
+    board.label("100 held-out cases from the clay region", CX0, CY0 - 10, css("--ink"), "left", 12);
     board.label(flipped > 0 ? "caught " + caught + " of " + flipped : "unflipped", CX0, CY0 + 10 * CELL + 18, css("--ink"), "left", 13, true);
     // bet scale (step 1)
-    if (step === 1) { board.line([[CX0, SCALE_Y], [CX0 + 10 * CELL, SCALE_Y]], css("--ink"), 1.5); for (let v = 50; v <= 100; v += 10) { const x = CX0 + (v - 50) / 50 * 10 * CELL; board.line([[x, SCALE_Y - 6], [x, SCALE_Y + 6]], css("--ink")); board.label(String(v), x, SCALE_Y + 22, css("--muted"), "center", 11, true); } board.label("click the scale: how many of the 100 will the band catch?", CX0, SCALE_Y - 14, css("--muted"), "left", 12); if (bet !== null) { const x = CX0 + (bet - 50) / 50 * 10 * CELL; ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.moveTo(x, SCALE_Y - 2); ctx.lineTo(x - 7, SCALE_Y - 14); ctx.lineTo(x + 7, SCALE_Y - 14); ctx.closePath(); ctx.fill(); board.label("your bet " + bet, x, SCALE_Y - 20, css("--orange"), "center", 12, true); } }
+    if (step === 1) { board.line([[CX0, SCALE_Y], [CX0 + 10 * CELL, SCALE_Y]], css("--ink"), 1.5); for (let v = 50; v <= 100; v += 10) { const x = CX0 + (v - 50) / 50 * 10 * CELL; board.line([[x, SCALE_Y - 6], [x, SCALE_Y + 6]], css("--ink")); board.label(String(v), x, SCALE_Y + 22, css("--muted"), "center", 11, true); } if (bet === null) board.label("click the scale: how many of the 100 will the band catch?", CX0, SCALE_Y - 14, css("--muted"), "left", 12); if (bet !== null) { const x = CX0 + (bet - 50) / 50 * 10 * CELL; ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.moveTo(x, SCALE_Y - 2); ctx.lineTo(x - 7, SCALE_Y - 14); ctx.lineTo(x + 7, SCALE_Y - 14); ctx.closePath(); ctx.fill(); board.label("your bet " + bet, x, SCALE_Y - 20, css("--orange"), "center", 12, true); } }
     // staircase
     const bw = (SX1 - SX0) / NC, qmax = sorted[NC - 1] * 1.08, sy = v => SY1 - (SY1 - SY0) * v / qmax;
     board.label(step === 1 ? "sixty calibration residuals, sorted (not yet in use)" : "sixty calibration residuals |y - yhat|, sorted: the staircase", SX0, SY0 - 10, css("--ink"), "left", 12);
@@ -556,29 +735,78 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
     board.label("rank", SX1 + 4, SY1 + 16, css("--muted"), "left", 11);
     if (step >= 2) { const cx = SX0 + rank * bw; board.line([[cx, SY0 - 4], [cx, SY1 + 4]], css("--orange"), 2.5); ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(cx, SY0 - 4, 7, 0, 2 * Math.PI); ctx.fill(); board.line([[SX0, sy(sorted[rank - 1])], [cx, sy(sorted[rank - 1])]], css("--orange"), 1, [4, 3]); const right = cx > 860; board.label("cut at rank " + rank + ": promise " + (100 * rank / (NC + 1)).toFixed(0) + " %, half width " + sorted[rank - 1].toFixed(1) + " mm", right ? cx - 10 : cx + 8, SY0 + 10, css("--orange"), right ? "right" : "left", 12, true); }
     else { board.line([[SX0, sy(half)], [SX1, sy(half)]], css("--red"), 1.5, [5, 4]); board.label("the model's claimed half width " + half.toFixed(1) + " mm", SX1, sy(half) - 6, css("--red"), "right", 12, true); }
-    // region map (step 3)
-    if (step === 3) { const tiles = [["clay", SX0, "calibrated here"], ["sand", SX0 + 240, "stiffer, noisier"]]; tiles.forEach(t => { const on = region === t[0]; ctx.fillStyle = on ? alpha(css("--blue"), 0.18) : css("--bg"); ctx.fillRect(t[1], MAPY, 220, 90); ctx.strokeStyle = on ? css("--blue") : css("--line"); ctx.lineWidth = on ? 2 : 1; ctx.strokeRect(t[1], MAPY, 220, 90); ctx.lineWidth = 1; board.label(t[0] + " region", t[1] + 12, MAPY + 26, css("--ink"), "left", 14); board.label(t[2], t[1] + 12, MAPY + 48, css("--muted"), "left", 12); board.label(on ? "testing here" : "click to test here", t[1] + 12, MAPY + 74, on ? css("--blue") : css("--muted"), "left", 12, true); }); }
+    if (step === 2) board.label("the next tab applies this band in another region", SX0, SY1 + 60, css("--muted"), "left", 12);
     // readouts
     document.getElementById("prBet").textContent = bet === null ? "-" : bet + " of 100"; document.getElementById("prCaught").textContent = flipped > 0 ? caught + " of " + flipped : "-"; document.getElementById("prWidth").textContent = "+/- " + half.toFixed(1) + " mm"; document.getElementById("prRank").textContent = step >= 2 ? rank + " / " + (100 * rank / (NC + 1)).toFixed(0) + " %" : "-";
     const rep = document.getElementById("prReport");
     if (step === 1) rep.innerHTML = "Predicted settlement <b>42 mm</b>, 90 percent interval <b>" + (PRED - half).toFixed(0) + " to " + (PRED + half).toFixed(0) + " mm</b>, from the model's own noise estimate, " + (flipped === NT ? "checked on 100 held-out cases: caught <b>" + caught + "</b>." : "unchecked.");
-    else rep.innerHTML = "Predicted settlement <b>42 mm</b>, <b>" + (100 * rank / (NC + 1)).toFixed(0) + " percent</b> interval <b>" + (PRED - half).toFixed(0) + " to " + (PRED + half).toFixed(0) + " mm</b>, conformal, calibrated on 60 held-out points from the clay region" + (step === 3 && region === "sand" ? ", applied in the sand region" : "") + (flipped === NT ? "; checked: caught <b>" + caught + "</b> of 100." : ".");
+    else rep.innerHTML = "Predicted settlement <b>42 mm</b>, <b>" + (100 * rank / (NC + 1)).toFixed(0) + " percent</b> interval <b>" + (PRED - half).toFixed(0) + " to " + (PRED + half).toFixed(0) + " mm</b>, conformal, calibrated on 60 held-out points from the clay region" + (flipped === NT ? "; checked: caught <b>" + caught + "</b> of 100." : ".");
     let txt;
-    if (step === 1) txt = flipped === 0 ? '<span class="k">step 1 of 3</span><p>The model fitted its own noise level and reports a 90 percent band of +/- ' + half.toFixed(1) + ' mm. Bet on the catches, then flip.</p>' : (flipped < NT ? '<span class="k">flipping</span><p>Green caught, red missed.</p>' : '<span class="k">counted</span><p>' + caught + ' of 100, against a promise of 90 and your bet of ' + bet + '. The fitted noise was too small, and nothing in the fit said so. Only the count does. Next step wraps the model.</p>');
-    else if (step === 2) txt = '<span class="k">step 2 of 3</span><p>Drag the orange cut. Rank k promises k over 61 and charges the k-th residual as half width. Put it where the promise reads 90, then flip. The last few steps of the staircase are where the width climbs: that is the price of 99.</p>' + (flipped === NT ? '<p>Caught ' + caught + ' of 100 with half width ' + half.toFixed(1) + ' mm. The promise is ' + (100 * rank / (NC + 1)).toFixed(0) + ' percent and it holds up to sampling noise.</p>' : '');
-    else txt = '<span class="k">step 3 of 3</span><p>The cut stays where you left it (rank ' + rank + '). Click the sand region and flip. The calibration residuals came from clay; the sand residuals are larger, the cases are no longer exchangeable, and the promise is void.</p>' + (flipped === NT ? '<p>Caught ' + caught + ' of 100 in the ' + region + ' region.' + (region === "sand" ? ' Week 2 says to calibrate on data drawn the way the test data will be, or to split calibration by region.' : '') + '</p>' : '');
+    if (step === 1) { txt = '<p><b>Will 90 of these 100 cards land inside the claimed band? Bet.</b></p>'; if (flipped === 0) txt += '<span class="k">step 1 of 2</span><p>The model fitted its own noise level and reports a 90 percent band of +/- ' + half.toFixed(1) + ' mm. Click the scale to bet on the catches; the cards flip only after a bet.</p>'; else if (flipped < NT) txt += '<span class="k">flipping</span><p>Green caught, red missed.</p>'; else { const ok = Math.abs(bet - caught) <= 10; txt += '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + 'The band caught ' + caught + ' of 100 against a promise of 90 and your bet of ' + bet + '. The fitted noise was too small, and nothing in the fit said so; only the count does.</div><p>Next step wraps the model.</p>'; } }
+    else txt = '<span class="k">step 2 of 2</span><p>Drag the orange cut. Rank k promises k over 61 and charges the k-th residual as half width. Put it where the promise reads 90, then flip. The last few steps of the staircase are where the width climbs: that is the price of 99.</p>' + (flipped === NT ? '<p>Caught ' + caught + ' of 100 with half width ' + half.toFixed(1) + ' mm. The promise is ' + (100 * rank / (NC + 1)).toFixed(0) + ' percent and it holds up to sampling noise. The Change the region tab carries this band to the sand.</p>' : '');
     stepEl.innerHTML = txt;
     document.getElementById("prFlip").disabled = (step === 1 && bet === null) || (anim !== null);
-    document.getElementById("prNext").disabled = !(flipped === NT && step < 3);
+    document.getElementById("prNext").disabled = !(flipped === NT && step < 2);
   }
-  function flip() { if (anim) return; flipped = 0; caught = 0; const T = test(); const tick = () => { if (flipped >= NT) { anim = null; draw(); return; } if (Math.abs(T[flipped]) <= half) caught++; flipped++; draw(); anim = setTimeout(tick, 28); }; anim = setTimeout(tick, 10); }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (step >= 2 && Math.abs(mx - (SX0 + rank * (SX1 - SX0) / NC)) < 16 && my >= SY0 - 16 && my <= SY1 + 8) { dragCut = true; return; } if (step === 1 && my > SCALE_Y - 24 && my < SCALE_Y + 26 && mx >= CX0 && mx <= CX0 + 10 * CELL) { bet = Math.round(50 + (mx - CX0) / (10 * CELL) * 50); draw(); } if (step === 3 && my >= MAPY && my <= MAPY + 90) { if (mx >= SX0 && mx <= SX0 + 220) region = "clay"; else if (mx >= SX0 + 240 && mx <= SX0 + 460) region = "sand"; else return; flipped = 0; caught = null; draw(); } });
-  window.addEventListener("mousemove", ev => { if (!dragCut) return; const [mx] = board.pos(ev); const r = Math.max(1, Math.min(NC, Math.round((mx - SX0) / ((SX1 - SX0) / NC)))); if (r !== rank) { rank = r; half = sorted[rank - 1]; flipped = 0; caught = null; draw(); } });
-  window.addEventListener("mouseup", () => { dragCut = false; });
+  function flip() { if (anim) return; flipped = 0; caught = 0; const tick = () => { if (flipped >= NT) { anim = null; draw(); return; } if (Math.abs(T[flipped]) <= half) caught++; flipped++; draw(); anim = setTimeout(tick, 28); }; anim = setTimeout(tick, 10); }
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (step >= 2 && Math.abs(mx - (SX0 + rank * (SX1 - SX0) / NC)) < 16 && my >= SY0 - 16 && my <= SY1 + 8) { dragCut = true; return; } if (step === 1 && flipped === 0 && my > SCALE_Y - 24 && my < SCALE_Y + 26 && mx >= CX0 && mx <= CX0 + 10 * CELL) { bet = Math.round(50 + (mx - CX0) / (10 * CELL) * 50); draw(); } });
+  window.addEventListener("pointermove", ev => { if (!dragCut) return; const [mx] = board.pos(ev); const r = Math.max(1, Math.min(NC, Math.round((mx - SX0) / ((SX1 - SX0) / NC)))); if (r !== rank) { rank = r; half = sorted[rank - 1]; flipped = 0; caught = null; draw(); } });
+  window.addEventListener("pointerup", () => { dragCut = false; });
   document.getElementById("prFlip").addEventListener("click", flip);
-  document.getElementById("prNext").addEventListener("click", () => { if (step === 1) { step = 2; half = sorted[rank - 1]; } else if (step === 2) { step = 3; } flipped = 0; caught = null; draw(); });
-  document.getElementById("prRestart").addEventListener("click", () => { if (anim) { clearTimeout(anim); anim = null; } step = 1; bet = null; half = Z90 * SD_CLAIM; rank = 40; region = "clay"; flipped = 0; caught = null; draw(); });
-  quiz(document.getElementById("prQuiz"), { q: "The conformal band caught 89 of 100 in the clay region and 63 of 100 in the sand region. What failed in the sand?", options: ["The model: it needs retraining on sand", "The guarantee's one assumption: sand cases are not exchangeable with the clay calibration cases", "The quantile: 90 percent needs rank 60"], answer: 1, why: "The conformal guarantee is distribution-free but not assumption-free. It needs the test case to be exchangeable with the calibration cases, and sand residuals are drawn from a wider distribution than clay residuals. Calibrate on sand, or on a mix drawn the way the deployment will be." });
+  document.getElementById("prNext").addEventListener("click", () => { if (step === 1) { step = 2; half = sorted[rank - 1]; } flipped = 0; caught = null; draw(); });
+  document.getElementById("prRestart").addEventListener("click", () => { if (anim) { clearTimeout(anim); anim = null; } step = 1; bet = null; half = Z90 * SD_CLAIM; rank = 40; flipped = 0; caught = null; draw(); });
+  quiz(document.getElementById("prQuiz"), { q: "The cut sits at rank 55 of 60 and promises 90 percent. Moving it to rank 60 promises 98 percent. What else changes?", options: ["Nothing: the band is the same, only the label moves", "The half width jumps to the largest calibration residual, so the last eight points of coverage cost more width than the first ninety", "The model is refitted on the calibration set"], answer: 1, why: "The half width is the k-th sorted residual. The staircase is steep at the top because the largest residuals are rare and far apart, so the final points of coverage are bought with the biggest increase in width. Conformal wrapping never touches the model." });
+  window.addEventListener("themechange", draw); draw();
+})();
+
+/* ================= 4b. CHANGE THE REGION ================= */
+(function shift() {
+  const board = new Board(document.getElementById("shPlot")), stepEl = document.getElementById("shStep");
+  const NC = 60, NT = 100, SD_CLAY = 7.3, SD_SAND = 13;
+  const rngC = mulberry32(51), rngT = mulberry32(120), rngS = mulberry32(16);
+  const calib = []; for (let i = 0; i < NC; i++) calib.push(Math.abs(SD_CLAY * gauss(rngC)));
+  const sorted = calib.slice().sort((a, b) => a - b);
+  const clay = [], sand = []; for (let i = 0; i < NT; i++) { clay.push(SD_CLAY * gauss(rngT)); sand.push(SD_SAND * gauss(rngS)); }
+  const TILES = [{ key: "clay", x: 40, label: "clay region: calibrated here", data: clay }, { key: "sand", x: 330, label: "sand region: stiffer, noisier", data: sand }];
+  const TY = 70, CELL = 24, GX0 = 680, GX1 = 1150, GY0 = 70, GY1 = 440, WMAX = 32;
+  let pick = null, flipped = 0, anim = null, half = sorted[54], dragW = false;
+  const gx = c => GX0 + (GX1 - GX0) * c / 100, gy = w => GY1 - (GY1 - GY0) * w / WMAX;
+  const count = d => d.reduce((s, v) => s + (Math.abs(v) <= half ? 1 : 0), 0);
+  const promised = () => { let k = 0; while (k < NC && sorted[k] <= half) k++; return 100 * k / (NC + 1); };
+  function draw() {
+    const ctx = board.ctx; board.clear(pick === null ? "two regions, one band: commit on the right before the tiles flip" : "two regions, one band: drag the orange width line and watch both coverages");
+    // tiles
+    TILES.forEach(t => { const n = count(t.data); board.label(t.label, t.x, TY - 10, css("--ink"), "left", 12); for (let i = 0; i < NT; i++) { const r = Math.floor(i / 10), c = i % 10, x = t.x + c * CELL, y = TY + r * CELL; const on = i < flipped; const hit = Math.abs(t.data[i]) <= half; ctx.fillStyle = on ? (hit ? "#2E7D5B" : css("--red")) : css("--bg"); ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2); ctx.strokeStyle = css("--line"); ctx.strokeRect(x + 1, y + 1, CELL - 2, CELL - 2); } board.label(flipped === NT ? "caught " + n + " of 100" : (flipped > 0 ? "flipping" : "face down"), t.x, TY + 10 * CELL + 20, flipped === NT ? (n >= 85 ? "#2E7D5B" : css("--red")) : css("--muted"), "left", 14, true); });
+    board.label("one hundred held-out cards per region, flipped against the same band", 40, TY + 10 * CELL + 46, css("--muted"), "left", 12);
+    // width-against-coverage curve
+    board.label("width against coverage: the sorted clay calibration residuals", GX0, GY0 - 10, css("--ink"), "left", 12);
+    board.line([[GX0, GY1], [GX1, GY1]], css("--line")); board.line([[GX0, GY0], [GX0, GY1]], css("--line"));
+    for (let c = 0; c <= 100; c += 20) board.label(c + " %", gx(c), GY1 + 16, css("--muted"), "center", 11, true);
+    for (let w = 0; w <= WMAX; w += 8) board.label(w + " mm", GX0 - 6, gy(w) + 4, css("--muted"), "right", 11, true);
+    board.label("coverage", (GX0 + GX1) / 2, GY1 + 34, css("--muted"), "center", 12); board.label("half width", GX0 + 6, GY0 + 4, css("--muted"), "left", 12);
+    const pts = sorted.map((v, k) => [gx(100 * (k + 1) / (NC + 1)), gy(Math.min(WMAX, v))]); board.line([[gx(0), gy(0)]].concat(pts), css("--blue"), 2);
+    board.line([[gx(90), GY0], [gx(90), GY1]], css("--grey"), 1, [4, 3]); board.label("90 % promised", gx(90), GY0 + 14, css("--muted"), "center", 11);
+    // width line and the two coverage dots
+    const wy = gy(Math.min(WMAX, half)); board.line([[GX0, wy], [GX1, wy]], css("--orange"), 2.5); ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(GX1, wy, 7, 0, 2 * Math.PI); ctx.fill();
+    board.label("half width " + half.toFixed(1) + " mm, promise " + promised().toFixed(0) + " % (drag)", GX0 + 8, wy < GY0 + 24 ? wy + 18 : wy - 8, css("--orange"), "left", 12, true);
+    if (pick !== null && flipped === NT) TILES.forEach((t, i) => { const n = count(t.data); const x = gx(n); ctx.fillStyle = i === 0 ? css("--blue") : css("--red"); ctx.beginPath(); ctx.arc(x, wy, 7, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--panel"); ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1; board.label(t.key + " " + n + " %", x, wy + (i === 0 ? 24 : 40), i === 0 ? css("--blue") : css("--red"), "center", 12, true); });
+    board.label(pick === null ? "coverage dots appear after the tiles flip" : "dots: coverage of each region at this width", GX0, GY1 + 56, css("--muted"), "left", 12);
+    // readouts
+    document.getElementById("shWidth").textContent = "+/- " + half.toFixed(1) + " mm"; document.getElementById("shProm").textContent = promised().toFixed(0) + " %";
+    document.getElementById("shClay").textContent = flipped === NT ? count(clay) + " of 100" : "-"; document.getElementById("shSand").textContent = flipped === NT ? count(sand) + " of 100" : "-";
+    let txt = '<p><b>The band calibrated on clay is applied to sand: coverage above or below 90 percent?</b></p>';
+    if (pick === null) txt += '<div class="btns" style="margin:8px 0"><button class="primary" data-pick="above">Above 90</button><button class="primary" data-pick="below">Below 90</button></div><p>The cut from the previous tab sits at rank 55: half width ' + half.toFixed(1) + ' mm, promise 90 percent on clay. Commit, and both tiles flip.</p>';
+    else if (flipped < NT) txt += '<span class="k">flipping</span><p>Green caught, red missed, both regions at once.</p>';
+    else { const ns = count(sand), ok = pick === "below"; txt += '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + 'Clay caught ' + count(clay) + ' of 100, sand ' + ns + '. The sand residuals have a standard deviation of 13 mm against 7.3 on clay, so the cases are not exchangeable with the calibration set and the promise does not transfer.</div><p>Drag the orange line. Widening the band until the sand dot reaches 90 shows the price the clay calibration never quoted.</p>'; }
+    stepEl.innerHTML = txt;
+  }
+  function flip() { if (anim) return; flipped = 0; const tick = () => { if (flipped >= NT) { anim = null; draw(); return; } flipped += 2; if (flipped > NT) flipped = NT; draw(); anim = setTimeout(tick, 24); }; anim = setTimeout(tick, 10); }
+  stepEl.addEventListener("click", ev => { const b = ev.target && ev.target.closest ? ev.target.closest("button[data-pick]") : null; if (!b || pick !== null) return; pick = b.dataset.pick; draw(); flip(); });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (mx >= GX0 - 10 && mx <= GX1 + 12 && Math.abs(my - gy(Math.min(WMAX, half))) < 14) { dragW = true; try { board.c.setPointerCapture(ev.pointerId); } catch (e) {} } });
+  board.c.addEventListener("pointermove", ev => { if (!dragW) return; const [, my] = board.pos(ev); half = Math.max(0.5, Math.min(WMAX, (GY1 - my) / (GY1 - GY0) * WMAX)); draw(); });
+  const stopDrag = () => { dragW = false; }; board.c.addEventListener("pointerup", stopDrag); board.c.addEventListener("pointercancel", stopDrag);
+  document.getElementById("shReset").addEventListener("click", () => { if (anim) { clearTimeout(anim); anim = null; } pick = null; flipped = 0; half = sorted[54]; draw(); });
+  quiz(document.getElementById("shQuiz"), { q: "The conformal band caught 89 of 100 in the clay region and 63 of 100 in the sand region. What failed in the sand?", options: ["The model: it needs retraining on sand", "The guarantee's one assumption: sand cases are not exchangeable with the clay calibration cases", "The quantile: 90 percent needs rank 60"], answer: 1, why: "The conformal guarantee is distribution-free but not assumption-free. It needs the test case to be exchangeable with the calibration cases, and sand residuals are drawn from a wider distribution than clay residuals. Calibrate on sand, or on a mix drawn the way the deployment will be." });
   window.addEventListener("themechange", draw); draw();
 })();
 
@@ -599,7 +827,7 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
   function decodeAE(z) { const b = base(z), h = hAE(z); return b.map((v, i) => v + h[0] * rough[0][i] + h[1] * rough[1][i] + h[2] * rough[2][i]); }
   function decodeVAE(z) { return base([z[0] / 0.45, z[1] / 0.45]); }
   function roughness(y) { let s = 0; for (let i = 1; i < NP - 1; i++) s += (y[i + 1] - 2 * y[i] + y[i - 1]) ** 2; return 100 * Math.sqrt(s / (NP - 2)); }
-  let hover = null, marks = { ae: [], vae: [] }, grid = false, found = 0, foundV = 0;
+  let hover = null, marks = { ae: [], vae: [] }, grid = false, found = 0, foundV = 0, pred = null, pending = null, last = null, verdict = null;
   const toPx = (b, z) => [b.W / 2 + z[0] * (b.W / 2 - 20) / R, b.H / 2 - z[1] * (b.H / 2 - 20) / R], toZ = (b, p) => [(p[0] - b.W / 2) * R / (b.W / 2 - 20), -(p[1] - b.H / 2) * R / (b.H / 2 - 20)];
   function mini(b, y, cx, cy, w, h, color) { const mx = 1.2; b.line(y.map((v, i) => [cx - w / 2 + w * i / (NP - 1), cy + h / 2 - h * Math.min(1.4, v) / mx]), color, 1.2); }
   function drawMap(b, train, decode, name, key) {
@@ -608,24 +836,30 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
     if (grid) for (let gi = 0; gi < 6; gi++) for (let gj = 0; gj < 6; gj++) { const z = [-2.5 + 5 * gi / 5, -2.5 + 5 * gj / 5]; const p = toPx(b, z), y = decode(z), r = roughness(y); mini(b, y, p[0], p[1], 60, 40, r > THR ? css("--red") : alpha(css("--ink"), 0.55)); }
     train.forEach(z => { const p = toPx(b, z); ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(p[0], p[1], 4, 0, 2 * Math.PI); ctx.fill(); });
     marks[key].forEach(m => { const p = toPx(b, m.z); b.label(m.hole ? "x" : "o", p[0], p[1] + 6, m.hole ? css("--red") : "#2E7D5B", "center", 18, true); });
+    if (pending && pending.key === key) { const p = toPx(b, pending.z); b.label("?", p[0], p[1] + 7, css("--orange"), "center", 20, true); b.label("commit on the right to decode", p[0], p[1] - 14, css("--orange"), "center", 12); }
     if (hover && hover.key === key) { const p = toPx(b, hover.z); ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p[0], p[1], 8, 0, 2 * Math.PI); ctx.stroke(); ctx.lineWidth = 1; }
     b.label("z1", b.W - 24, b.H - 26, css("--muted"), "right", 11, true); b.label("z2", 26, 34, css("--muted"), "left", 11, true);
   }
   function drawDec() {
-    bDec.clear(hover ? "decoded profile at z = (" + hover.z[0].toFixed(2) + ", " + hover.z[1].toFixed(2) + ") on the " + (hover.key === "ae" ? "autoencoder" : "VAE") + " map" : "move the mouse over a map to decode a point");
-    const y = hover ? (hover.key === "ae" ? decodeAE(hover.z) : decodeVAE(hover.z)) : null; const X0 = 60, X1 = 1160, Y0 = 40, Y1 = 180;
+    bDec.clear(pred === null ? "the decoder answers once you have committed: a field or a mess" : (hover ? "decoded profile at z = (" + hover.z[0].toFixed(2) + ", " + hover.z[1].toFixed(2) + ") on the " + (hover.key === "ae" ? "autoencoder" : "VAE") + " map" : "move the mouse over a map to decode a point"));
+    const y = hover && pred !== null ? (hover.key === "ae" ? decodeAE(hover.z) : decodeVAE(hover.z)) : null; const X0 = 60, X1 = 1160, Y0 = 40, Y1 = 180;
     bDec.line([[X0, Y1], [X1, Y1]], css("--line")); bDec.label("position along the member", (X0 + X1) / 2, Y1 + 16, css("--muted"), "center", 11); bDec.label("strain", X0 - 8, Y0 + 10, css("--muted"), "right", 11);
+    if (last && pred !== null) { bDec.label("roughness " + last.r.toFixed(1), X0 + 12, Y0 + 30, last.hole ? css("--red") : "#2E7D5B", "left", 22, true); bDec.label(last.hole ? "a hole: the last click decoded to a mess" : "field-like: the last click decoded to a field", X0 + 12, Y0 + 50, last.hole ? css("--red") : "#2E7D5B", "left", 12); }
     if (y) { const r = roughness(y); bDec.line(y.map((v, i) => [X0 + (X1 - X0) * i / (NP - 1), Y1 - (Y1 - Y0) * Math.max(-0.2, Math.min(1.4, v)) / 1.4]), r > THR ? css("--red") : css("--blue"), 2); bDec.label("roughness " + r.toFixed(1) + (r > THR ? " : a hole" : " : field-like"), X1, Y0 + 4, r > THR ? css("--red") : css("--blue"), "right", 12, true); document.getElementById("hoRough").textContent = r.toFixed(1); }
   }
   function drawAll() { drawMap(bAE, trainAE, decodeAE, "autoencoder latent map, forty training embeddings", "ae"); drawMap(bVAE, trainVAE, decodeVAE, "variational autoencoder latent map, the same forty fields", "vae"); drawDec(); document.getElementById("hoFound").textContent = found + " of 3"; document.getElementById("hoFoundV").textContent = String(foundV);
-    stepEl.innerHTML = found < 3 ? '<span class="k">hunt</span><p>Hover to decode; the profile turns red where it is rough. Click three holes on the autoencoder map. Hint: the holes are between the clusters, where no training field ever told the decoder what to do.</p><p>Then click the same kind of spot on the VAE map, inside the dashed prior, and see what you get.</p>' : '<span class="k">found</span><p>Three holes on the autoencoder side; ' + foundV + ' on the VAE side after ' + marks.vae.length + ' tries. Decode a grid on both maps: the autoencoder grid shows red profiles in the gaps, the VAE grid is field-like across the prior, and neighbours decode to neighbours.</p>'; }
+    document.getElementById("hoGrid").disabled = pred === null;
+    const head = '<p><b>Click between two clusters on the left map. Will the decode be a field or a mess?</b></p>' + (pred === null ? '<div class="btns" style="margin:8px 0"><button class="primary" data-pred="field">A field</button><button class="primary" data-pred="mess">A mess</button></div><p>' + (pending ? 'Your click is marked. Commit to see what it decodes to.' : 'Commit first, or click the map and then commit; the decode stays hidden until you do.') + '</p>' : (verdict || '<p>Committed: ' + (pred === "field" ? 'a field' : 'a mess') + '. Now click between two clusters on the autoencoder map.</p>'));
+    stepEl.innerHTML = head + (found < 3 ? '<span class="k">hunt</span><p>Hover to decode; the profile turns red where it is rough. Click three holes on the autoencoder map. Hint: the holes are between the clusters, where no training field ever told the decoder what to do.</p><p>Then click the same kind of spot on the VAE map, inside the dashed prior, and see what you get.</p>' : '<span class="k">found</span><p>Three holes on the autoencoder side; ' + foundV + ' on the VAE side after ' + marks.vae.length + ' tries. Decode a grid on both maps: the autoencoder grid shows red profiles in the gaps, the VAE grid is field-like across the prior, and neighbours decode to neighbours.</p>'); }
   function attach(b, key, decode) {
-    b.c.addEventListener("mousemove", ev => { const [mx, my] = b.pos(ev); const z = toZ(b, [mx, my]); if (Math.abs(z[0]) > R || Math.abs(z[1]) > R) return; hover = { key, z }; drawAll(); });
-    b.c.addEventListener("click", ev => { const [mx, my] = b.pos(ev); const z = toZ(b, [mx, my]); if (Math.abs(z[0]) > R || Math.abs(z[1]) > R) return; const r = roughness(decode(z)); const hole = r > THR; marks[key].push({ z, hole }); if (key === "ae" && hole) found = Math.min(3, found + 1); if (key === "vae" && hole) foundV++; drawAll(); });
+    b.c.addEventListener("pointermove", ev => { const [mx, my] = b.pos(ev); const z = toZ(b, [mx, my]); if (Math.abs(z[0]) > R || Math.abs(z[1]) > R) return; hover = { key, z }; drawAll(); });
+    b.c.addEventListener("click", ev => { const [mx, my] = b.pos(ev); const z = toZ(b, [mx, my]); if (Math.abs(z[0]) > R || Math.abs(z[1]) > R) return; if (pred === null) { pending = { key, z }; drawAll(); return; } test(key, z); drawAll(); });
   }
+  function test(key, z) { const decode = key === "ae" ? decodeAE : decodeVAE; const r = roughness(decode(z)); const hole = r > THR; marks[key].push({ z, hole }); last = { key, z, r, hole }; if (key === "ae" && hole) found = Math.min(3, found + 1); if (key === "vae" && hole) foundV++; if (verdict === null && pred !== null) { const ok = (pred === "mess") === hole; verdict = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + 'The first click decoded with roughness ' + r.toFixed(1) + ', ' + (hole ? 'above the hole threshold of 3: a mess. ' : 'below the hole threshold of 3: still a field. ') + (key === "ae" ? 'Between clusters nothing pinned the autoencoder\'s decoder, so what comes out there is whatever the training left behind; about half of that map is hole.' : 'This was the VAE map, where the prior term keeps the blobs overlapping and the decode field-like inside the dashed prior.') + '</div>'; } }
   attach(bAE, "ae", decodeAE); attach(bVAE, "vae", decodeVAE);
+  stepEl.addEventListener("click", ev => { const b = ev.target && ev.target.closest ? ev.target.closest("button[data-pred]") : null; if (!b || pred !== null) return; pred = b.dataset.pred; if (pending) { test(pending.key, pending.z); pending = null; } drawAll(); });
   document.getElementById("hoGrid").addEventListener("click", () => { grid = !grid; drawAll(); });
-  document.getElementById("hoReset").addEventListener("click", () => { marks = { ae: [], vae: [] }; found = 0; foundV = 0; grid = false; hover = null; drawAll(); });
+  document.getElementById("hoReset").addEventListener("click", () => { marks = { ae: [], vae: [] }; found = 0; foundV = 0; grid = false; hover = null; pred = null; pending = null; last = null; verdict = null; drawAll(); });
   quiz(document.getElementById("hoQuiz"), { q: "Which term of the VAE objective is responsible for the map having no holes inside the prior?", options: ["The reconstruction term: it forces every point to decode well", "The KL term: it pulls every encoder blob toward the unit Gaussian and gives it spread, so the blobs cover the prior", "Neither; a two-dimensional latent space never has holes"], answer: 1, why: "Reconstruction alone is the autoencoder, holes included. The KL term is what crowds the blobs into the prior and gives each one a spread, so that any point the prior is likely to draw sits inside some blob and decodes to that blob's field or a neighbour of it." });
   window.addEventListener("themechange", drawAll); drawAll();
 })();
@@ -639,7 +873,7 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
   const fields = [[0.25, 0.9], [0.5, 0.7], [0.75, 0.9], [0.35, 0.5], [0.65, 0.5], [0.5, 1.1]].map(f => S.map(s => 0.1 + f[1] * Math.exp(-((s - f[0]) ** 2) / (2 * 0.07 * 0.07))));
   const meanField = S.map((s, i) => fields.reduce((a, f) => a + f[i], 0) / NF);
   const rngE = mulberry32(51), EPS = []; for (let i = 0; i < NF; i++) { const e = []; for (let k = 0; k < 12; k++) e.push([gauss(rngE), gauss(rngE)]); EPS.push(e); }
-  let blobs, round = 0, best = Infinity, samples = [], sampleSeed = 60, dragI = -1, dragMode = "", optAnim = null;
+  let blobs, round = 1, best = Infinity, samples = [], sampleSeed = 60, dragI = -1, dragMode = "", optAnim = null, pred = null, verdict = null;
   function init() { const r = mulberry32(52); blobs = []; for (let i = 0; i < NF; i++) blobs.push({ m: [2.2 * (r() - 0.5) * 2.5, 2.2 * (r() - 0.5) * 1.6], s: 0.5 + 0.4 * r() }); }
   init();
   function resp(z, B) { const lg = B.map(b => -((z[0] - b.m[0]) ** 2 + (z[1] - b.m[1]) ** 2) / (2 * b.s * b.s) - 2 * Math.log(b.s)); const mx = Math.max.apply(null, lg); const e = lg.map(v => Math.exp(v - mx)); const sum = e.reduce((a, v) => a + v, 0); return e.map(v => v / sum); }
@@ -649,7 +883,7 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
   function mini(y, cx, cy, w, h, color, width) { board.line(y.map((v, i) => [cx - w / 2 + w * i / (NP - 1), cy + h / 2 - h * Math.min(1.3, v) / 1.3]), color, width || 1.3); }
   function draw() {
     const ctx = board.ctx, T = terms(blobs), beta = BETAS[round], tot = T.rec + beta * T.kl; if (tot < best) best = tot;
-    board.clear("latent plane: drag a center to move a blob, drag its rim to resize. round " + (round + 1) + ": total = reconstruction + " + beta + " x KL");
+    board.clear("latent plane: drag a center to move a blob, drag its rim to resize. this round: total = reconstruction + " + beta + " x KL");
     ctx.fillStyle = css("--bg"); ctx.fillRect(PX0, PY0, PW, PH); ctx.strokeStyle = css("--line"); ctx.strokeRect(PX0, PY0, PW, PH);
     const o = px([0, 0]); ctx.strokeStyle = css("--grey"); ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.arc(o[0], o[1], 2 * U, 0, 2 * Math.PI); ctx.stroke(); ctx.beginPath(); ctx.arc(o[0], o[1], U, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]); board.label("prior: 1 and 2 standard deviations", o[0] + 2 * U + 6, o[1] - 2 * U + 14, css("--muted"), "left", 11);
     blobs.forEach((b, i) => { const p = px(b.m); ctx.fillStyle = alpha(COLORS[i], 0.22); ctx.beginPath(); ctx.arc(p[0], p[1], b.s * U, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = COLORS[i]; ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1; ctx.fillStyle = COLORS[i]; ctx.beginPath(); ctx.arc(p[0], p[1], 5, 0, 2 * Math.PI); ctx.fill(); mini(fields[i], p[0], p[1] - 22, 44, 26, COLORS[i], 1.5); });
@@ -665,16 +899,28 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
     let fieldLike = 0, identical = true; const decs = samples.map(z => decode(z, blobs));
     decs.forEach((d, k) => { const dist = Math.min.apply(null, fields.map(f => Math.sqrt(d.reduce((a, v, i) => a + (v - f[i]) ** 2, 0) / f.reduce((a, v) => a + v * v, 0)))); const ok = dist < 0.35; if (ok) fieldLike++; if (k && Math.sqrt(d.reduce((a, v, i) => a + (v - decs[0][i]) ** 2, 0)) > 0.2) identical = false; const cx = 850 + (k % 3) * 120, cy = 368 + Math.floor(k / 3) * 96; ctx.strokeStyle = css("--line"); ctx.strokeRect(cx - 52, cy - 36, 104, 72); mini(d, cx, cy, 90, 56, ok ? "#2E7D5B" : css("--red"), 1.6); });
     if (samples.length) board.label(identical && samples.length > 1 ? "all identical: the training mean" : fieldLike + " of " + samples.length + " field-like (green)", 790, 548, css("--ink"), "left", 12, true);
-    document.getElementById("blRound").textContent = (round + 1) + " of 3 (beta " + beta + ")"; document.getElementById("blRec").textContent = T.rec.toFixed(2); document.getElementById("blKL").textContent = T.kl.toFixed(2); document.getElementById("blTot").textContent = tot.toFixed(2); document.getElementById("blBest").textContent = best.toFixed(2);
-    const txts = ['<span class="k">round 1: reconstruction only</span><p>The KL pan is switched off. Pack for the lowest reconstruction: small blobs, far apart, decode cleanly. Then sample the prior and look at what lands in the gaps.</p>', '<span class="k">round 2: both terms</span><p>Now distance from the origin and any spread other than one cost KL. The blobs have to crowd the unit disc and overlap a little; reconstruction gets worse, prior samples get better. Find the packing that balances the two.</p>', '<span class="k">round 3: KL weighted eight times</span><p>Try the cheapest arrangement: every blob on the origin with spread one. KL goes to zero, the decoder cannot tell which field a z came from, and every sample decodes to the same mean profile. That is posterior collapse, and the loss looks fine.</p>'];
-    stepEl.innerHTML = txts[round];
+    document.getElementById("blRound").textContent = "beta " + beta + ", " + ["reconstruction only", "both terms", "KL weighted 8x"][round];
+    document.getElementById("blOpt").disabled = round === 2 && pred === null; document.getElementById("blRec").textContent = T.rec.toFixed(2); document.getElementById("blKL").textContent = T.kl.toFixed(2); document.getElementById("blTot").textContent = tot.toFixed(2); document.getElementById("blBest").textContent = best.toFixed(2);
+    const txts = ['<span class="k">beta 0: reconstruction only</span><p>The KL pan is switched off. Pack for the lowest reconstruction: small blobs, far apart, decode cleanly. Then sample the prior and look at what lands in the gaps.</p>', '<span class="k">beta 1: both terms</span><p>Now distance from the origin and any spread other than one cost KL. The blobs have to crowd the unit disc and overlap a little; reconstruction gets worse, prior samples get better. Find the packing that balances the two.</p>', '<span class="k">beta 8: KL weighted eight times</span><p>Let the optimizer pack and watch where the blobs go. When every blob sits on the origin with spread one, KL is zero, the decoder cannot tell which field a z came from, and every sample decodes to the same mean profile. That is posterior collapse, and the loss looks fine.</p>'];
+    let head = '';
+    if (round === 2) head = '<p><b>Beta 8: where will the blobs end up?</b></p>' + (pred === null ? '<div class="btns" style="margin:8px 0"><button class="primary" data-pred="spread">Spread out</button><button class="primary" data-pred="origin">All at the origin</button><button class="primary" data-pred="same">Unchanged</button></div><p>The optimizer button unlocks after you commit.</p>' : (verdict || '<p>Committed: ' + { spread: 'spread out', origin: 'all at the origin', same: 'unchanged' }[pred] + '. Press Let the optimizer pack and watch the 240 steps.</p>'));
+    stepEl.innerHTML = head + txts[round];
   }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); let bi = -1, bd = 1e9; blobs.forEach((b, i) => { const p = px(b.m); const d = Math.hypot(mx - p[0], my - p[1]); if (d < 14 && d < bd) { bi = i; bd = d; dragMode = "move"; } }); if (bi < 0) blobs.forEach((b, i) => { const p = px(b.m); const d = Math.hypot(mx - p[0], my - p[1]); if (Math.abs(d - b.s * U) < 10 && Math.abs(d - b.s * U) < bd) { bi = i; bd = Math.abs(d - b.s * U); dragMode = "size"; } }); dragI = bi; });
-  window.addEventListener("mousemove", ev => { if (dragI < 0) return; const [mx, my] = board.pos(ev); const b = blobs[dragI]; if (dragMode === "move") b.m = [Math.max(-3.4, Math.min(3.4, (mx - PX0 - PW / 2) / U)), Math.max(-2.3, Math.min(2.3, -(my - PY0 - PH / 2) / U))]; else { const p = px(b.m); b.s = Math.max(0.08, Math.min(2.5, Math.hypot(mx - p[0], my - p[1]) / U)); } draw(); });
-  window.addEventListener("mouseup", () => { dragI = -1; });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); let bi = -1, bd = 1e9; blobs.forEach((b, i) => { const p = px(b.m); const d = Math.hypot(mx - p[0], my - p[1]); if (d < 14 && d < bd) { bi = i; bd = d; dragMode = "move"; } }); if (bi < 0) blobs.forEach((b, i) => { const p = px(b.m); const d = Math.hypot(mx - p[0], my - p[1]); if (Math.abs(d - b.s * U) < 10 && Math.abs(d - b.s * U) < bd) { bi = i; bd = Math.abs(d - b.s * U); dragMode = "size"; } }); dragI = bi; });
+  window.addEventListener("pointermove", ev => { if (dragI < 0) return; const [mx, my] = board.pos(ev); const b = blobs[dragI]; if (dragMode === "move") b.m = [Math.max(-3.4, Math.min(3.4, (mx - PX0 - PW / 2) / U)), Math.max(-2.3, Math.min(2.3, -(my - PY0 - PH / 2) / U))]; else { const p = px(b.m); b.s = Math.max(0.08, Math.min(2.5, Math.hypot(mx - p[0], my - p[1]) / U)); } draw(); });
+  window.addEventListener("pointerup", () => { dragI = -1; });
   document.getElementById("blSample").addEventListener("click", () => { const r = mulberry32(sampleSeed++); samples = []; for (let k = 0; k < 6; k++) samples.push([gauss(r), gauss(r)]); draw(); });
-  document.getElementById("blNext").addEventListener("click", () => { round = (round + 1) % 3; best = Infinity; samples = []; draw(); });
-  document.getElementById("blOpt").addEventListener("click", () => { if (optAnim) return; let it = 0; const beta = BETAS[round]; const f = B => { const T = terms(B); return T.rec + beta * T.kl; }; const stepIt = () => { for (let s = 0; s < 2; s++) { const base = f(blobs), g = []; blobs.forEach((b, i) => { const h = 0.02; b.m[0] += h; const gx = (f(blobs) - base) / h; b.m[0] -= h; b.m[1] += h; const gy = (f(blobs) - base) / h; b.m[1] -= h; b.s += h; const gs = (f(blobs) - base) / h; b.s -= h; g.push([gx, gy, gs]); }); const lr = 0.04; blobs.forEach((b, i) => { b.m[0] = Math.max(-3.4, Math.min(3.4, b.m[0] - lr * g[i][0])); b.m[1] = Math.max(-2.3, Math.min(2.3, b.m[1] - lr * g[i][1])); b.s = Math.max(0.08, Math.min(2.5, b.s - lr * g[i][2])); }); } it++; draw(); if (it < 120) optAnim = requestAnimationFrame(stepIt); else optAnim = null; }; optAnim = requestAnimationFrame(stepIt); });
+  document.getElementById("blNext").addEventListener("click", () => { if (optAnim) { cancelAnimationFrame(optAnim); optAnim = null; } round = (round + 1) % 3; best = Infinity; samples = []; pred = null; verdict = null; draw(); });
+  stepEl.addEventListener("click", ev => { const b = ev.target && ev.target.closest ? ev.target.closest("button[data-pred]") : null; if (!b || pred !== null || round !== 2) return; pred = b.dataset.pred; draw(); });
+  document.getElementById("blOpt").addEventListener("click", () => {
+    if (optAnim || (round === 2 && pred === null)) return;
+    const TOTAL = 240, DUR = 2000, t0 = performance.now(), start = blobs.map(b => ({ m: b.m.slice(), s: b.s })); let it = 0; const beta = BETAS[round]; const f = B => { const T = terms(B); return T.rec + beta * T.kl; };
+    const one = () => { const base = f(blobs), g = []; blobs.forEach((b, i) => { const h = 0.02; b.m[0] += h; const gx = (f(blobs) - base) / h; b.m[0] -= h; b.m[1] += h; const gy = (f(blobs) - base) / h; b.m[1] -= h; b.s += h; const gs = (f(blobs) - base) / h; b.s -= h; g.push([gx, gy, gs]); }); const lr = 0.04; blobs.forEach((b, i) => { b.m[0] = Math.max(-3.4, Math.min(3.4, b.m[0] - lr * g[i][0])); b.m[1] = Math.max(-2.3, Math.min(2.3, b.m[1] - lr * g[i][1])); b.s = Math.max(0.08, Math.min(2.5, b.s - lr * g[i][2])); }); };
+    const stepIt = () => { const want = Math.min(TOTAL, Math.max(it + 1, Math.floor((performance.now() - t0) / DUR * TOTAL))); while (it < want) { one(); it++; } if (it < TOTAL) { draw(); optAnim = requestAnimationFrame(stepIt); return; } optAnim = null;
+      if (round === 2 && verdict === null) { const maxR = Math.max.apply(null, blobs.map(b => Math.hypot(b.m[0], b.m[1]))); const moved = blobs.reduce((a, b, i) => a + Math.hypot(b.m[0] - start[i].m[0], b.m[1] - start[i].m[1]), 0) / NF; const outcome = maxR < 0.35 ? "origin" : (moved < 0.15 ? "same" : "spread"); const ok = pred === outcome; const T = terms(blobs); verdict = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + (outcome === "origin" ? 'After 240 steps every center is within ' + maxR.toFixed(2) + ' of the origin and the spreads are near one: KL ' + T.kl.toFixed(2) + ', reconstruction ' + T.rec.toFixed(1) + '. With the prior weighted eight times, matching the prior is cheaper than telling the fields apart, so the encoder stops encoding. Sample the prior: every decode is the training mean.' : (outcome === "same" ? 'The blobs barely moved: the packing you started from was already a local minimum for this weighting.' : 'The blobs are still spread, farthest center ' + maxR.toFixed(2) + ' from the origin: this packing had not yet collapsed after 240 steps. Press the optimizer again.')) + '</div>'; }
+      draw(); };
+    optAnim = requestAnimationFrame(stepIt);
+  });
   quiz(document.getElementById("blQuiz"), { q: "During training the KL per latent dimension is plotted and one dimension reads 0.00 for the whole run. What happened?", options: ["That dimension is perfectly calibrated", "The encoder stopped using it: its blob matches the prior exactly, so it carries no information and the decoder ignores it", "The decoder overfitted that dimension"], answer: 1, why: "A KL of zero means the encoder's distribution on that coordinate is the prior whatever the input, so the coordinate says nothing about x. That is the per-dimension view of collapse on slide 21, and it is invisible in the total loss." });
   window.addEventListener("themechange", draw); draw();
 })();
@@ -706,12 +952,12 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
     if (pulse) { const seg = pulse.segs[pulse.i], t = pulse.t; const p = [seg[0][0] + (seg[1][0] - seg[0][0]) * t, seg[0][1] + (seg[1][1] - seg[0][1]) * t]; ctx.fillStyle = pulse.dead ? css("--red") : "#2E7D5B"; ctx.beginPath(); ctx.arc(p[0], p[1], pulse.dead ? 14 : 9, 0, 2 * Math.PI); ctx.fill(); if (onRail && ALT[pulse.i]) { const a = ALT[pulse.i]; const q = [a[0][0] + (a[1][0] - a[0][0]) * t, a[0][1] + (a[1][1] - a[0][1]) * t]; ctx.beginPath(); ctx.arc(q[0], q[1], 9, 0, 2 * Math.PI); ctx.fill(); } if (pulse.dead) board.label("no derivative of a draw with respect to mu or sigma", N.z[0], N.z[1] + 50, css("--red"), "center", 12); }
     board.label("gradient pulses: " + hits + " reached the encoder, " + deaths + " died at the draw", 40, 540, css("--ink"), "left", 12, true);
     document.getElementById("rtHits").textContent = String(hits); document.getElementById("rtDmu").textContent = onRail ? "1" : "undefined"; document.getElementById("rtDsig").textContent = onRail ? eps.toFixed(2) : "undefined";
-    stepEl.innerHTML = onRail ? '<span class="k">rewired</span><p>The dice rolls eps on the rail, and z is computed from mu, sigma and eps by arithmetic. Send the pulse: it passes z, splits to mu and sigma with derivatives 1 and eps, and reaches the encoder. Every send rolls a new eps; the derivative with respect to sigma changes with it, which is exactly the Monte Carlo estimate the objective asked for.</p>' : '<span class="k">first wiring</span><p>Send the pulse and watch it die. Then drag the dice down onto the rail. The sampling node becomes an arithmetic node and the pulse has a path.</p>';
+    stepEl.innerHTML = '<p><b>Why does the pulse stop? Move the dice.</b></p>' + (onRail ? '<span class="k">rewired</span><p>The dice rolls eps on the rail, and z is computed from mu, sigma and eps by arithmetic. Send the pulse: it passes z, splits to mu and sigma with derivatives 1 and eps, and reaches the encoder. Every send rolls a new eps; the derivative with respect to sigma changes with it, which is exactly the Monte Carlo estimate the objective asked for.</p>' : '<span class="k">first wiring</span><p>Send the pulse and watch it die. Then drag the dice down onto the rail. The sampling node becomes an arithmetic node and the pulse has a path.</p>');
   }
   function send() { if (pulse) return; const segs = paths().map(s => [s[0], s[1]]); pulse = { segs, i: 0, t: 0, dead: false, deadAt: 0 }; const tick = () => { pulse.t += 0.04; if (pulse.t >= 1) { pulse.t = 0; pulse.i++; if (pulse.i >= pulse.segs.length) { if (onRail) { hits++; eps = gauss(rng); } else { deaths++; } if (!onRail) { pulse.dead = true; pulse.i = 1; pulse.t = 1; draw(); setTimeout(() => { pulse = null; draw(); }, 900); return; } pulse = null; draw(); return; } } draw(); requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (Math.hypot(mx - dice[0], my - dice[1]) < 30 && !onRail) drag = true; });
-  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); dice = [Math.max(40, Math.min(1160, mx)), Math.max(40, Math.min(520, my))]; draw(); });
-  window.addEventListener("mouseup", () => { if (!drag) return; drag = false; if (Math.hypot(dice[0] - RAIL[0], dice[1] - RAIL[1]) < 50) { onRail = true; dice = RAIL.slice(); } else dice = HOME.slice(); draw(); });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (Math.hypot(mx - dice[0], my - dice[1]) < 30 && !onRail) drag = true; });
+  window.addEventListener("pointermove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); dice = [Math.max(40, Math.min(1160, mx)), Math.max(40, Math.min(520, my))]; draw(); });
+  window.addEventListener("pointerup", () => { if (!drag) return; drag = false; if (Math.hypot(dice[0] - RAIL[0], dice[1] - RAIL[1]) < 50) { onRail = true; dice = RAIL.slice(); } else dice = HOME.slice(); draw(); });
   document.getElementById("rtSend").addEventListener("click", send);
   document.getElementById("rtReset").addEventListener("click", () => { onRail = false; dice = HOME.slice(); pulse = null; hits = 0; deaths = 0; eps = 0.42; draw(); });
   quiz(document.getElementById("rtQuiz"), { q: "After the rewiring, what does the gradient of the loss with respect to sigma look like for one training example?", options: ["Exactly the expected gradient, with no noise", "The pathwise gradient at the eps that was drawn, times eps: a noisy but unbiased estimate", "Zero, because eps has mean zero"], answer: 1, why: "With z = mu + sigma eps the chain rule gives dz/dsigma = eps, and the loss gradient through z is evaluated at the one z that was drawn. Averaged over draws it is the true gradient of the bound; any single draw is a noisy estimate of it, with far less noise than the score-function estimator." });
@@ -733,6 +979,46 @@ show(location.hash.slice(1) || "drill", false);
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
 if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
 new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+
+<script>
+/* Classroom mode (shared patch): larger canvas text through the font setter, prose hidden, redraw via themechange. */
+(function () {
+  var desc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "font");
+  var on = false;
+  function scale(v) {
+    return String(v).replace(/(\d+(?:\.\d+)?)px/, function (m, n) {
+      var s = parseFloat(n); var t = s < 13 ? s + 5 : Math.round(s * 1.35);
+      return t + "px";
+    });
+  }
+  Object.defineProperty(CanvasRenderingContext2D.prototype, "font", {
+    configurable: true,
+    get: function () { return desc.get.call(this); },
+    set: function (v) { desc.set.call(this, on ? scale(v) : v); }
+  });
+  function apply(state) {
+    on = !!state;
+    document.body.classList.toggle("classroom", on);
+    var b = document.getElementById("classroomBtn");
+    if (b) { b.textContent = on ? "Classroom: on" : "Classroom"; b.setAttribute("aria-pressed", on ? "true" : "false"); }
+    try { localStorage.setItem("ce_classroom", on ? "1" : "0"); } catch (e) {}
+    window.dispatchEvent(new Event("themechange"));
+    window.dispatchEvent(new Event("resize"));
+  }
+  window.addEventListener("DOMContentLoaded", function () {
+    var b = document.createElement("button");
+    b.id = "classroomBtn"; b.type = "button"; b.title = "Large text for a projector; hides the explanatory prose (key: c)";
+    b.textContent = "Classroom";
+    b.addEventListener("click", function () { apply(!on); });
+    document.body.appendChild(b);
+    var saved = "0"; try { saved = localStorage.getItem("ce_classroom") || "0"; } catch (e) {}
+    if (saved === "1" || /[?&]classroom\b/.test(location.search)) apply(true);
+    window.addEventListener("keydown", function (ev) {
+      if (ev.key === "c" && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) apply(!on);
+    });
+  });
 })();
 </script>
 </body>
