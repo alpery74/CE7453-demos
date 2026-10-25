@@ -97,6 +97,23 @@ section.demo.active { display: block; }
 .caption p { margin: 0 0 6px; }
 footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* classroom mode and touch (shared patch) */
+canvas { touch-action: none; -webkit-user-select: none; user-select: none; }
+#classroomBtn { position: fixed; right: 14px; bottom: 14px; z-index: 50; font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; opacity: 0.85; }
+#classroomBtn:hover { opacity: 1; color: var(--ink); }
+body.classroom #classroomBtn { background: var(--blue); border-color: var(--blue); color: #fff; }
+body.classroom header, body.classroom .lead, body.classroom .caption, body.classroom footer, body.classroom .ask-note { display: none; }
+body.classroom nav { padding-block: 6px 4px; }
+body.classroom nav button { font-size: 17px; padding: 9px 16px; }
+body.classroom main { padding-block: 0 8px; }
+body.classroom .demo h2 { font-size: 26px; margin: 4px 0 8px; }
+body.classroom .step, body.classroom .ask, body.classroom .quiz, body.classroom .quiz button, body.classroom .readout, body.classroom .ctl label, body.classroom .choice button, body.classroom .bet button, body.classroom .btns button, body.classroom .legend, body.classroom .board { font-size: 18px; }
+body.classroom .step .k, body.classroom .ctl .hint, body.classroom .badge { font-size: 15px; }
+body.classroom .panel h3 { font-size: 15px; }
+body.classroom .stage { grid-template-columns: minmax(0, 1fr) 400px; }
+body.classroom .grid { grid-template-columns: minmax(0, 1fr) 360px; }
+@media (max-width: 1100px) { body.classroom .stage, body.classroom .grid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -139,6 +156,14 @@ canvas.grab { cursor: grab; }
 .sw[aria-pressed="true"] { border-color: var(--blue); background: var(--blue-soft); }
 .sw b { font-family: var(--mono); font-weight: 500; font-size: 12.5px; color: var(--muted); }
 .sws { display: grid; gap: 6px; }
+.gate { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; align-items: center; }
+.gate button { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.gate button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.gate button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.gate button:disabled, .btns button:disabled { opacity: 0.5; cursor: default; }
+.gate input[type="number"] { font: inherit; font-family: var(--mono); font-size: 14px; width: 112px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.rule { font-family: var(--mono); font-size: 13.5px; line-height: 1.6; color: var(--ink); }
+.rule b { color: var(--blue); font-weight: 500; }
 </style>
 
 <header>
@@ -149,10 +174,11 @@ canvas.grab { cursor: grab; }
 
 <nav role="tablist" aria-label="Demos">
   <button role="tab" data-tab="scaling" aria-selected="true">Extend the line<span class="slide">slide 5</span></button>
+  <button role="tab" data-tab="bend" aria-selected="false">Around the bend<span class="slide">slide 5</span></button>
   <button role="tab" data-tab="stack" aria-selected="false">Fit the run<span class="slide">slide 7</span></button>
   <button role="tab" data-tab="patches" aria-selected="false">Cut the image<span class="slide">slide 8</span></button>
   <button role="tab" data-tab="sparse" aria-selected="false">The reach test<span class="slide">slide 10</span></button>
-  <button role="tab" data-tab="ssm" aria-selected="false">The step sequencer<span class="slide">slides 15, 19</span></button>
+  <button role="tab" data-tab="ssm" aria-selected="false">The step sequencer<span class="slide">slides 15, 16, 19</span></button>
   <button role="tab" data-tab="selective" aria-selected="false">The distractor test<span class="slide">slide 18</span></button>
 </nav>
 
@@ -161,13 +187,13 @@ canvas.grab { cursor: grab; }
 <!-- ============ 1. EXTEND THE LINE ============ -->
 <section class="demo active" id="scaling" role="tabpanel">
   <h2>Extend the line: predict the big run from four small ones</h2>
-  <p class="lead">Four models have been trained, from one million to one hundred million parameters, and their losses are plotted on log axes. Lay the ruler through them by dragging its two handles, read off your prediction for a ten billion parameter run, then pay for the run and see where it lands.</p>
+  <p class="lead">Four models have been trained, from one million to one hundred million parameters, and their reducible losses are plotted on log axes with the floor subtracted. Lay the ruler through them by dragging its two handles, commit to whether the ten billion parameter run will land on your line, then pay for the run and see where it lands.</p>
   <div class="stage">
     <div class="plot"><canvas id="slPlot" class="grab" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel step" id="slStep"></div>
       <div class="panel">
-        <div class="btns"><button class="primary" id="slRun">Pay for the big run</button><button id="slNext">Next exercise</button></div>
+        <div class="btns"><button class="primary" id="slRun" disabled>Pay for the big run</button><button id="slReset">Reset the ruler</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>ruler slope (exponent)</dt><dd id="slSlope">-</dd>
           <dt>your prediction at the big size</dt><dd id="slPred">-</dd>
@@ -178,18 +204,43 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>The runs follow L = E + A / N^alpha with E = 1.8, the entropy floor of the data. In the first exercise the vertical axis is the reducible loss L - E, so the law is a straight line on log axes and the ruler extrapolates two decades without error. In the second the raw loss is plotted, the floor bends the points, and a ruler laid through the measured range predicts a loss below the floor. That is slide 5's narrow reading: the straight line is a statement about the range you measured, and about the quantity you plotted.</p>
+    <p>The runs follow L = E + A / N^alpha with E = 1.8, the entropy floor of the data. With the floor subtracted the vertical axis is the reducible loss L - E, the law is a straight line on log axes, and a ruler through four cheap runs extrapolates two decades without error. Small runs price the large one before anyone pays for it, slide 5. The next tab plots the same runs without subtracting the floor.</p>
+  </div>
+</section>
+
+<!-- ============ 1b. AROUND THE BEND ============ -->
+<section class="demo" id="bend" role="tabpanel">
+  <h2>Around the bend: the same runs with the floor left in</h2>
+  <p class="lead">The same four runs, this time with the raw loss on the vertical axis, as it comes out of training. Lay the ruler through the four points as before, commit to where a hundred billion parameter run will land relative to a straight extension, then pay for the run.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="bdPlot" class="grab" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="bdStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="bdRun" disabled>Pay for the big run</button><button id="bdReset">Reset the ruler</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>ruler slope on the raw axis</dt><dd id="bdSlope">-</dd>
+          <dt>your prediction at the big size</dt><dd id="bdPred">-</dd>
+          <dt>the big run</dt><dd id="bdTrue">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="bdQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>With the floor E = 1.8 left inside the loss, the points bend as they approach it, and a ruler laid through the measured range runs under the curve. Extended to 10^11 parameters it predicts a loss below the floor, which no model on this data can reach. This is slide 5's narrow reading of a scaling law: the straight line is a statement about the range that was measured and about the quantity that was plotted. The law is a power law in the reducible loss.</p>
   </div>
 </section>
 
 <!-- ============ 2. FIT THE RUN ============ -->
 <section class="demo" id="stack" role="tabpanel">
   <h2>Fit the run: stack the memory of one training step onto the card</h2>
-  <p class="lead">A training step holds the weights, their gradients, the optimizer's two moments and the activations of the batch in flight. Everything here is set by touching the picture: click a model crate to load it, click above the stack to add a sample of activations and click a green brick to drop one, click the weights brick to switch mixed precision, drag the Adam brick onto a second device to shard the states, click the ghost column to add a device, click the loop to accumulate, and drag the card's top edge to change the card. Make the run fit with an effective batch of 256.</p>
+  <p class="lead">A training step holds the weights, their gradients, the optimizer's two moments and the activations of the batch in flight. Everything here is set by touching the picture: click a model crate to load it, click above the stack to add a sample of activations and click a green brick to drop one, click the weights brick to switch mixed precision, drag the Adam brick onto a second device to shard the states, click the ghost column to add a device, click the loop to accumulate, and drag the card's top edge to change the card. Commit to a number of cards first; the bench unlocks after that.</p>
   <div class="stage">
     <div class="plot"><canvas id="stCols" class="hit" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel step" id="stStep"></div>
+      <div class="panel"><h3>rule</h3><div class="rule" id="stRule">-</div></div>
       <div class="panel">
         <dl class="readout">
           <dt>model</dt><dd id="stModelName">-</dd>
@@ -204,14 +255,14 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Per parameter, a plain fp32 step keeps 4 bytes of weight, 4 of gradient and 8 of Adam moments: 16 bytes, so a 1.3 B model is 21 GB before a single activation. Mixed precision moves the arithmetic to 2 bytes but keeps the 4-byte master copy and the 8-byte moments, so it saves activation memory and time, little else, slide 7. Gradient accumulation buys batch size with wall-clock time and no memory. Data parallel multiplies the batch, and only sharding the states (ZeRO, FSDP) divides the per-device memory. The target here is an effective batch of 256 on the card you have.</p>
+    <p>Per parameter, a plain fp32 step keeps 4 bytes of weight, 4 of gradient and 8 of Adam moments: 16 bytes, so a 1.3 B model is 21 GB before a single activation. Mixed precision moves the arithmetic to 2 bytes but keeps the 4-byte master copy and the 8-byte moments, so it saves activation memory and time, little else, slide 7. Gradient accumulation buys batch size with wall-clock time and no memory. Data parallel multiplies the batch, and only sharding the states (ZeRO, FSDP) divides the per-device memory. The 7 B model carries 104 GB of weights, master copy, gradients and moments before any activation, so on 24 GB cards the static stack has to be sharded over eight devices; accumulation then buys the rest of the batch.</p>
   </div>
 </section>
 
 <!-- ============ 3. CUT THE IMAGE ============ -->
 <section class="demo" id="patches" role="tabpanel">
   <h2>Cut the image into tokens, then take the positions away</h2>
-  <p class="lead">A 64 by 64 aerial scene becomes a sequence by cutting it into patches. Drag the corner handle of the first patch to set the patch size, click a patch to see the vector that becomes its token and the position tag that goes with it, then shuffle the sequence and look at what a model without position tags would be reasoning about.</p>
+  <p class="lead">A 64 by 64 aerial scene becomes a sequence by cutting it into patches. Commit to a token count for 16 px patches, then drag the corner handle of the first patch to recut the scene and check it. Click a patch to see the vector that becomes its token and the position tag that goes with it. Commit to what a shuffle leaves the model, then shuffle the sequence and look at what a model without position tags would be reasoning about.</p>
   <div class="stage">
     <div class="plot two">
       <canvas id="ptImg" class="hit" width="760" height="560"></canvas>
@@ -220,7 +271,7 @@ canvas.grab { cursor: grab; }
     <div class="side">
       <div class="panel step" id="ptStep"></div>
       <div class="panel">
-        <div class="btns"><button class="primary" id="ptShuffle">Shuffle the tokens</button><button id="ptRestore">Restore</button></div>
+        <div class="btns"><button class="primary" id="ptShuffle" disabled>Shuffle the tokens</button><button id="ptRestore">Restore</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>patch size</dt><dd id="ptP">-</dd>
           <dt>tokens T</dt><dd id="ptT">-</dd>
@@ -239,16 +290,16 @@ canvas.grab { cursor: grab; }
 <!-- ============ 4. THE REACH TEST ============ -->
 <section class="demo" id="sparse" role="tabpanel">
   <h2>The reach test: compose a sparse pattern that still reaches everything</h2>
-  <p class="lead">Forty-eight positions in a record. Full attention lets each one read all 48 at once. Compose a cheaper pattern on the stencil row: drag the edge of the orange window to widen it, drag the second tooth of the comb to set a stride, and click the slots above the first positions to make them global tokens. Click a position on the record to make it the source and watch how many hops its information needs to reach everyone. The challenge: everything within two hops, at most twelve entries per row.</p>
+  <p class="lead">Twenty-four positions in a record. Full attention lets each one read all 24 at once. Compose a cheaper pattern on the stencil row: drag the edge of the orange window to widen it, drag the second tooth of the comb to set a stride, and click the slots above the first positions to make them global tokens. Click a position on the record to make it the source and watch how many hops its information needs to reach everyone. Pick the device you expect to win before the stencil unlocks.</p>
   <div class="stage">
     <div class="plot"><canvas id="spStrip" class="grab" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel step" id="spStep"></div>
       <div class="panel">
-        <div class="btns"><button class="primary" id="spFull">Compare with full attention</button></div>
+        <div class="btns"><button class="primary" id="spFull">Compare with full attention</button><button id="spReset">Reset the pattern</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>window, each side / stride / global</dt><dd id="spPat">-</dd>
-          <dt>entries per row (cost)</dt><dd id="spCost">-</dd>
+          <dt>entries per ordinary row (cost)</dt><dd id="spCost">-</dd>
           <dt>positions reached in 1 / 2 / 3 hops</dt><dd id="spReach">-</dd>
           <dt>hops to reach everything</dt><dd id="spMax">-</dd>
         </dl>
@@ -258,26 +309,28 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>A pattern is a fixed set of pairs that will be scored, chosen before training, slide 10. A window alone needs T / w hops to cross the record, which is the long reach attention was built for, thrown away. A stride adds a coarse grid, so distant positions meet in two hops. A global token is a shared summary that everyone reads and writes, and it collapses the diameter to two hops at a cost of one entry per row. The pattern is a prior about which pairs matter; the record's physics, not a paper about text, should pick it.</p>
+    <p>A pattern is a fixed set of pairs that will be scored, chosen before training, slide 10. A window alone needs T / w hops to cross the record, which is the long reach attention was built for, thrown away. A stride adds a coarse grid, so distant positions meet in two hops. A global token is a shared summary that everyone reads and writes, and it collapses the diameter to two hops at a cost of one entry per ordinary row; the global row itself reads all T. The pattern is a prior about which pairs matter, and the physics of the record should pick it.</p>
   </div>
 </section>
 
 <!-- ============ 5. THE STEP SEQUENCER ============ -->
 <section class="demo" id="ssm" role="tabpanel">
   <h2>The step sequencer: tap an input into a state space layer and watch what it keeps</h2>
-  <p class="lead">A two-state linear system, a damped oscillator, discretized with a zero order hold. Click steps on the input row to place impulses. The state evolves one step at a time and the output traces below; the kernel row shows the same layer as a convolution. The system itself is set on the pole map at the right: drag the pole left for faster decay, up for faster rotation. The step size is the spacing of the sample ticks on the time ruler: drag a tick. Set the layer to remember a cue 24 steps back.</p>
+  <p class="lead">A two-state linear system, a damped oscillator, discretized with a zero order hold. Click steps on the input row to place impulses. The state evolves one step at a time and the output traces below; the kernel row shows the same layer as a convolution. The system itself is set on the pole map at the right: first click where the pole belongs for a half-life of 12 steps, then drag it left for faster decay, up for faster rotation. The step size is the spacing of the sample ticks on the time ruler: drag a tick. The output can be computed by the recurrence or by the convolution; both are shown to agree.</p>
   <div class="stage">
     <div class="plot"><canvas id="ssSeq" class="grab" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel step" id="ssStep"></div>
       <div class="panel">
-        <div class="btns"><button class="primary" id="ssPlay">Run the recurrence</button><button id="ssClear">Clear inputs</button><button id="ssCue">Place the cue at step 8</button></div>
+        <div class="btns"><button class="primary" id="ssPlay">Run the recurrence</button><button id="ssClear">Clear inputs</button><button id="ssCue">Place the cue at step 8</button><button id="ssReset">Reset the pole</button></div>
+        <div class="sws" id="ssMode" style="margin-top:10px"><button class="sw" data-v="0" aria-pressed="true">output by recurrence <b>x_k = A x_(k-1) + B u_k</b></button><button class="sw" data-v="1" aria-pressed="false">output by convolution <b>y_k = sum_j K_j u_(k-j)</b></button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>pole: decay lambda, rotation omega</dt><dd id="ssPole">-</dd>
           <dt>step size Delta</dt><dd id="ssDtv">-</dd>
           <dt>half-life of the state, in steps</dt><dd id="ssHalf">-</dd>
           <dt>oscillation period, in steps</dt><dd id="ssPer">-</dd>
           <dt>kernel weight at lag 24, relative to its peak</dt><dd id="ssK24">-</dd>
+          <dt>recurrence against convolution, largest difference</dt><dd id="ssDiff">-</dd>
         </dl>
         <div class="ask" id="ssVerdict" hidden></div>
       </div>
@@ -285,16 +338,16 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>The continuous system is x' = A x + B u with A = [[-lambda, omega], [-omega, -lambda]], whose eigenvalues are the pole pair -lambda plus or minus i omega on the map, and y = C x. Holding u constant over a step of length Delta gives the recurrence x_k = A_bar x_(k-1) + B_bar u_k with A_bar = exp(A Delta), slide 15, the Kalman prediction step with learned matrices, slide 16. Unrolled, y is the convolution of u with the kernel K_k = C A_bar^k B_bar, slide 19. The half-life in steps is ln 2 / (lambda Delta): the pole and the step size set the timescale together, and a learned layer sets both from the data. The pole map is the control engineer's picture of the same object.</p>
+    <p>The continuous system is x' = A x + B u with A = [[-lambda, omega], [-omega, -lambda]], whose eigenvalues are the pole pair -lambda plus or minus i omega on the map, and y = C x. Holding u constant over a step of length Delta gives the recurrence x_k = A_bar x_(k-1) + B_bar u_k with A_bar = exp(A Delta), slide 15, the Kalman prediction step with learned matrices, slide 16. Unrolled, y is the convolution of u with the kernel K_k = C A_bar^k B_bar, slide 19; the toggle computes the output both ways and the largest difference between them is rounding error. The half-life in steps is ln 2 / (lambda Delta): the pole and the step size set the timescale together, and a learned layer sets both from the data. The pole map is the control engineer's picture of the same object.</p>
   </div>
 </section>
 
 <!-- ============ 6. THE DISTRACTOR TEST ============ -->
 <section class="demo" id="selective" role="tabpanel">
   <h2>The distractor test: a fixed layer against a selective one</h2>
-  <p class="lead">A record holds one cue early on and a burst of distractors somewhere after it. Two state space layers read the record: one with fixed matrices, one whose step size depends on the input. Drag the burst along the record by its body and change its length by dragging its right edge. The fixed layer's step size is the height of its gate bars: drag them up or down. Then read how much of the cue each layer still holds at the end.</p>
+  <p class="lead">A record holds one cue early on and a burst of distractors somewhere after it. Three state space layers read the record: one with fixed matrices, one whose gate you draw by hand, and one whose step size depends on the input. Drag the burst along the record by its body and change its length by dragging its right edge. The fixed layer's step size is the height of its gate bars: drag them up or down. Paint your own gate on the middle row, lock it in, and compare how much of the cue each layer still holds at the end.</p>
   <div class="stage">
-    <div class="plot"><canvas id="seRec" class="grab" width="1200" height="560"></canvas></div>
+    <div class="plot"><canvas id="seRec" class="grab" width="1200" height="720"></canvas></div>
     <div class="side">
       <div class="panel step" id="seStep"></div>
       <div class="panel">
@@ -302,16 +355,18 @@ canvas.grab { cursor: grab; }
           <dt>burst: start, length</dt><dd id="seBurst">-</dd>
           <dt>fixed layer's step size</dt><dd id="seDtv">-</dd>
           <dt>share of the final state that is cue, fixed layer</dt><dd id="seFix">-</dd>
+          <dt>share of the final state that is cue, your gate</dt><dd id="seMine">-</dd>
           <dt>share of the final state that is cue, selective layer</dt><dd id="seSel">-</dd>
-          <dt>cue retained, end over written, fixed / selective</dt><dd id="seDis">-</dd>
+          <dt>cue retained, end over written, fixed / yours / selective</dt><dd id="seDis">-</dd>
         </dl>
         <div class="ask" id="seVerdict" hidden></div>
+        <div class="btns" style="margin-top:10px"><button id="seClear">Clear your gate</button></div>
       </div>
       <div class="panel quiz" id="seQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>Both layers run h_k = a_k h_(k-1) + (1 - a_k) u_k with a_k = exp(-Delta_k). The fixed layer uses one Delta for every step, so every distractor both decays the cue and writes itself in. The selective layer, slide 18, computes Delta from the input: large for a step it recognizes as a cue, near zero for a step it treats as noise, so the state holds through the burst. That is the gate of Week 5 in a cleaner form, and the reason the layer no longer has a single convolutional kernel: the kernel now depends on the record.</p>
+    <p>All three layers run h_k = a_k h_(k-1) + (1 - a_k) u_k with a_k = exp(-Delta_k). The fixed layer uses one Delta for every step, so every distractor both decays the cue and writes itself in. A hand-drawn gate shows what a good Delta_k looks like: open at the cue, shut everywhere else. The selective layer, slide 18, computes that Delta from the input: large for a step it recognizes as a cue, near zero for a step it treats as noise, so the state holds through the burst. That is the gate of Week 5 in a cleaner form, and the reason the layer no longer has a single convolutional kernel: the kernel now depends on the record.</p>
   </div>
 </section>
 
@@ -340,60 +395,82 @@ function quiz(el, spec) {
 }
 function pressGroup(id, cb) { document.querySelectorAll("#" + id + " button").forEach(b => b.addEventListener("click", () => { document.querySelectorAll("#" + id + " button").forEach(c => c.setAttribute("aria-pressed", c === b ? "true" : "false")); cb(+b.dataset.v); })); }
 
-/* ================= 1. EXTEND THE LINE ================= */
-(function scaling() {
+/* ================= 1. EXTEND THE LINE / AROUND THE BEND ================= */
+function rulerTab(cfg) {
   const E = 1.8, A = 400, al = 0.35, L = N => E + A / Math.pow(N, al);
-  const SMALL = [6, 6.67, 7.33, 8], BIG = [10, 11];
-  const board = new Board(document.getElementById("slPlot"));
+  const SMALL = [6, 6.67, 7.33, 8], big = cfg.big, raw = cfg.raw;
+  const board = new Board(document.getElementById(cfg.id + "Plot"));
   const XL = 5.5, XR = 11.5, L0 = 90, R0 = board.W - 40, T0 = 50, B0 = board.H - 60;
-  let ex = 0, h = [[6.2, null], [8.5, null]], drag = null, paid = false;
-  function yval(lg) { const v = L(Math.pow(10, lg)); return ex === 0 ? Math.log10(v - E) : Math.log10(v); }
-  function ylim() { return ex === 0 ? [-1.6, 0.8] : [0.2, 0.75]; }
+  let h = [[6.2, 0], [8.5, 0]], drag = null, paid = false, choice = null;
+  function yval(lg) { const v = L(Math.pow(10, lg)); return raw ? Math.log10(v) : Math.log10(v - E); }
+  function ylim() { return raw ? [-0.1, 0.78] : [-1.6, 0.8]; }
   const px = lg => L0 + (R0 - L0) * (lg - XL) / (XR - XL), py = v => { const [a, b] = ylim(); return B0 - (B0 - T0) * (v - a) / (b - a); };
   const pyinv = y => { const [a, b] = ylim(); return a + (b - a) * (B0 - y) / (B0 - T0); };
-  function initHandles() { const o = ex === 0 ? 0.08 : 0.02; h = [[6.2, yval(6.2) + o], [8.3, yval(8.3) - o * 0.75]]; }
-  const stepEl = document.getElementById("slStep");
-  function text() { stepEl.innerHTML = '<span class="k">exercise ' + (ex + 1) + ' of 2</span><p>' + (ex === 0 ? 'The vertical axis is the reducible loss, L minus the floor E = 1.8 that the data\'s entropy sets. Drag the two handles so the ruler runs through the four runs.' : 'This time the vertical axis is the raw loss, as it comes out of the run. Lay the ruler through the four points as before.') + '</p><p>Read your prediction at 10^' + BIG[ex] + ', then pay for the run.</p>'; }
+  function initHandles() { const o = raw ? 0.02 : 0.08; h = [[6.2, yval(6.2) + o], [8.3, yval(8.3) - o * 0.75]]; }
+  const stepEl = document.getElementById(cfg.id + "Step"), runBtn = document.getElementById(cfg.id + "Run");
   function line(lg) { const [x1, y1] = h[0], [x2, y2] = h[1]; return y1 + (y2 - y1) * (lg - x1) / (x2 - x1); }
+  function predV() { const v = line(big); return raw ? Math.pow(10, v) : E + Math.pow(10, v); }
+  function text() {
+    let html = '<span class="k">' + cfg.kicker + '</span><p>' + cfg.prompt + '</p>';
+    if (!paid) html += '<div class="gate">' + cfg.options.map((o, i) => '<button data-g="' + i + '" aria-pressed="' + (choice === i ? 'true' : 'false') + '">' + o + '</button>').join('') + '</div>';
+    html += '<p>' + cfg.howto + '</p>';
+    if (!paid) html += '<p>' + (choice === null ? 'Commit to one answer; the run can be paid for after that.' : 'Committed. Adjust the ruler if you want, then pay for the run.') + '</p>';
+    stepEl.innerHTML = html;
+    stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { choice = parseInt(b.dataset.g, 10); runBtn.disabled = false; text(); }));
+  }
   function draw() {
-    board.clear(ex === 0 ? "reducible loss L - E against model size, log axes" : "raw loss L against model size, log axes"); const ctx = board.ctx;
+    board.clear(raw ? "raw loss L against model size, log axes" : "reducible loss L - E against model size, log axes"); const ctx = board.ctx;
     ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(L0, T0); ctx.lineTo(L0, B0); ctx.lineTo(R0, B0); ctx.stroke();
     for (let lg = 6; lg <= 11; lg++) { board.label("10^" + lg, px(lg), B0 + 20, css("--muted"), "center", 11, true); ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(px(lg), B0); ctx.lineTo(px(lg), B0 + 5); ctx.stroke(); }
     board.label("parameters N", (L0 + R0) / 2, board.H - 14, css("--muted"), "center", 12);
-    const ticks = ex === 0 ? [-1.5, -1, -0.5, 0, 0.5] : [0.25, 0.35, 0.45, 0.55, 0.65];
-    ticks.forEach(v => { board.label((ex === 0 ? "L-E = " : "L = ") + Math.pow(10, v).toFixed(2), L0 - 8, py(v) + 4, css("--muted"), "right", 11, true); ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(L0 - 4, py(v)); ctx.lineTo(L0, py(v)); ctx.stroke(); });
-    if (ex === 1) { ctx.strokeStyle = css("--grey"); ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(L0, py(Math.log10(E))); ctx.lineTo(R0, py(Math.log10(E))); ctx.stroke(); ctx.setLineDash([]); board.label("floor E = 1.8", R0 - 4, py(Math.log10(E)) - 6, css("--muted"), "right", 12); }
+    const ticks = raw ? [0, 0.15, 0.3, 0.45, 0.6, 0.75] : [-1.5, -1, -0.5, 0, 0.5];
+    ticks.forEach(v => { board.label((raw ? "L = " : "L-E = ") + Math.pow(10, v).toFixed(2), L0 - 8, py(v) + 4, css("--muted"), "right", 11, true); ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(L0 - 4, py(v)); ctx.lineTo(L0, py(v)); ctx.stroke(); });
+    if (raw) { ctx.strokeStyle = css("--grey"); ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(L0, py(Math.log10(E))); ctx.lineTo(R0, py(Math.log10(E))); ctx.stroke(); ctx.setLineDash([]); board.label("floor E = 1.8", R0 - 4, py(Math.log10(E)) - 6, css("--muted"), "right", 12); }
     // ruler
-    ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(px(XL), py(line(XL))); ctx.lineTo(px(XR), py(line(XR))); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.rect(L0, T0 - 10, R0 - L0, B0 - T0 + 10); ctx.clip(); ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(px(XL), py(line(XL))); ctx.lineTo(px(XR), py(line(XR))); ctx.stroke(); ctx.restore();
     h.forEach(p => { ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(px(p[0]), py(p[1]), 10, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke(); });
-    board.label("ruler: drag the two handles", px(XL) + 8, py(line(XL)) - 12, css("--orange"), "left", 12);
+    board.label("ruler: drag the two handles", px(h[0][0]) + 14, py(h[0][1]) - 14, css("--orange"), "left", 12);
     SMALL.forEach(lg => { ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(px(lg), py(yval(lg)), 7, 0, 2 * Math.PI); ctx.fill(); });
     board.label("the four small runs", px(SMALL[0]), py(yval(SMALL[0])) - 16, css("--blue"), "left", 12);
-    const big = BIG[ex], pred = line(big);
+    const pred = line(big);
     ctx.strokeStyle = css("--grey"); ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(px(big), T0); ctx.lineTo(px(big), B0); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(px(big), py(pred), 7, 0, 2 * Math.PI); ctx.fill(); board.label("your prediction", px(big) - 12, py(pred) + 4, css("--orange"), "right", 12);
-    const predV = ex === 0 ? E + Math.pow(10, pred) : Math.pow(10, pred);
-    document.getElementById("slSlope").textContent = ((h[1][1] - h[0][1]) / (h[1][0] - h[0][0])).toFixed(3); document.getElementById("slPred").textContent = "L = " + predV.toFixed(3);
-    if (paid) { const tv = yval(big), trueL = L(Math.pow(10, big)); ctx.fillStyle = css("--red"); ctx.beginPath(); ctx.arc(px(big), py(tv), 9, 0, 2 * Math.PI); ctx.fill(); board.label("the run: L = " + trueL.toFixed(3), px(big) - 12, py(tv) + (tv > pred ? -8 : 18), css("--red"), "right", 13); document.getElementById("slTrue").textContent = "L = " + trueL.toFixed(3); } else document.getElementById("slTrue").textContent = "-";
+    board.label("the big run: 10^" + big + " parameters", px(big), T0 - 8, css("--muted"), "center", 12);
+    const predY = Math.max(T0, Math.min(B0, py(pred))), off = predY !== py(pred); ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(px(big), predY, 7, 0, 2 * Math.PI); ctx.fill(); board.label(off ? "your prediction, L = " + predV().toFixed(2) + " (off the chart)" : "your prediction", px(big) - 12, predY + 4, css("--orange"), "right", 12);
+    document.getElementById(cfg.id + "Slope").textContent = ((h[1][1] - h[0][1]) / (h[1][0] - h[0][0])).toFixed(3); document.getElementById(cfg.id + "Pred").textContent = "L = " + predV().toFixed(3);
+    if (paid) { const tv = yval(big), trueL = L(Math.pow(10, big)); ctx.fillStyle = css("--red"); ctx.beginPath(); ctx.arc(px(big), py(tv), 9, 0, 2 * Math.PI); ctx.fill(); board.label("the run: L = " + trueL.toFixed(3), px(big) - 12, py(tv) + (tv > pred ? -8 : 18), css("--red"), "right", 13); document.getElementById(cfg.id + "True").textContent = "L = " + trueL.toFixed(3); }
+    else { document.getElementById(cfg.id + "True").textContent = choice === null ? "commit first" : "pay to see"; if (choice === null) board.label("the run stays hidden until you commit in the panel", px(big) - 12, T0 + 16, css("--muted"), "right", 12); }
   }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); let bd = 1e9; drag = null; h.forEach((p, i) => { const d = Math.hypot(mx - px(p[0]), my - py(p[1])); if (d < bd) { bd = d; drag = i; } }); if (bd > 24) drag = null; });
-  window.addEventListener("mousemove", ev => { if (drag === null) return; const [mx, my] = board.pos(ev); h[drag] = [Math.max(XL, Math.min(XR, XL + (mx - L0) / (R0 - L0) * (XR - XL))), pyinv(my)]; if (Math.abs(h[0][0] - h[1][0]) < 0.3) h[drag][0] = h[1 - drag][0] + (drag === 0 ? -0.3 : 0.3); draw(); });
-  window.addEventListener("mouseup", () => { drag = null; });
-  document.getElementById("slRun").addEventListener("click", () => {
-    paid = true; draw(); const big = BIG[ex], predV = ex === 0 ? E + Math.pow(10, line(big)) : Math.pow(10, line(big)), trueL = L(Math.pow(10, big)), err = predV - trueL;
-    stepEl.innerHTML = '<span class="k">exercise ' + (ex + 1) + ': the run came back</span><div class="ask ' + (Math.abs(err) < 0.05 ? 'ok' : 'no') + '">You predicted ' + predV.toFixed(3) + '; the run reached ' + trueL.toFixed(3) + ' (' + (err > 0 ? '+' : '') + err.toFixed(3) + ').</div><p>' + (ex === 0 ? 'With the floor subtracted the law is exactly a line on these axes, and a ruler through four cheap runs predicts a run a hundred times larger. This is what scaling laws are for: the small runs price the large one before you pay for it.' : 'The raw points bend because the floor E = 1.8 is in them; a ruler through the measured range runs below the floor and predicts a loss no model can reach. The law is a power law in the reducible loss, over the measured range, and it says nothing about what the model can do.') + '</p>';
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); let bd = 1e9; drag = null; h.forEach((p, i) => { const d = Math.hypot(mx - px(p[0]), my - py(p[1])); if (d < bd) { bd = d; drag = i; } }); if (bd > 24) drag = null; });
+  window.addEventListener("pointermove", ev => { if (drag === null) return; const [mx, my] = board.pos(ev); h[drag] = [Math.max(XL, Math.min(XR, XL + (mx - L0) / (R0 - L0) * (XR - XL))), pyinv(my)]; if (Math.abs(h[0][0] - h[1][0]) < 0.3) h[drag][0] = h[1 - drag][0] + (drag === 0 ? -0.3 : 0.3); draw(); });
+  window.addEventListener("pointerup", () => { drag = null; });
+  runBtn.addEventListener("click", () => {
+    if (choice === null) return; paid = true; runBtn.disabled = true; draw(); const pv = predV(), trueL = L(Math.pow(10, big)), err = pv - trueL;
+    const j = cfg.judge(choice, pv, trueL, err);
+    stepEl.innerHTML = '<span class="k">' + cfg.kicker + ': the run came back</span><div class="ask ' + (j.ok ? 'ok' : 'no') + '">You predicted ' + pv.toFixed(3) + '; the run reached ' + trueL.toFixed(3) + ' (' + (err > 0 ? '+' : '') + err.toFixed(3) + '). ' + j.text + '</div><p>' + cfg.after + '</p>';
   });
-  document.getElementById("slNext").addEventListener("click", () => { ex = (ex + 1) % 2; paid = false; initHandles(); text(); draw(); });
-  quiz(document.getElementById("slQuiz"), { q: "A scaling-law paper reports loss falling as a straight line on log axes from 10^7 to 10^9 parameters. What does it license you to say about a 10^12 model?", options: ["Its loss, to within a few percent", "Its capabilities on downstream tasks", "A prediction of its loss that assumes the same data and the same regime, to be checked rather than trusted", "Nothing at all"], answer: 2, why: "The line is an empirical fit over three decades. Extrapolating three more assumes the regime continues, that the data mix is the same, and that the floor was handled. It is a useful estimate and a poor guarantee, and it is silent on capability." });
+  document.getElementById(cfg.id + "Reset").addEventListener("click", () => { paid = false; choice = null; runBtn.disabled = true; initHandles(); text(); draw(); });
+  quiz(document.getElementById(cfg.id + "Quiz"), cfg.quiz);
+  window.addEventListener("themechange", draw);
   initHandles(); text(); draw();
-})();
-
+}
+rulerTab({ id: "sl", raw: false, big: 10, kicker: "exercise 1: the reducible loss",
+  prompt: "Lay the ruler. Will the big run land on your line?", options: ["Yes", "No"],
+  howto: "The vertical axis is L minus the floor E = 1.8 that the data's entropy sets. Drag the two handles so the ruler runs through the four runs and read your prediction at 10^10.",
+  judge: (c, pv, trueL, err) => { const landed = Math.abs(err) < 0.05; if (c === 0 && landed) return { ok: true, text: "Yes: with the floor subtracted the law is exactly a line on these axes, and a ruler through four cheap runs prices a run a hundred times larger." }; if (c === 0 && !landed) return { ok: false, text: "The run missed your line by " + Math.abs(err).toFixed(3) + ". The law is a line on these axes; the ruler did not run through the four points. Reset the ruler and lay it again." }; if (c === 1 && landed) return { ok: false, text: "The run landed on your line. With the floor subtracted the law is an exact power law, so the four small runs fix the big one." }; return { ok: true, text: "The run missed your line, as you said, by " + Math.abs(err).toFixed(3) + ". The law itself is a line here; the miss belongs to the ruler. Reset and lay it through the points to see the line hold." }; },
+  after: "This is what scaling laws are for: the small runs price the large one before you pay for it. The next tab plots the same runs with the floor left in.",
+  quiz: { q: "A scaling-law paper reports loss falling as a straight line on log axes from 10^7 to 10^9 parameters. What does it license you to say about a 10^12 model?", options: ["Its loss, to within a few percent", "Its capabilities on downstream tasks", "A prediction of its loss that assumes the same data and the same regime, to be checked rather than trusted", "Nothing at all"], answer: 2, why: "The line is an empirical fit over three decades. Extrapolating three more assumes the regime continues, that the data mix is the same, and that the floor was handled. It is a useful estimate and a poor guarantee, and it is silent on capability." } });
+rulerTab({ id: "bd", raw: true, big: 11, kicker: "exercise 2: the raw loss",
+  prompt: "Extend the straight line to 1e11 parameters: will the real loss be above or below it?", options: ["Above the line", "Below the line"],
+  howto: "The vertical axis is the raw loss, as it comes out of the run. Lay the ruler through the four points as before and read where the line sits at 10^11. The dashed line is the floor E = 1.8.",
+  judge: (c, pv, trueL, err) => { const above = trueL > pv; const ok = (c === 0) === above; return { ok, text: (above ? "The run came in above the line. " : "The run came in below the line. ") + (pv < 1.8 ? "Your line predicted L = " + pv.toFixed(3) + ", below the floor that no model on this data can reach. " : "") + (ok ? "Right: the floor E = 1.8 sits inside the raw loss, the points bend as they approach it, and a straight extension through the measured range overshoots the improvement." : "The floor E = 1.8 sits inside the raw loss, so the points bend as they approach it and a straight extension through the measured range overshoots the improvement.") }; },
+  after: "The law is a power law in the reducible loss, over the measured range, and it says nothing about what the model can do. Subtract the floor and the line is straight again.",
+  quiz: { q: "On the raw axis the four points already curve a little, and the big run sits well above a straight extension. Which statement about the straight line is correct?", options: ["The line is wrong because the small runs were undertrained", "The line is a fit to log L, while the law is straight in log (L - E); the floor bends the raw curve toward L = E", "The line would be right if the axis were linear"], answer: 1, why: "L = E + A / N^alpha is a power law only after the floor E is subtracted. Plotted raw, the curve flattens toward the floor, and a ruler through the measured range predicts a loss below it. Which quantity is plotted decides whether the ruler is a fair tool." } });
 /* ================= 2. FIT THE RUN ================= */
 (function stack() {
   const MODELS = [{ name: "125 M", P: 0.125e9, act: 0.35 }, { name: "1.3 B", P: 1.3e9, act: 1.2 }, { name: "7 B", P: 7e9, act: 3.0 }];
-  const CARDS = [16, 24, 32, 40, 48, 64, 80, 96], ACCS = [1, 2, 4, 8, 16];
-  let m = 1, mixed = false, zero = false, micro = 4, acc = 1, dev = 1, card = 24;
-  let hits = [], dragAdam = null, dragCard = false, moved = false;
+  const CARDS = [16, 24, 32, 40, 48, 64, 80, 96], ACCS = [1, 2, 4, 8, 16], FEWEST = 8;
+  let m = 2, mixed = false, zero = false, micro = 4, acc = 1, dev = 1, card = 24;
+  let hits = [], dragAdam = null, dragCard = false, moved = false, guess = null, solved = false;
   const board = new Board(document.getElementById("stCols")), stepEl = document.getElementById("stStep");
   const X0 = 220, XW = 780, BOTTOM = 500, PXGB = 4;
   function parts() {
@@ -406,7 +483,8 @@ function pressGroup(id, cb) { document.querySelectorAll("#" + id + " button").fo
   function draw() {
     const { list, actOne } = parts(), total = list.reduce((a, p) => a + p.gb, 0), batch = micro * dev * acc, time = acc * (mixed ? 0.6 : 1) * (zero ? 1.15 : 1);
     document.getElementById("stModelName").textContent = MODELS[m].name + " parameters"; document.getElementById("stBatch").textContent = micro + " x " + dev + " x " + acc + " = " + batch; document.getElementById("stMem").textContent = total.toFixed(1) + " GB of " + card; document.getElementById("stTime").textContent = time.toFixed(2) + " x";
-    board.clear("one training step, per device: touch the bricks, the columns, the loop and the card edge"); const ctx = board.ctx; hits = [];
+    document.getElementById("stRule").innerHTML = "effective batch = micro-batch x accumulation x devices<br>= " + micro + " x " + acc + " x " + dev + " = <b>" + batch + "</b>" + (batch >= 256 ? " (target 256 met)" : " (target 256)");
+    board.clear(guess === null ? "one training step, per device: commit to a number of cards in the panel to unlock the bench" : "one training step, per device: touch the bricks, the columns, the loop and the card edge"); const ctx = board.ctx; hits = [];
     // crates
     board.label("the job", 100, 56, css("--ink"), "center", 13);
     MODELS.forEach((md, i) => { const h = 36 + 22 * i, y = 90 + i * 110, x = 40, wdt = 120; ctx.fillStyle = i === m ? alpha(css("--blue"), 0.25) : css("--bg"); ctx.fillRect(x, y, wdt, h); ctx.strokeStyle = i === m ? css("--blue") : css("--line"); ctx.lineWidth = i === m ? 2 : 1; ctx.strokeRect(x, y, wdt, h); ctx.lineWidth = 1; board.label(md.name + " params", x + wdt / 2, y + h / 2 + 5, css("--ink"), "center", 13); hits.push({ kind: "model", i, x, y, w: wdt, h }); });
@@ -425,6 +503,7 @@ function pressGroup(id, cb) { document.querySelectorAll("#" + id + " button").fo
     }
     // card edge
     const over = total > card; ctx.strokeStyle = over ? css("--red") : "#2E7D5B"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(X0 - 8, top); ctx.lineTo(X0 + XW, top); ctx.stroke(); ctx.lineWidth = 1;
+    ctx.font = "12px " + css("--sans"); const cw = ctx.measureText(card + " GB card (drag this edge)").width; ctx.fillStyle = alpha(css("--panel"), 0.85); ctx.fillRect(X0 - 8, top - 19, cw + 8, 16);
     board.label(card + " GB card (drag this edge)", X0 - 4, top - 6, over ? css("--red") : "#2E7D5B", "left", 12);
     if (over) board.label("over by " + (total - card).toFixed(1) + " GB", X0 + XW, top - 6, css("--red"), "right", 12, true);
     hits.push({ kind: "card", x: X0 - 10, y: top - 8, w: XW + 10, h: 16 });
@@ -438,199 +517,273 @@ function pressGroup(id, cb) { document.querySelectorAll("#" + id + " button").fo
     board.label("total " + total.toFixed(1) + " GB", legX + 140, legY + 6, over ? css("--red") : css("--ink"), "right", 13, true);
     board.label(mixed ? "mixed precision on" : "fp32 throughout (click weights)", legX, legY + 32, css("--muted"), "left", 11); board.label(zero ? "states sharded over " + dev + " devices" : "not sharded (drag Adam over)", legX, legY + 48, css("--muted"), "left", 11);
     if (dragAdam) { const p = list.find(q => q.key === "adam"); ctx.fillStyle = alpha(p.color, 0.8); ctx.fillRect(dragAdam[0] - 40, dragAdam[1] - 14, 80, 28); board.label("Adam", dragAdam[0], dragAdam[1] + 4, "#fff", "center", 11); }
-    const v = document.getElementById("stVerdict"); v.hidden = false; const fits = total <= card, ok = fits && batch >= 256;
-    v.className = "ask " + (ok ? "ok" : (fits ? "" : "no")); v.textContent = ok ? "Fits, with an effective batch of " + batch + " at " + time.toFixed(2) + " x the step time. " + (time > 4 ? "Most of that batch is bought with accumulation; more devices would buy it with hardware." : "") : (fits ? "Fits, but the batch is " + batch + "; the job needs 256." : "Over the card by " + (total - card).toFixed(1) + " GB. " + (!mixed ? "Mixed precision halves the activations. " : "") + (!zero && dev > 1 ? "Sharding divides the states over the devices. " : "") + (micro > 1 ? "Fewer samples with more accumulation trades time for memory." : ""));
+    const v = document.getElementById("stVerdict"); const fits = total <= card, ok = fits && batch >= 256, onTask = m === 2 && card === 24;
+    if (guess === null) { v.hidden = true; return; }
+    v.hidden = false;
+    if (ok && onTask) {
+      solved = true; const right = guess === FEWEST;
+      v.className = "ask " + (right ? "ok" : "no");
+      v.textContent = (right ? "Right: " + dev + " cards. " : "You said " + guess + "; the fit needed " + dev + ", and that is the fewest. ") + "The 7 B model carries 104 GB of weights, master copy, gradients and moments, the same 16 bytes per parameter with or without mixed precision, and that stack goes under 24 GB only when it is sharded over 8 devices (4 leave 26 GB each). Effective batch " + batch + " at " + time.toFixed(2) + " x the step time.";
+    } else {
+      v.className = "ask " + (ok ? "" : (fits ? "" : "no"));
+      v.textContent = ok ? "Fits with an effective batch of " + batch + ", on the " + MODELS[m].name + " model and a " + card + " GB card. The task is the 7 B model on 24 GB cards." : (fits ? "Fits, but the batch is " + batch + "; the job needs 256." : "Over the card by " + (total - card).toFixed(1) + " GB. " + (!mixed ? "Mixed precision halves the activations. " : "") + (!zero && dev > 1 ? "Sharding divides the states over the devices. " : "") + (micro > 1 ? "Fewer samples with more accumulation trades time for memory." : ""));
+    }
   }
-  function text() { stepEl.innerHTML = '<span class="k">the task</span><p>Fit a training step for the chosen model on the card, with an effective batch of at least 256. Every brick is a memory cost you can read off the column; the step time tells you what the fit costs in wall-clock.</p><p>Start with the 1.3 B crate and everything plain, then change one thing at a time and watch which brick it touches. The 7 B crate will not fit a 24 GB card without sharding.</p>'; }
+  function text() {
+    let html = '<span class="k">the task</span><p>Fit the 7B model on 24 GB cards with effective batch 256. Fewest cards.</p>';
+    if (guess === null) html += '<div class="gate"><input type="number" id="stIn" min="1" max="8" step="1" placeholder="cards" aria-label="number of cards"><button class="primary" id="stLock">Lock in</button></div><p>Type the number of cards you expect the job to need. The bricks unlock after that. Devices are added by doubling: 1, 2, 4, 8.</p>';
+    else html += '<p>You said <b>' + guess + '</b> card' + (guess === 1 ? '' : 's') + '. Build it: every brick is a memory cost you can read off the column, and the step time tells you what the fit costs in wall-clock. Change one thing at a time and watch which brick it touches.</p>';
+    stepEl.innerHTML = html;
+    const lock = document.getElementById("stLock"); if (lock) lock.addEventListener("click", () => { const vIn = parseInt(document.getElementById("stIn").value, 10); if (!(vIn >= 1)) return; guess = vIn; text(); draw(); });
+  }
   function hitAt(x, y) { for (let i = hits.length - 1; i >= 0; i--) { const h = hits[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h; } return null; }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const h = hitAt(mx, my); moved = false; if (!h) return; if (h.kind === "card") { dragCard = true; return; } if (h.kind === "adam") { dragAdam = [mx, my]; draw(); } });
-  window.addEventListener("mousemove", ev => { if (!dragCard && !dragAdam) return; const [mx, my] = board.pos(ev); moved = true; if (dragCard) { const gb = (BOTTOM - my) / PXGB; let best = CARDS[0]; CARDS.forEach(c => { if (Math.abs(c - gb) < Math.abs(best - gb)) best = c; }); if (best !== card) { card = best; draw(); } } else { dragAdam = [mx, my]; draw(); } });
-  window.addEventListener("mouseup", ev => { if (dragAdam) { const [mx] = board.pos(ev); const colW = Math.min(120, XW / (dev + 1) - 14); const d = Math.floor((mx - X0) / (colW + 14)); if (d >= 1 && d < dev) zero = true; else if (d === 0) zero = false; dragAdam = null; draw(); } dragCard = false; });
-  board.c.addEventListener("click", ev => { if (moved) { moved = false; return; } const [mx, my] = board.pos(ev); const h = hitAt(mx, my); if (!h) return;
+  board.c.addEventListener("pointerdown", ev => { if (guess === null) return; const [mx, my] = board.pos(ev); const h = hitAt(mx, my); moved = false; if (!h) return; if (h.kind === "card") { dragCard = true; return; } if (h.kind === "adam") { dragAdam = [mx, my]; draw(); } });
+  window.addEventListener("pointermove", ev => { if (!dragCard && !dragAdam) return; const [mx, my] = board.pos(ev); moved = true; if (dragCard) { const gb = (BOTTOM - my) / PXGB; let best = CARDS[0]; CARDS.forEach(c => { if (Math.abs(c - gb) < Math.abs(best - gb)) best = c; }); if (best !== card) { card = best; draw(); } } else { dragAdam = [mx, my]; draw(); } });
+  window.addEventListener("pointerup", ev => { if (dragAdam) { const [mx] = board.pos(ev); const colW = Math.min(120, XW / (dev + 1) - 14); const d = Math.floor((mx - X0) / (colW + 14)); if (d >= 1 && d < dev) zero = true; else if (d === 0) zero = false; dragAdam = null; draw(); } dragCard = false; });
+  board.c.addEventListener("click", ev => { if (guess === null) return; if (moved) { moved = false; return; } const [mx, my] = board.pos(ev); const h = hitAt(mx, my); if (!h) return;
     if (h.kind === "model") m = h.i; else if (h.kind === "act") micro = Math.max(1, micro - 1); else if (h.kind === "addAct") micro = Math.min(16, micro + 1); else if (h.kind === "w" || h.kind === "master") mixed = !mixed; else if (h.kind === "addDev") dev = Math.min(8, dev * 2); else if (h.kind === "removeDev") { dev = Math.max(1, dev / 2); if (dev === 1) zero = false; } else if (h.kind === "acc") acc = ACCS[(ACCS.indexOf(acc) + 1) % ACCS.length]; else return; draw(); });
-  document.getElementById("stReset").addEventListener("click", () => { m = 1; mixed = false; zero = false; micro = 4; acc = 1; dev = 1; card = 24; draw(); });
+  document.getElementById("stReset").addEventListener("click", () => { m = 2; mixed = false; zero = false; micro = 4; acc = 1; dev = 1; card = 24; guess = null; solved = false; text(); draw(); });
   quiz(document.getElementById("stQuiz"), { q: "Mixed precision is often described as halving memory. Which brick does it actually halve on this bench?", options: ["The optimizer moments", "The master copy of the weights", "The activations and the working copy of the weights and gradients; the fp32 master copy and the Adam moments stay full width"], answer: 2, why: "The optimizer keeps a full-width master copy so that small updates are not rounded away, and its two moments are full width too. Those 12 bytes per parameter dominate the static memory of a step; what mixed precision buys is activation memory and arithmetic speed." });
   window.addEventListener("themechange", draw); text(); draw();
 })();
-
 /* ================= 3. CUT THE IMAGE ================= */
 (function patches() {
   const S = 64, img = new Uint8ClampedArray(S * S * 3), rng = mulberry32(5);
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const u = x / S, v = y / S; let r = 110, g = 130, b = 70; const fieldA = Math.floor(u * 4 + v * 2) % 3; if (fieldA === 1) { r = 150; g = 120; b = 70; } if (fieldA === 2) { r = 90; g = 140; b = 60; } if (Math.abs(v - (0.15 + 0.5 * u)) < 0.035) { r = 70; g = 70; b = 72; } const rv = 0.75 - 0.25 * Math.sin(u * 5); if (Math.abs(v - rv) < 0.05) { r = 50; g = 90; b = 160; } if (u > 0.62 && u < 0.9 && v > 0.1 && v < 0.35 && ((Math.floor(u * 40) + Math.floor(v * 40)) % 2 === 0)) { r = 190; g = 185; b = 175; } const n = (rng() - 0.5) * 18; const i = (y * S + x) * 3; img[i] = r + n; img[i + 1] = g + n; img[i + 2] = b + n; }
   const board = new Board(document.getElementById("ptImg")), tok = new Board(document.getElementById("ptTok"));
-  const OX = 40, OY = 50, SIZE = 480; let p = 16, order = null, sel = null, dragH = false, moved = false;
+  const OX = 40, OY = 50, SIZE = 480; let p = 32, order = null, sel = null, dragH = false, moved = false;
+  let countGuess = null, countShown = false, knowGuess = null, knowJudged = false;
+  const KNOW = ["The set of patch contents", "Their arrangement", "Both", "Neither"];
   const G = () => S / p, T = () => G() * G();
   function ident() { order = []; for (let i = 0; i < T(); i++) order.push(i); }
   function patchAt(k) { return [k % G(), Math.floor(k / G())]; }
   function drawPatch(ctx, k, x0, y0, size) { const [gx, gy] = patchAt(k), q = size / p; for (let yy = 0; yy < p; yy++) for (let xx = 0; xx < p; xx++) { const i = ((gy * p + yy) * S + gx * p + xx) * 3; ctx.fillStyle = "rgb(" + img[i] + "," + img[i + 1] + "," + img[i + 2] + ")"; ctx.fillRect(x0 + xx * q, y0 + yy * q, q + 0.5, q + 0.5); } }
-  const stepEl = document.getElementById("ptStep");
+  const stepEl = document.getElementById("ptStep"), shuffleBtn = document.getElementById("ptShuffle");
+  function text(shuffled) {
+    const n = T();
+    let html = '<span class="k">' + p + ' px patches, T = ' + n + '</span>';
+    html += '<p>Patch 16: how many tokens?</p>';
+    if (countGuess === null) html += '<div class="gate"><input type="number" id="ptIn" min="1" max="4096" step="1" placeholder="tokens" aria-label="token count at 16 px"><button class="primary" id="ptLock">Lock in</button></div><p>Type your count for a 64 px scene cut into 16 px patches. The corner handle unlocks after that; drag it to 16 px to check.</p>';
+    else if (!countShown) html += '<p>You said <b>' + countGuess + '</b>. Drag the corner handle to 16 px and read the count.</p>';
+    else { const right = countGuess === 16; html += '<div class="ask ' + (right ? 'ok' : 'no') + '">' + (right ? 'Right: ' : 'You said ' + countGuess + '. ') + 'At 16 px the 64 px side cuts into 4, and 4 x 4 = 16 tokens, each a vector of 3 x 16 x 16 = 768 numbers. At 8 px the count is 64 and the score matrix is sixteen times larger.</div>'; }
+    html += '<p>Shuffle: what does the model still know?</p>';
+    if (!knowJudged) html += '<div class="gate">' + KNOW.map((o, i) => '<button data-g="' + i + '" aria-pressed="' + (knowGuess === i ? 'true' : 'false') + '">' + o + '</button>').join('') + '</div><p>' + (knowGuess === null ? 'Commit to one answer; the shuffle unlocks after that.' : 'Committed. Shuffle the tokens to see.') + '</p>';
+    else { const right = knowGuess === 0; const why = ["The set of patch contents survives: every vector is still here, unchanged. The arrangement is gone, so without position tags the model holds a bag of patches.", "The arrangement is exactly what the shuffle removes. The contents survive: every vector is still here, unchanged, and that bag of patches is all a model without position tags has.", "The contents survive and the arrangement does not: every vector is still here, in a different order. A model without position tags holds a bag of patches.", "Every vector is still here, unchanged; only the order went. A model without position tags holds the set of patch contents and nothing about their arrangement."][knowGuess]; html += '<div class="ask ' + (right ? 'ok' : 'no') + '">' + why + ' The tags are the only thing that puts the road back together.</div>'; }
+    const prev = document.getElementById("ptIn"), prevVal = prev ? prev.value : "";
+    stepEl.innerHTML = html;
+    const lock = document.getElementById("ptLock"); if (lock) { document.getElementById("ptIn").value = prevVal; lock.addEventListener("click", () => { const vIn = parseInt(document.getElementById("ptIn").value, 10); if (!(vIn >= 1)) return; countGuess = vIn; draw(); }); }
+    stepEl.querySelectorAll(".gate button[data-g]").forEach(b => b.addEventListener("click", () => { knowGuess = parseInt(b.dataset.g, 10); shuffleBtn.disabled = false; draw(); }));
+  }
   function draw() {
     const n = T(), shuffled = order.some((v, i) => v !== i), cell = SIZE / G();
+    if (countGuess !== null && p === 16) countShown = true;
     document.getElementById("ptP").textContent = p + " px"; document.getElementById("ptT").textContent = n; document.getElementById("ptD").textContent = 3 * p * p; document.getElementById("ptM").textContent = (n * n).toLocaleString();
-    board.clear(shuffled ? "the sequence rebuilt in its shuffled order: the model's view without position tags" : "the scene, cut into " + n + " patches of " + p + " px (drag the corner handle to recut, click a patch)"); const ctx = board.ctx;
+    board.clear(shuffled ? "the sequence rebuilt in its shuffled order: the model's view without position tags" : "the scene, cut into " + n + " patches of " + p + " px (" + (countGuess === null ? "commit to a count to unlock the handle" : "drag the corner handle to recut, click a patch") + ")"); const ctx = board.ctx;
     for (let slot = 0; slot < n; slot++) { const k = order[slot], [sx, sy] = patchAt(slot); drawPatch(ctx, k, OX + sx * cell, OY + sy * cell, cell); ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.strokeRect(OX + sx * cell, OY + sy * cell, cell, cell); if (sel === k) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.strokeRect(OX + sx * cell + 1, OY + sy * cell + 1, cell - 2, cell - 2); ctx.lineWidth = 1; } }
     // the corner handle on the first patch
-    ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.strokeRect(OX + 1, OY + 1, cell - 2, cell - 2); ctx.lineWidth = 1; ctx.fillStyle = css("--orange"); ctx.fillRect(OX + cell - 9, OY + cell - 9, 18, 18); ctx.strokeStyle = "#fff"; ctx.strokeRect(OX + cell - 9, OY + cell - 9, 18, 18);
-    board.label("drag the corner: 8, 16 or 32 px", OX + cell + 14, OY + cell + 5, css("--orange"), "left", 12);
+    const hc = countGuess === null ? css("--grey") : css("--orange");
+    ctx.strokeStyle = hc; ctx.lineWidth = 3; ctx.strokeRect(OX + 1, OY + 1, cell - 2, cell - 2); ctx.lineWidth = 1; ctx.fillStyle = hc; ctx.fillRect(OX + cell - 9, OY + cell - 9, 18, 18); ctx.strokeStyle = "#fff"; ctx.strokeRect(OX + cell - 9, OY + cell - 9, 18, 18);
+    board.label(countGuess === null ? "handle: locked until you commit" : "handle: drag to 8, 16 or 32 px", OX + SIZE, OY + SIZE + 24, hc, "right", 12);
     board.label(shuffled ? "every token is still here; only the order changed" : "a field, a road, a river, a few buildings", OX, OY + SIZE + 24, css("--muted"), "left", 12);
     tok.clear("the sequence, " + n + " tokens"); const tc = tok.ctx; const cols = Math.min(8, G()), tw = Math.min(44, (tok.W - 60) / cols - 6), rows = Math.ceil(n / cols);
     for (let slot = 0; slot < n; slot++) { const k = order[slot], cx = 30 + (slot % cols) * (tw + 6), cy = 40 + Math.floor(slot / cols) * (tw + 18); drawPatch(tc, k, cx, cy, tw); if (sel === k) { tc.strokeStyle = css("--orange"); tc.lineWidth = 3; tc.strokeRect(cx, cy, tw, tw); tc.lineWidth = 1; } if (n <= 64) tok.label("pos " + (slot + 1), cx + tw / 2, cy + tw + 11, css("--muted"), "center", 9, true); }
     const by = 40 + rows * (tw + 18) + 20;
     if (sel !== null) { tok.label("token " + (sel + 1) + ": its " + (3 * p * p) + " numbers, flattened (first 96)", 30, by, css("--ink"), "left", 12); const [gx, gy] = patchAt(sel); for (let j = 0; j < 96 && j < 3 * p * p; j++) { const pix = Math.floor(j / 3), xx = pix % p, yy = Math.floor(pix / p), i = ((gy * p + yy) * S + gx * p + xx) * 3 + (j % 3); tc.fillStyle = mix(css("--panel"), css("--ink"), img[i] / 255); tc.fillRect(30 + j * 4, by + 10, 3.5, 30); } tok.label("+ position tag " + (order.indexOf(sel) + 1) + " of " + n + (shuffled ? "  (changed by the shuffle)" : ""), 30, by + 60, css("--blue"), "left", 12); }
     else tok.label("click a patch on the scene", 30, by, css("--muted"), "left", 12);
-    stepEl.innerHTML = '<span class="k">' + p + ' px patches, T = ' + n + '</span><p>' + (p === 8 ? 'Sixty-four tokens: a fine grid, and a score matrix sixteen times the size of the 16 px one.' : (p === 16 ? 'Sixteen tokens, the usual choice at this scale: a 224 px image at 16 px gives 196.' : 'Four tokens: cheap, and each one has to summarize a quarter of the scene.')) + '</p><p>' + (shuffled ? 'The shuffled scene is what the attention block sees without position tags: the same bag of tokens. The tags are the only thing that puts the road back together.' : 'Shuffle the tokens to see the scene as a model without position tags would.') + '</p>';
+    text(shuffled);
   }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const cell = SIZE / G(); moved = false; if (Math.abs(mx - (OX + cell)) < 14 && Math.abs(my - (OY + cell)) < 14) dragH = true; });
-  window.addEventListener("mousemove", ev => { if (!dragH) return; const [mx, my] = board.pos(ev); moved = true; const want = Math.max(mx - OX, my - OY); let best = 16, bd = 1e9; [8, 16, 32].forEach(q => { const d = Math.abs(SIZE * q / S - want); if (d < bd) { bd = d; best = q; } }); if (best !== p) { p = best; sel = null; ident(); draw(); } });
-  window.addEventListener("mouseup", () => { dragH = false; });
+  board.c.addEventListener("pointerdown", ev => { if (countGuess === null) return; const [mx, my] = board.pos(ev); const cell = SIZE / G(); moved = false; if (Math.abs(mx - (OX + cell)) < 14 && Math.abs(my - (OY + cell)) < 14) dragH = true; });
+  window.addEventListener("pointermove", ev => { if (!dragH) return; const [mx, my] = board.pos(ev); moved = true; const want = Math.max(mx - OX, my - OY); let best = 16, bd = 1e9; [8, 16, 32].forEach(q => { const d = Math.abs(SIZE * q / S - want); if (d < bd) { bd = d; best = q; } }); if (best !== p) { p = best; sel = null; ident(); draw(); } });
+  window.addEventListener("pointerup", () => { dragH = false; });
   board.c.addEventListener("click", ev => { if (moved) { moved = false; return; } const [mx, my] = board.pos(ev), cell = SIZE / G(), sx = Math.floor((mx - OX) / cell), sy = Math.floor((my - OY) / cell); if (sx < 0 || sy < 0 || sx >= G() || sy >= G()) return; sel = order[sy * G() + sx]; draw(); });
-  document.getElementById("ptShuffle").addEventListener("click", () => { const r = mulberry32(Date.now() % 100000); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } draw(); });
-  document.getElementById("ptRestore").addEventListener("click", () => { ident(); draw(); });
+  shuffleBtn.addEventListener("click", () => { if (knowGuess === null) return; const r = mulberry32(Date.now() % 100000); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } knowJudged = true; draw(); });
+  document.getElementById("ptRestore").addEventListener("click", () => { p = 32; sel = null; countGuess = null; countShown = false; knowGuess = null; knowJudged = false; shuffleBtn.disabled = true; ident(); draw(); });
   quiz(document.getElementById("ptQuiz"), { q: "A vision transformer and a convolutional network are trained on 2 000 labelled aerial tiles. Which usually wins, and why?", options: ["The transformer, since attention is more expressive", "The convolution, since its grid assumption is a prior the transformer must learn from data it does not have", "They tie; the architecture does not matter at this size"], answer: 1, why: "Locality and translation equivariance are built into convolution. A transformer has to discover from the data that neighbouring patches are related, which takes far more than 2 000 tiles. With pretraining on a large corpus the picture reverses, which is why Week 4's backbones are pretrained patch models." });
   window.addEventListener("themechange", draw); ident(); draw();
 })();
-
 /* ================= 4. THE REACH TEST ================= */
 (function sparse() {
-  const T = 48, REF = 24; let win = 2, stride = 0, glob = 0, src = 20, full = false, anim = null, shown = 0, drag = null;
+  const T = 24, REF = 10, BUDGET = 4, SMAX = 12; let win = 2, stride = 0, glob = 0, src = 20, full = false, anim = null, shown = 0, drag = null, pick = null;
+  const DEV = ["Window", "Stride", "Global tokens"];
   const board = new Board(document.getElementById("spStrip")), stepEl = document.getElementById("spStep");
-  const X0 = 40, W = (1200 - 80) / T, Y0 = 70, HGT = 60, SY = 190, SH = 44;
+  const X0 = 40, W = (1200 - 80) / T, Y0 = 70, HGT = 60, SY = 200, SH = 48;
   function adj(i) { const s = new Set(); if (full) { for (let j = 0; j < T; j++) s.add(j); return s; } for (let d = -win; d <= win; d++) { const j = i + d; if (j >= 0 && j < T) s.add(j); } if (stride) { for (let j = i % stride; j < T; j += stride) s.add(j); } for (let g = 0; g < glob; g++) s.add(g); if (i < glob) for (let j = 0; j < T; j++) s.add(j); return s; }
   function hops() { const h = new Array(T).fill(-1); h[src] = 0; let frontier = [src], k = 0; while (frontier.length) { k++; const next = []; for (const i of frontier) for (const j of adj(i)) if (h[j] < 0) { h[j] = k; next.push(j); } frontier = next; } return h; }
-  function cost() { let tot = 0; for (let i = 0; i < T; i++) tot += adj(i).size; return tot / T; }
+  function cost() { let tot = 0, n = 0; for (let i = glob; i < T; i++) { tot += adj(i).size; n++; } return n ? tot / n : T; }
   function draw() {
-    const h = hops(), c = cost(), maxh = Math.max.apply(null, h), r1 = h.filter(v => v >= 0 && v <= 1).length, r2 = h.filter(v => v >= 0 && v <= 2).length, r3 = h.filter(v => v >= 0 && v <= 3).length;
-    document.getElementById("spPat").textContent = win + " / " + (stride || "off") + " / " + glob; document.getElementById("spCost").textContent = c.toFixed(1) + " of " + T; document.getElementById("spReach").textContent = r1 + " / " + r2 + " / " + r3 + " of " + T; document.getElementById("spMax").textContent = h.some(v => v < 0) ? "never (disconnected)" : String(maxh);
-    board.clear((full ? "full attention" : "pattern: window " + win + (stride ? ", stride " + stride : "") + (glob ? ", " + glob + " global" : "")) + "; click a position to make it the source"); const ctx = board.ctx;
+    const h = hops(), c = cost(), maxh = Math.max.apply(null, h), r1 = h.filter(v => v >= 0 && v <= 1).length, r2 = h.filter(v => v >= 0 && v <= 2).length, r3 = h.filter(v => v >= 0 && v <= 3).length, disc = h.some(v => v < 0);
+    document.getElementById("spPat").textContent = win + " / " + (stride || "off") + " / " + glob; document.getElementById("spCost").textContent = c.toFixed(1) + " of " + T; document.getElementById("spReach").textContent = r1 + " / " + r2 + " / " + r3 + " of " + T; document.getElementById("spMax").textContent = disc ? "never (disconnected)" : String(maxh);
+    board.clear((full ? "full attention" : "pattern: window " + win + (stride ? ", stride " + stride : "") + (glob ? ", " + glob + " global" : "")) + "; click a position to make it the source" + (pick === null ? "; the stencil unlocks after you pick a device in the panel" : "")); const ctx = board.ctx;
     const col = v => v < 0 ? css("--bg") : (v === 0 ? css("--orange") : [css("--blue"), mix(css("--panel"), css("--blue"), 0.55), mix(css("--panel"), css("--blue"), 0.3), mix(css("--panel"), css("--blue"), 0.15)][Math.min(3, v - 1)]);
     // global slots
-    for (let g = 0; g < 4; g++) { const on = g < glob; ctx.fillStyle = on ? css("--red") : css("--bg"); ctx.strokeStyle = on ? css("--red") : css("--line"); ctx.beginPath(); ctx.arc(X0 + g * W + W / 2, Y0 - 14, 6, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); }
-    board.label("global slots (click)", X0 + 4 * W + 6, Y0 - 10, css("--muted"), "left", 11);
-    for (let i = 0; i < T; i++) { const v = h[i] <= shown ? h[i] : -1; ctx.fillStyle = col(v); ctx.fillRect(X0 + i * W + 2, Y0, W - 4, HGT); ctx.strokeStyle = css("--line"); ctx.strokeRect(X0 + i * W + 2, Y0, W - 4, HGT); if (v >= 0) board.label(String(v), X0 + i * W + W / 2, Y0 + HGT / 2 + 5, v <= 1 ? "#fff" : css("--ink"), "center", 12, true); if (i % 8 === 0) board.label(String(i + 1), X0 + i * W + W / 2, Y0 + HGT + 14, css("--muted"), "center", 10, true); }
-    board.label("hops from the source (orange) to each position; blank = not yet reached", X0, Y0 + HGT + 34, css("--muted"), "left", 12);
+    for (let g = 0; g < 4; g++) { const on = g < glob; ctx.fillStyle = on ? css("--red") : css("--bg"); ctx.strokeStyle = on ? css("--red") : css("--line"); ctx.beginPath(); ctx.arc(X0 + g * W + W / 2, Y0 - 16, 8, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); }
+    board.label("global slots (click)", X0 + 4 * W + 6, Y0 - 11, css("--muted"), "left", 13);
+    for (let i = 0; i < T; i++) { const v = h[i] <= shown ? h[i] : -1; ctx.fillStyle = col(v); ctx.fillRect(X0 + i * W + 2, Y0, W - 4, HGT); ctx.strokeStyle = css("--line"); ctx.strokeRect(X0 + i * W + 2, Y0, W - 4, HGT); if (v >= 0) board.label(String(v), X0 + i * W + W / 2, Y0 + HGT / 2 + 6, v <= 1 ? "#fff" : css("--ink"), "center", 16, true); if (i % 4 === 0) board.label(String(i + 1), X0 + i * W + W / 2, Y0 + HGT + 16, css("--muted"), "center", 12, true); }
+    board.label("hops from the source (orange) to each position; blank = not yet reached", X0, Y0 + HGT + 38, css("--muted"), "left", 13);
     // stencil row
-    board.label("the stencil: what one position (here " + (REF + 1) + ") reads. drag the window edge, drag the comb tooth, click the slots", X0, SY - 10, css("--ink"), "left", 13);
+    board.label("the stencil: what one position (here " + (REF + 1) + ") reads. drag the window edge, drag the comb tooth, click the slots", X0, SY - 12, css("--ink"), "left", 13);
     for (let i = 0; i < T; i++) { ctx.fillStyle = css("--bg"); ctx.fillRect(X0 + i * W + 2, SY, W - 4, SH); ctx.strokeStyle = css("--line"); ctx.strokeRect(X0 + i * W + 2, SY, W - 4, SH); }
     if (!full) {
       // window band
       ctx.fillStyle = alpha(css("--orange"), 0.45); ctx.fillRect(X0 + (REF - win) * W + 2, SY, (2 * win + 1) * W - 4, SH);
-      const ex = X0 + (REF + win + 1) * W - 2; ctx.fillStyle = css("--orange"); ctx.fillRect(ex - 5, SY - 4, 10, SH + 8); board.label("window " + win, ex + 10, SY + SH / 2 + 4, css("--orange"), "left", 11, true);
+      const ex = X0 + (REF + win + 1) * W - 2; ctx.fillStyle = css("--orange"); ctx.fillRect(ex - 6, SY - 5, 12, SH + 10); board.label("window " + win, ex + 12, SY + SH / 2 + 5, css("--orange"), "left", 13, true);
       // comb
-      if (stride) { for (let j = REF % stride; j < T; j += stride) { ctx.fillStyle = alpha(css("--blue"), 0.6); ctx.fillRect(X0 + j * W + 2, SY + SH - 14, W - 4, 14); } }
-      const tx = X0 + (REF + (stride || 2)) * W + W / 2; ctx.fillStyle = stride ? css("--blue") : css("--line"); ctx.beginPath(); ctx.arc(tx, SY + SH + 14, 7, 0, 2 * Math.PI); ctx.fill(); board.label(stride ? "stride " + stride + " (drag)" : "drag to add a stride", tx + 12, SY + SH + 18, stride ? css("--blue") : css("--muted"), "left", 11, true);
-      for (let g = 0; g < glob; g++) { ctx.fillStyle = alpha(css("--red"), 0.6); ctx.fillRect(X0 + g * W + 2, SY, W - 4, 14); }
-      ctx.fillStyle = css("--ink"); ctx.fillRect(X0 + REF * W + 2, SY + SH / 2 - 3, W - 4, 6);
+      if (stride) { for (let j = REF % stride; j < T; j += stride) { ctx.fillStyle = alpha(css("--blue"), 0.6); ctx.fillRect(X0 + j * W + 2, SY + SH - 16, W - 4, 16); } }
+      const tx = X0 + (REF + (stride || 2)) * W + W / 2; ctx.fillStyle = stride ? css("--blue") : css("--line"); ctx.beginPath(); ctx.arc(tx, SY + SH + 18, 9, 0, 2 * Math.PI); ctx.fill(); board.label(stride ? "stride " + stride + " (drag)" : "drag to add a stride", tx + 14, SY + SH + 23, stride ? css("--blue") : css("--muted"), "left", 13, true);
+      for (let g = 0; g < glob; g++) { ctx.fillStyle = alpha(css("--red"), 0.6); ctx.fillRect(X0 + g * W + 2, SY, W - 4, 16); }
+      ctx.fillStyle = css("--ink"); ctx.fillRect(X0 + REF * W + 2, SY + SH / 2 - 4, W - 4, 8);
     } else { ctx.fillStyle = alpha(css("--blue"), 0.4); ctx.fillRect(X0 + 2, SY, T * W - 4, SH); }
     // pattern matrix
-    const mx = 40, my = 290, ms = 250 / T; board.label("the pattern: pairs that will be scored (rows read columns)", mx, my - 8, css("--ink"), "left", 13);
-    for (let i = 0; i < T; i++) { const a = adj(i); for (let j = 0; j < T; j++) { ctx.fillStyle = a.has(j) ? (i === src ? css("--orange") : css("--blue")) : css("--bg"); ctx.fillRect(mx + j * ms, my + i * ms, ms - 0.5, ms - 0.5); } }
+    const mx = 40, my = 305, ms = 240 / T; board.label("the pattern: pairs that will be scored (rows read columns)", mx, my - 10, css("--ink"), "left", 13);
+    for (let i = 0; i < T; i++) { const a = adj(i); for (let j = 0; j < T; j++) { ctx.fillStyle = a.has(j) ? (i === src ? css("--orange") : css("--blue")) : css("--bg"); ctx.fillRect(mx + j * ms, my + i * ms, ms - 0.8, ms - 0.8); } }
     ctx.strokeStyle = css("--line"); ctx.strokeRect(mx, my, T * ms, T * ms);
-    board.label("entries per row: " + c.toFixed(1) + " of " + T + " (full attention scores all " + T + ")", mx + 280, my + 40, css("--ink"), "left", 14);
+    board.label("entries per ordinary row: " + c.toFixed(1) + " of " + T + " (full attention scores all " + T + ")" + (glob ? "; each global row reads all " + T : ""), mx + 280, my + 40, css("--ink"), "left", 14);
     board.label("reach from the source: " + r1 + " in one hop, " + r2 + " within two, " + r3 + " within three", mx + 280, my + 70, css("--ink"), "left", 14);
-    board.label(h.some(v => v < 0) ? "some positions are never reached" : "the whole record is reached in " + maxh + (maxh === 1 ? " hop" : " hops"), mx + 280, my + 100, css("--ink"), "left", 14);
-    board.label("the comb is the stride: every stride-th position is read, a coarse grid", mx + 280, my + 140, css("--muted"), "left", 12); board.label("a global token reads and is read by everyone: one entry per row, two hops across", mx + 280, my + 160, css("--muted"), "left", 12);
-    const v = document.getElementById("spVerdict"); v.hidden = full; if (!full) { const ok = maxh <= 2 && !h.some(x => x < 0) && c <= 12; v.className = "ask " + (ok ? "ok" : ""); v.textContent = ok ? "Challenge met: everything within two hops at " + c.toFixed(1) + " entries per row, a quarter of full attention." : (c > 12 ? "Too expensive: " + c.toFixed(1) + " entries per row. Shrink the window or widen the stride." : (h.some(x => x < 0) ? "Disconnected: some positions can never hear the source." : maxh > 2 ? "Reach is " + maxh + " hops. Add a stride or a global token to shorten the path." : "")); }
+    board.label(disc ? "some positions are never reached" : "the whole record is reached in " + maxh + (maxh === 1 ? " hop" : " hops"), mx + 280, my + 100, css("--ink"), "left", 14);
+    board.label("the comb is the stride: every stride-th position is read, a coarse grid", mx + 280, my + 140, css("--muted"), "left", 13); board.label("a global token reads and is read by everyone: one entry per row, two hops across", mx + 280, my + 162, css("--muted"), "left", 13);
+    board.label("the budget: " + BUDGET + " entries per ordinary row, every position within two hops", mx + 280, my + 200, css("--ink"), "left", 14, true);
+    const v = document.getElementById("spVerdict"); v.hidden = full || pick === null; if (!full && pick !== null) { const ok = maxh <= 2 && !disc && c <= BUDGET; const used = glob ? 2 : (stride ? 1 : 0); v.className = "ask " + (ok ? "ok" : ""); v.textContent = ok ? "Challenge met: everything within two hops at " + c.toFixed(1) + " entries per ordinary row, " + (c / T * 100).toFixed(0) + " % of full attention. " + (used === 2 ? "A global token did it" : used === 1 ? "A stride did it" : "The window did it") + (used !== pick ? "; you had picked the " + DEV[pick].toLowerCase() + "." : ", as you picked.") : (c > BUDGET ? "Too expensive: " + c.toFixed(1) + " entries per ordinary row against a budget of " + BUDGET + ". Shrink the window or drop the stride." : (disc ? "Disconnected: some positions can never hear the source." : maxh > 2 ? "Reach is " + maxh + " hops. Add a stride or a global token to shorten the path." : "")); }
   }
   function animate() { if (anim) clearTimeout(anim); shown = 0; (function f() { draw(); shown++; if (shown <= 4) anim = setTimeout(f, 350); })(); }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev);
-    if (my >= Y0 - 24 && my <= Y0 - 4 && mx >= X0 && mx <= X0 + 4 * W) { const g = Math.floor((mx - X0) / W); glob = (g < glob) ? g : g + 1; full = false; animate(); return; }
+  function text() {
+    let html = '<span class="k">the challenge</span><p>Reach every token in two hops with a budget of four entries per row.</p>';
+    if (pick === null) html += '<p>Pick the device that will do it with the smallest budget. The stencil unlocks after that.</p><div class="gate">' + DEV.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>';
+    else { const right = pick === 2; html += '<div class="ask ' + (right ? 'ok' : 'no') + '">' + (right ? 'Right: a global token. ' : 'You picked the ' + DEV[pick].toLowerCase() + '. ') + 'One shared token that everyone reads and writes gives every pair a two-hop route for one entry per ordinary row. A window alone needs ' + Math.ceil((T - 1) / 4) + ' each side, ' + (2 * Math.ceil((T - 1) / 4) + 1) + ' entries, to cross ' + T + ' positions in two hops. A stride alone never leaves its own residue class, and with a window it still costs about ' + (3 + T / 3) + '.</div><p>Build it on the stencil: shrink the window, click a global slot, then click any position as the source and watch the wave. Full attention does it in one hop for ' + T + ' per row.</p>'; }
+    stepEl.innerHTML = html;
+    stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { pick = parseInt(b.dataset.g, 10); text(); animate(); }));
+  }
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev);
     if (my >= Y0 && my <= Y0 + HGT) { const i = Math.floor((mx - X0) / W); if (i >= 0 && i < T) { src = i; animate(); } return; }
-    const ex = X0 + (REF + win + 1) * W - 2; if (Math.abs(mx - ex) < 10 && my >= SY - 6 && my <= SY + SH + 6) { drag = "win"; return; }
-    const tx = X0 + (REF + (stride || 2)) * W + W / 2; if (Math.hypot(mx - tx, my - (SY + SH + 14)) < 12) { drag = "stride"; return; } });
-  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx] = board.pos(ev); full = false; if (drag === "win") { const w2 = Math.max(0, Math.min(6, Math.round((mx - X0) / W - REF - 1))); if (w2 !== win) { win = w2; shown = 9; draw(); } } else { const d = Math.round((mx - X0) / W - REF); const s = d < 3 ? 0 : Math.min(16, d); if (s !== stride) { stride = s; shown = 9; draw(); } } });
-  window.addEventListener("mouseup", () => { if (drag) { drag = null; animate(); } });
+    if (pick === null) return;
+    if (my >= Y0 - 28 && my <= Y0 - 4 && mx >= X0 && mx <= X0 + 4 * W) { const g = Math.floor((mx - X0) / W); glob = (g < glob) ? g : g + 1; full = false; animate(); return; }
+    const ex = X0 + (REF + win + 1) * W - 2; if (Math.abs(mx - ex) < 12 && my >= SY - 8 && my <= SY + SH + 8) { drag = "win"; return; }
+    const tx = X0 + (REF + (stride || 2)) * W + W / 2; if (Math.hypot(mx - tx, my - (SY + SH + 18)) < 14) { drag = "stride"; return; } });
+  window.addEventListener("pointermove", ev => { if (!drag) return; const [mx] = board.pos(ev); full = false; if (drag === "win") { const w2 = Math.max(0, Math.min(6, Math.round((mx - X0) / W - REF - 1))); if (w2 !== win) { win = w2; shown = 9; draw(); } } else { const d = Math.round((mx - X0) / W - REF); const s = d < 3 ? 0 : Math.min(SMAX, d); if (s !== stride) { stride = s; shown = 9; draw(); } } });
+  window.addEventListener("pointerup", () => { if (drag) { drag = null; animate(); } });
   document.getElementById("spFull").addEventListener("click", () => { full = !full; document.getElementById("spFull").textContent = full ? "Back to my pattern" : "Compare with full attention"; animate(); });
-  stepEl.innerHTML = '<span class="k">the challenge</span><p>Reach all 48 positions from any source within two hops, scoring at most 12 pairs per row. Full attention does it in one hop for 48 per row.</p><p>Watch the wave: each pulse is one layer of attention passing information one hop further. A window of 2, a stride of 8 and one global token is one answer; find another.</p>';
-  quiz(document.getElementById("spQuiz"), { q: "A sparse pattern that reaches everything in two hops needs two attention layers to do what one dense layer does. Why is that still a win for long records?", options: ["Two layers are always better than one", "Each layer costs T times the entries per row instead of T squared, so the pair of layers is far cheaper than one dense layer once T is large", "It is not a win; sparse attention is only for text"], answer: 1, why: "Cost per layer is T times the row count. With 12 entries per row at T = 864 000 that is 10 million scores per layer; the dense layer needs 750 billion. Two cheap hops are a bargain, provided the pattern matches which pairs the physics of the record actually couples." });
-  window.addEventListener("themechange", draw); animate();
+  document.getElementById("spReset").addEventListener("click", () => { win = 2; stride = 0; glob = 0; src = 20; full = false; pick = null; document.getElementById("spFull").textContent = "Compare with full attention"; text(); animate(); });
+  quiz(document.getElementById("spQuiz"), { q: "A sparse pattern that reaches everything in two hops needs two attention layers to do what one dense layer does. Why is that still a win for long records?", options: ["Two layers are always better than one", "Each layer costs T times the entries per row instead of T squared, so the pair of layers is far cheaper than one dense layer once T is large", "It is not a win; sparse attention is only for text"], answer: 1, why: "Cost per layer is T times the row count. With 4 entries per row at T = 864 000 that is 3.5 million scores per layer; the dense layer needs 750 billion. Two cheap hops are a bargain, provided the pattern matches which pairs the physics of the record actually couples." });
+  window.addEventListener("themechange", draw); text(); animate();
 })();
-
 /* ================= 5. THE STEP SEQUENCER ================= */
 (function ssm() {
-  const N = 48; let dt = 0.3, lam = 0.2, om = 0.3, u = new Array(N).fill(0), anim = null, shown = N, drag = null;
+  const N = 48, TARGET = 12; let dt = 0.3, lam = 0.45, om = 0.3, u = new Array(N).fill(0), anim = null, shown = N, drag = null, mode = 0, placed = false, clickLam = null;
   const board = new Board(document.getElementById("ssSeq")), stepEl = document.getElementById("ssStep");
   const X0 = 60, W = 800 / N, PX = 900, PY = 70, PW = 270, PH = 250, RX = 60, RW = 800, RY = 36, UNIT = RW / 12;
   const poleX = l => PX + PW - (l / 1.2) * (PW - 20) - 10, poleY = w => PY + PH - 10 - (w / 1.2) * (PH - 20);
+  const lamOf = half => Math.log(2) / (half * dt);
   function disc() { const e = Math.exp(-lam * dt), c = Math.cos(om * dt), s = Math.sin(om * dt), Ab = [[e * c, e * s], [-e * s, e * c]], det = lam * lam + om * om, Ai = [[-lam / det, -om / det], [om / det, -lam / det]], M = [[Ab[0][0] - 1, Ab[0][1]], [Ab[1][0], Ab[1][1] - 1]]; const Bb = [Ai[0][0] * M[0][0] + Ai[0][1] * M[1][0], Ai[1][0] * M[0][0] + Ai[1][1] * M[1][0]]; return { Ab, Bb }; }
   function kernel(n) { const { Ab, Bb } = disc(); let x = Bb.slice(); const K = []; for (let k = 0; k < n; k++) { K.push(x[0]); x = [Ab[0][0] * x[0] + Ab[0][1] * x[1], Ab[1][0] * x[0] + Ab[1][1] * x[1]]; } return K; }
   function run() { const { Ab, Bb } = disc(); let x = [0, 0]; const xs = [], ys = []; for (let k = 0; k < N; k++) { x = [Ab[0][0] * x[0] + Ab[0][1] * x[1] + Bb[0] * u[k], Ab[1][0] * x[0] + Ab[1][1] * x[1] + Bb[1] * u[k]]; xs.push(x.slice()); ys.push(x[0]); } return { xs, ys }; }
+  function convolve(K) { const yc = []; for (let k = 0; k < N; k++) { let s = 0; for (let j = 0; j <= k; j++) s += K[j] * u[k - j]; yc.push(s); } return yc; }
   function draw() {
-    const K = kernel(N), peak = Math.max.apply(null, K.map(Math.abs)) || 1, { xs, ys } = run(), half = Math.log(2) / (lam * dt), per = om > 0.001 ? 2 * Math.PI / (om * dt) : Infinity, k24 = K[24] / peak;
-    document.getElementById("ssPole").textContent = lam.toFixed(2) + ", " + om.toFixed(2); document.getElementById("ssDtv").textContent = dt.toFixed(2); document.getElementById("ssHalf").textContent = half.toFixed(1); document.getElementById("ssPer").textContent = isFinite(per) ? per.toFixed(1) : "none"; document.getElementById("ssK24").textContent = (100 * k24).toFixed(0) + " %";
+    const K = kernel(N), peak = Math.max.apply(null, K.map(Math.abs)) || 1, { xs, ys } = run(), yc = convolve(K), half = Math.log(2) / (lam * dt), per = om > 0.001 ? 2 * Math.PI / (om * dt) : Infinity, k24 = K[24] / peak;
+    let diff = 0; for (let k = 0; k < N; k++) diff = Math.max(diff, Math.abs(ys[k] - yc[k]));
+    const yShow = mode === 0 ? ys : yc;
+    document.getElementById("ssPole").textContent = placed ? lam.toFixed(2) + ", " + om.toFixed(2) : "click the map"; document.getElementById("ssDtv").textContent = dt.toFixed(2); document.getElementById("ssHalf").textContent = placed ? half.toFixed(1) : "-"; document.getElementById("ssPer").textContent = placed ? (isFinite(per) ? per.toFixed(1) : "none") : "-"; document.getElementById("ssK24").textContent = (100 * k24).toFixed(0) + " %"; document.getElementById("ssDiff").textContent = diff === 0 ? "0 (identical)" : diff.toExponential(1);
     board.clear("input, state, output and kernel on the left; the pole map and the time ruler set the system"); const ctx = board.ctx;
     // time ruler
     board.line([[RX, RY + 10], [RX + RW, RY + 10]], css("--line")); for (let k = 0; k * dt <= 12; k++) { const x = RX + k * dt * UNIT; const first = k === 1; ctx.fillStyle = first ? css("--orange") : css("--muted"); ctx.fillRect(x - (first ? 3 : 0.5), RY + (first ? 0 : 4), first ? 6 : 1, first ? 20 : 12); }
-    board.label("time ruler: a tick every Delta = " + dt.toFixed(2) + " (drag the orange tick)", RX + RW, RY + 30, css("--muted"), "right", 11);
+    board.label("time ruler: a tick every Delta = " + dt.toFixed(2) + (placed ? " (drag the orange tick)" : " (locked until the pole is placed)"), RX + RW, RY + 30, css("--muted"), "right", 11);
     // input row
     const IY = 70; board.label("input u_k (click a step)", X0, IY - 6, css("--muted"), "left", 11); for (let k = 0; k < N; k++) { ctx.fillStyle = u[k] ? css("--orange") : css("--bg"); ctx.fillRect(X0 + k * W + 2, IY, W - 4, 30); ctx.strokeStyle = css("--line"); ctx.strokeRect(X0 + k * W + 2, IY, W - 4, 30); if (k % 8 === 0) board.label(String(k), X0 + k * W + W / 2, IY + 44, css("--muted"), "center", 10, true); }
     // state
     const sy0 = 215, sh = 60, xmax = Math.max(0.05, Math.max.apply(null, xs.map(v => Math.max(Math.abs(v[0]), Math.abs(v[1]))))); board.label("state x_k, two components (dark and light), scaled to " + xmax.toFixed(2), X0, sy0 - 70, css("--muted"), "left", 11);
     for (let k = 0; k < Math.min(shown, N); k++) { const s1 = xs[k][0] / xmax, s2 = xs[k][1] / xmax; ctx.fillStyle = css("--blue"); ctx.fillRect(X0 + k * W + 2, sy0 - Math.max(0, s1) * sh, W / 2 - 2, Math.abs(s1) * sh); ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.45); ctx.fillRect(X0 + k * W + W / 2, sy0 - Math.max(0, s2) * sh, W / 2 - 2, Math.abs(s2) * sh); }
     board.line([[X0, sy0], [X0 + N * W, sy0]], css("--line"));
-    const oy0 = 345, ymax = Math.max(0.05, Math.max.apply(null, ys.map(Math.abs))); board.label("output y_k = C x_k, scaled to " + ymax.toFixed(2), X0, oy0 - 62, css("--muted"), "left", 11); board.line([[X0, oy0], [X0 + N * W, oy0]], css("--line"));
-    ctx.strokeStyle = css("--red"); ctx.lineWidth = 2.4; ctx.beginPath(); for (let k = 0; k < Math.min(shown, N); k++) { const y = oy0 - ys[k] / ymax * 50; if (k === 0) ctx.moveTo(X0 + k * W + W / 2, y); else ctx.lineTo(X0 + k * W + W / 2, y); } ctx.stroke(); ctx.lineWidth = 1;
+    const oy0 = 345, ymax = Math.max(0.05, Math.max.apply(null, ys.map(Math.abs))); board.label((mode === 0 ? "output by the recurrence, y_k = C x_k" : "output by the convolution, y_k = sum of K_j u_(k-j)") + ", scaled to " + ymax.toFixed(2) + "; largest difference between the two: " + (diff === 0 ? "0" : diff.toExponential(1)), X0, oy0 - 62, css("--muted"), "left", 11); board.line([[X0, oy0], [X0 + N * W, oy0]], css("--line"));
+    ctx.strokeStyle = mode === 0 ? css("--red") : "#2E7D5B"; ctx.lineWidth = 2.4; ctx.beginPath(); for (let k = 0; k < Math.min(shown, N); k++) { const y = oy0 - yShow[k] / ymax * 50; if (k === 0) ctx.moveTo(X0 + k * W + W / 2, y); else ctx.lineTo(X0 + k * W + W / 2, y); } ctx.stroke(); ctx.lineWidth = 1;
+    if (mode === 1) { for (let k = 0; k < Math.min(shown, N); k++) { ctx.fillStyle = css("--red"); ctx.beginPath(); ctx.arc(X0 + k * W + W / 2, oy0 - ys[k] / ymax * 50, 2.2, 0, 2 * Math.PI); ctx.fill(); } board.label("green line: convolution; red dots: recurrence", X0 + N * W, oy0 - 62, css("--muted"), "right", 11); }
     const ky0 = 480; board.label("kernel K_lag: the weight the output gives to an input that many steps back", X0, ky0 - 56, css("--muted"), "left", 11);
     for (let k = 0; k < N; k++) { const v = K[k] / peak; ctx.fillStyle = k === 24 ? css("--orange") : "#2E7D5B"; ctx.fillRect(X0 + k * W + 2, ky0 - Math.max(0, v) * 46, W - 4, Math.abs(v) * 46); } board.line([[X0, ky0], [X0 + N * W, ky0]], css("--line")); board.label("lag 24 (orange): " + (100 * k24).toFixed(0) + " % of the peak", X0 + 24 * W + W, ky0 + 46, css("--orange"), "left", 12);
     for (let k = 0; k < N; k += 8) board.label("lag " + k, X0 + k * W + W / 2, ky0 + 18 + (k === 24 ? 14 : 0), css("--muted"), "center", 10, true);
     // pole map
     ctx.fillStyle = css("--bg"); ctx.fillRect(PX, PY, PW, PH); ctx.strokeStyle = css("--line"); ctx.strokeRect(PX, PY, PW, PH);
-    board.label("pole map: drag the pole", PX + PW / 2, PY - 10, css("--ink"), "center", 12);
+    board.label(placed ? "pole map: drag the pole" : "pole map: click where the pole belongs", PX + PW / 2, PY - 10, css("--ink"), "center", 12);
+    if (placed) { const bl = poleX(Math.min(1.2, lamOf(TARGET - 2))), br = poleX(lamOf(TARGET + 2)); ctx.fillStyle = alpha(css("--blue"), 0.18); ctx.fillRect(Math.min(bl, br), PY, Math.abs(br - bl), PH); board.label("half-life " + (TARGET - 2) + " to " + (TARGET + 2), (bl + br) / 2, PY + 30, css("--blue"), "center", 11); }
     board.line([[poleX(0), PY], [poleX(0), PY + PH]], css("--line"), 1, [3, 3]); board.label("real part (decay)", PX + 6, PY + PH - 6, css("--muted"), "left", 10); board.label("imag (rotation)", PX + 6, PY + 14, css("--muted"), "left", 10);
     [0.25, 0.5, 0.75, 1.0].forEach(l => board.label("-" + l, poleX(l), PY + PH + 14, css("--muted"), "center", 9, true));
-    const pxp = poleX(lam), pyp = poleY(om); ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(pxp, pyp, 9, 0, 2 * Math.PI); ctx.fill(); board.label("x", pxp, pyp + 4, "#fff", "center", 12, true); board.label("-" + lam.toFixed(2) + " + " + om.toFixed(2) + " i", pxp, pyp - 14, css("--ink"), "center", 11, true);
-    board.label("left: forgets faster. up: spins faster", PX + PW / 2, PY + PH + 32, css("--muted"), "center", 11);
-    board.label("half-life " + half.toFixed(0) + " steps", PX + PW / 2, PY + PH + 70, css("--ink"), "center", 14, true); board.label(isFinite(per) ? "period " + per.toFixed(0) + " steps" : "no oscillation", PX + PW / 2, PY + PH + 92, css("--ink"), "center", 12, true);
-    const v = document.getElementById("ssVerdict"); v.hidden = false; const ok = half >= 15 && half <= 40; v.className = "ask " + (ok ? "ok" : ""); v.textContent = ok ? "Half-life " + half.toFixed(0) + " steps: a cue 24 steps back still weighs " + (100 * Math.abs(k24)).toFixed(0) + " % of the peak, and the layer forgets before the record repeats. Place the cue at step 8 and run it." : (half > 40 ? "Half-life " + half.toFixed(0) + " steps: the layer remembers everything, including what it should have dropped. Move the pole left or widen the ticks." : "Half-life " + half.toFixed(0) + " steps: a cue 24 steps back is gone. Move the pole right or tighten the ticks.");
+    if (placed) { const pxp = poleX(lam), pyp = poleY(om); ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(pxp, pyp, 9, 0, 2 * Math.PI); ctx.fill(); board.label("x", pxp, pyp + 4, "#fff", "center", 12, true); board.label("-" + lam.toFixed(2) + " + " + om.toFixed(2) + " i", pxp, pyp - 14, css("--ink"), "center", 11, true); }
+    board.label(placed ? "left: forgets faster. up: spins faster" : "half-life in steps = ln 2 / (lambda Delta)", PX + PW / 2, PY + PH + 32, css("--muted"), "center", 11);
+    board.label(placed ? "half-life " + half.toFixed(0) + " steps" : "half-life: hidden until you click", PX + PW / 2, PY + PH + 70, css("--ink"), "center", 14, true); board.label(placed ? (isFinite(per) ? "period " + per.toFixed(0) + " steps" : "no oscillation") : "", PX + PW / 2, PY + PH + 92, css("--ink"), "center", 12, true);
+    const v = document.getElementById("ssVerdict"); v.hidden = !placed; if (placed) { const ok = half >= 15 && half <= 40; v.className = "ask " + (ok ? "ok" : ""); v.textContent = ok ? "Half-life " + half.toFixed(0) + " steps: a cue 24 steps back still weighs " + (100 * Math.abs(k24)).toFixed(0) + " % of the peak, and the layer forgets before the record repeats. Place the cue at step 8 and run it." : (half > 40 ? "Half-life " + half.toFixed(0) + " steps: the layer remembers everything, including what it should have dropped. Move the pole left or widen the ticks." : "Half-life " + half.toFixed(0) + " steps: a cue 24 steps back is gone by step 32. Move the pole right or tighten the ticks to reach 15 to 40."); }
+  }
+  function text() {
+    let html = '<span class="k">the pole</span><p>Put the half-life at 12 steps. Where does the pole sit?</p>';
+    if (!placed) html += '<p>Click the point on the pole map where the pole belongs. The step size is Delta = ' + dt.toFixed(2) + ' on the ruler, and the half-life in steps is ln 2 / (lambda Delta). The real part is the decay lambda; the height is the rotation, which the half-life does not depend on. The pole becomes draggable after your click.</p>';
+    else { const half = Math.log(2) / (clickLam * dt), ok = half >= TARGET - 2 && half <= TARGET + 2; html += '<div class="ask ' + (ok ? 'ok' : 'no') + '">Your pole at -' + clickLam.toFixed(2) + ' gives a half-life of ' + half.toFixed(1) + ' steps' + (ok ? ', inside the band. ' : '; the band for 12 steps runs from -' + lamOf(TARGET - 2).toFixed(2) + ' to -' + lamOf(TARGET + 2).toFixed(2) + ', with lambda = ln 2 / (12 x ' + dt.toFixed(2) + ') = ' + lamOf(TARGET).toFixed(3) + ' at its centre. ') + 'Only the real part sets the half-life; the rotation sets the period.</div><p>Now the pole and the ticks are yours. The input row is a sequencer: click a step to drop an impulse. The kernel row is the same layer written as a convolution, so a single impulse traces the kernel; the toggle computes the output both ways. Task: put the half-life between 15 and 40 steps, place the cue at step 8 and watch it carried to step 32.</p>'; }
+    stepEl.innerHTML = html;
   }
   function animate() { if (anim) clearTimeout(anim); shown = 0; (function f() { shown += 2; draw(); if (shown < N) anim = setTimeout(f, 40); })(); }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (my >= 70 && my <= 100 && mx >= X0 && mx < X0 + N * W) { const k = Math.floor((mx - X0) / W); u[k] = u[k] ? 0 : 1; shown = N; draw(); return; } if (Math.hypot(mx - poleX(lam), my - poleY(om)) < 16) { drag = "pole"; return; } if (Math.abs(mx - (RX + dt * UNIT)) < 10 && my >= RY - 4 && my <= RY + 24) { drag = "dt"; return; } });
-  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); if (drag === "pole") { lam = Math.max(0.02, Math.min(1.1, (PX + PW - 10 - mx) / (PW - 20) * 1.2)); om = Math.max(0, Math.min(1.15, (PY + PH - 10 - my) / (PH - 20) * 1.2)); } else { dt = Math.max(0.05, Math.min(1.5, (mx - RX) / UNIT)); } shown = N; draw(); });
-  window.addEventListener("mouseup", () => { drag = null; });
+  function inMap(mx, my) { return mx >= PX && mx <= PX + PW && my >= PY && my <= PY + PH; }
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (my >= 70 && my <= 100 && mx >= X0 && mx < X0 + N * W) { const k = Math.floor((mx - X0) / W); u[k] = u[k] ? 0 : 1; shown = N; draw(); return; }
+    if (!placed) { if (inMap(mx, my)) { lam = Math.max(0.02, Math.min(1.1, (PX + PW - 10 - mx) / (PW - 20) * 1.2)); om = Math.max(0, Math.min(1.15, (PY + PH - 10 - my) / (PH - 20) * 1.2)); clickLam = lam; placed = true; text(); shown = N; draw(); } return; }
+    if (Math.hypot(mx - poleX(lam), my - poleY(om)) < 16) { drag = "pole"; return; } if (Math.abs(mx - (RX + dt * UNIT)) < 10 && my >= RY - 4 && my <= RY + 24) { drag = "dt"; return; } });
+  window.addEventListener("pointermove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); if (drag === "pole") { lam = Math.max(0.02, Math.min(1.1, (PX + PW - 10 - mx) / (PW - 20) * 1.2)); om = Math.max(0, Math.min(1.15, (PY + PH - 10 - my) / (PH - 20) * 1.2)); } else { dt = Math.max(0.05, Math.min(1.5, (mx - RX) / UNIT)); } shown = N; draw(); });
+  window.addEventListener("pointerup", () => { drag = null; });
   document.getElementById("ssPlay").addEventListener("click", animate);
   document.getElementById("ssClear").addEventListener("click", () => { u = new Array(N).fill(0); shown = N; draw(); });
   document.getElementById("ssCue").addEventListener("click", () => { u = new Array(N).fill(0); u[8] = 1; animate(); });
-  stepEl.innerHTML = '<span class="k">how to read it</span><p>The input row is a sequencer: click a step to drop an impulse. The state is two numbers that rotate and decay; the output reads the first. The kernel row is the same layer written as a convolution, so a single impulse traces the kernel.</p><p>The pole map is the system: its distance from the axis is the decay, its height the rotation. The time ruler is the step size. Task: put the half-life between 15 and 40 steps, then place the cue at step 8 and watch it carried to step 32.</p>';
+  document.getElementById("ssReset").addEventListener("click", () => { placed = false; clickLam = null; lam = 0.45; om = 0.3; dt = 0.3; drag = null; shown = N; text(); draw(); });
+  pressGroup("ssMode", v => { mode = v; document.getElementById("ssPlay").textContent = v === 0 ? "Run the recurrence" : "Run the convolution"; shown = N; draw(); });
   quiz(document.getElementById("ssQuiz"), { q: "A state space layer and a Kalman filter prediction step share the equation x_k = A x_(k-1) + B u_k. What does the layer not have?", options: ["A transition matrix", "The covariance, the innovation and the gain: it returns a point estimate with no band", "An input"], answer: 1, why: "The layer learns A, B and C by gradient descent and keeps the prediction step only. The filter's update step, which weighs the prediction against a measurement by their covariances, is gone, so uncertainty has to be put back by other means, which is Week 8." });
-  window.addEventListener("themechange", draw); u[8] = 1; draw();
+  window.addEventListener("themechange", draw); u[8] = 1; text(); draw();
 })();
-
 /* ================= 6. THE DISTRACTOR TEST ================= */
 (function selective() {
-  const N = 48, CUE = 4; let start = 20, len = 8, dtFix = 0.2, drag = null;
+  const N = 48, CUE = 4; let start = 20, len = 8, dtFix = 0.2, drag = null, mine = new Array(N).fill(0), paint = null, locked = false;
   const board = new Board(document.getElementById("seRec")), stepEl = document.getElementById("seStep");
-  const X0 = 60, W = (1200 - 100) / N, GY_F = 410, GY_S = 490, GH = 40;
+  const X0 = 60, W = (1200 - 100) / N, GH = 40, Y_F = 188, GY_F = 286, GY_U = 374, Y_U = 472, GY_S = 570, Y_S = 664;
   function record() { const u = new Array(N).fill(0), kind = new Array(N).fill(0); u[CUE] = 1; kind[CUE] = 1; const rng = mulberry32(3); for (let k = start; k < Math.min(N, start + len); k++) { u[k] = 0.6 + 0.8 * rng(); kind[k] = 2; } return { u, kind }; }
-  function simulate(selective) { const { u, kind } = record(); let hc = 0, hd = 0, written = 0; const H = [], gates = []; for (let k = 0; k < N; k++) { const d = selective ? (kind[k] === 1 ? 1.5 : (kind[k] === 2 ? 0.01 : 0.0)) : dtFix, a = Math.exp(-d); gates.push(d); hc = a * hc + (kind[k] === 1 ? (1 - a) * u[k] : 0); hd = a * hd + (kind[k] === 2 ? (1 - a) * u[k] : 0); if (kind[k] === 1) written = hc; H.push([hc, hd]); } return { H, gates, u, kind, written }; }
+  function simulate(gateOf) { const { u, kind } = record(); let hc = 0, hd = 0, written = 0; const H = [], gates = []; for (let k = 0; k < N; k++) { const d = gateOf(k, kind[k]), a = Math.exp(-d); gates.push(d); hc = a * hc + (kind[k] === 1 ? (1 - a) * u[k] : 0); hd = a * hd + (kind[k] === 2 ? (1 - a) * u[k] : 0); if (kind[k] === 1) written = hc; H.push([hc, hd]); } return { H, gates, u, kind, written }; }
+  const shares = R => { const c = R.H[N - 1][0], d = R.H[N - 1][1]; return { share: c / (c + d + 1e-12), ret: R.written > 1e-9 ? c / R.written : NaN }; };
+  function gateRow(ctx, y, gates, scale, locked2) { for (let k = 0; k < N; k++) { const g = gates[k], h = Math.min(GH, g / scale * GH); ctx.fillStyle = mix(css("--panel"), "#2E7D5B", Math.min(1, g / scale)); ctx.fillRect(X0 + k * W + 2, y - h, W - 4, h); ctx.strokeStyle = locked2 ? css("--grey") : css("--line"); ctx.strokeRect(X0 + k * W + 2, y - GH, W - 4, GH); } }
+  function stateRow(ctx, y, R) { const scl = 48 / Math.max(R.written, 0.05); for (let k = 0; k < N; k++) { const [c, d] = R.H[k]; ctx.fillStyle = css("--blue"); ctx.fillRect(X0 + k * W + 2, y - Math.min(56, c * scl), W / 2 - 2, Math.min(56, c * scl)); ctx.fillStyle = css("--red"); ctx.fillRect(X0 + k * W + W / 2, y - Math.min(56, d * scl), W / 2 - 2, Math.min(56, d * scl)); } board.line([[X0, y], [X0 + N * W, y]], css("--line")); board.label("blue: cue in the state   red: burst in the state   (bars scaled to the cue as written)", X0, y + 14, css("--muted"), "left", 11); }
   function draw() {
-    const F = simulate(false), S = simulate(true), fcAbs = F.H[N - 1][0], scAbs = S.H[N - 1][0], fdAbs = F.H[N - 1][1], sdAbs = S.H[N - 1][1], fc = fcAbs / (fcAbs + fdAbs + 1e-12), sc = scAbs / (scAbs + sdAbs + 1e-12), fr = fcAbs / F.written, sr = scAbs / S.written;
-    document.getElementById("seBurst").textContent = len ? start + ", " + len : "none"; document.getElementById("seDtv").textContent = dtFix.toFixed(2); document.getElementById("seFix").textContent = (100 * fc).toFixed(0) + " %"; document.getElementById("seSel").textContent = (100 * sc).toFixed(0) + " %"; document.getElementById("seDis").textContent = (100 * fr).toFixed(1) + " % / " + (100 * sr).toFixed(0) + " %";
-    board.clear("the record (drag the burst by its body, its right edge to resize), each layer's state, and the two gate rows"); const ctx = board.ctx;
+    const F = simulate(() => dtFix), S = simulate((k, kd) => kd === 1 ? 1.5 : (kd === 2 ? 0.01 : 0.0)), M = simulate(k => mine[k]);
+    const f = shares(F), s = shares(S), m = shares(M), pct = v => isNaN(v) ? "-" : (100 * v).toFixed(0) + " %";
+    document.getElementById("seBurst").textContent = len ? start + ", " + len : "none"; document.getElementById("seDtv").textContent = dtFix.toFixed(2); document.getElementById("seFix").textContent = pct(f.share); document.getElementById("seMine").textContent = M.written > 1e-9 ? pct(m.share) : "gate never opens"; document.getElementById("seSel").textContent = locked ? pct(s.share) : "lock in first"; document.getElementById("seDis").textContent = (100 * f.ret).toFixed(1) + " % / " + pct(m.ret) + " / " + (locked ? pct(s.ret) : "-");
+    board.clear("the record (drag the burst by its body, its right edge to resize), each layer's state, and the gate rows"); const ctx = board.ctx;
     board.label("input", X0 - 8, 70, css("--muted"), "right", 12);
     for (let k = 0; k < N; k++) { const kd = F.kind[k]; ctx.fillStyle = kd === 1 ? css("--blue") : (kd === 2 ? css("--red") : css("--bg")); ctx.fillRect(X0 + k * W + 2, 80 - (kd ? F.u[k] * 34 : 0), W - 4, kd ? F.u[k] * 34 : 34); ctx.strokeStyle = css("--line"); ctx.strokeRect(X0 + k * W + 2, 46, W - 4, 34); if (k % 8 === 0) board.label(String(k), X0 + k * W + W / 2, 96, css("--muted"), "center", 10, true); }
     board.label("cue", X0 + CUE * W + W / 2, 40, css("--blue"), "center", 11);
     const bx1 = X0 + (start + len) * W; ctx.fillStyle = css("--red"); ctx.fillRect(bx1 - 4, 42, 8, 42); board.label(len ? "burst (drag body, drag edge)" : "no burst: drag the edge to make one", X0 + (start + Math.max(len, 1) / 2) * W, 40, css("--red"), "center", 11);
-    const rows = [{ name: "fixed layer, Delta = " + dtFix.toFixed(2), R: F, y: 185 }, { name: "selective layer, Delta from the input", R: S, y: 300 }];
-    rows.forEach(r => {
-      board.label(r.name, X0, r.y - 58, css("--ink"), "left", 13);
-      const scl = 48 / Math.max(r.R.written, 0.05); for (let k = 0; k < N; k++) { const [c, d] = r.R.H[k]; ctx.fillStyle = css("--blue"); ctx.fillRect(X0 + k * W + 2, r.y - Math.min(56, c * scl), W / 2 - 2, Math.min(56, c * scl)); ctx.fillStyle = css("--red"); ctx.fillRect(X0 + k * W + W / 2, r.y - Math.min(56, d * scl), W / 2 - 2, Math.min(56, d * scl)); }
-      board.line([[X0, r.y], [X0 + N * W, r.y]], css("--line"));
-      board.label("blue: cue in the state   red: burst in the state   (bars scaled to the cue as written)", X0, r.y + 14, css("--muted"), "left", 11);
-    });
-    // gate rows
-    board.label("fixed layer's step size, the same for every input: drag the bars up or down", X0, GY_F - GH - 10, css("--ink"), "left", 13);
-    for (let k = 0; k < N; k++) { const h = Math.min(GH, dtFix / 1.0 * GH); ctx.fillStyle = mix(css("--panel"), "#2E7D5B", Math.min(1, dtFix / 1.0)); ctx.fillRect(X0 + k * W + 2, GY_F - h, W - 4, h); ctx.strokeStyle = css("--line"); ctx.strokeRect(X0 + k * W + 2, GY_F - GH, W - 4, GH); }
-    board.label("the selective layer's step size per input: open for the cue, shut for the burst", X0, GY_S - GH - 10, css("--ink"), "left", 13);
-    for (let k = 0; k < N; k++) { const g = S.gates[k], h = Math.min(GH, g / 1.5 * GH); ctx.fillStyle = mix(css("--panel"), "#2E7D5B", Math.min(1, g / 1.5)); ctx.fillRect(X0 + k * W + 2, GY_S - h, W - 4, h); ctx.strokeStyle = css("--line"); ctx.strokeRect(X0 + k * W + 2, GY_S - GH, W - 4, GH); }
-    board.label("at the end the fixed layer's state is " + (100 * fc).toFixed(0) + " % cue and " + (100 - 100 * fc).toFixed(0) + " % burst; the selective layer's is " + (100 * sc).toFixed(0) + " % cue", X0, GY_S + 28, css("--ink"), "left", 13);
-    const v = document.getElementById("seVerdict"); v.hidden = false; v.className = "ask " + (len > 0 && fc < 0.3 && sc > 0.8 ? "ok" : ""); v.textContent = len === 0 ? "No burst: both layers end with a state that is all cue, though the fixed layer has let " + (100 - 100 * fr).toFixed(0) + " % of it decay. Drag the red edge to make a burst." : (fc < 0.3 && sc > 0.8 ? "The burst has displaced the cue in the fixed layer (state " + (100 * fc).toFixed(0) + " % cue) while the selective layer still holds it (" + (100 * sc).toFixed(0) + " % cue, " + (100 * sr).toFixed(0) + " % of what was written). Fixed matrices treat every step the same; selectivity lets the input decide what is worth writing." : "The fixed layer's state is still " + (100 * fc).toFixed(0) + " % cue. Lengthen the burst or raise the fixed gate and watch the red take over.");
-    stepEl.innerHTML = '<span class="k">reading the bars</span><p>Each state is drawn as two parts, which the linear recurrence keeps separate: the blue part came from the cue, the red from the burst. The fixed layer decays and rewrites at every step, so the burst displaces the cue. The selective layer closes its step size for the burst and keeps the cue intact.</p><p>Drag the burst next to the cue, then far from it; stretch it; raise and lower the fixed gate.</p>';
+    // fixed layer
+    board.label("fixed layer, Delta = " + dtFix.toFixed(2) + " at every step", X0, Y_F - 58, css("--ink"), "left", 13); stateRow(ctx, Y_F, F);
+    board.label("fixed layer's step size, the same for every input: drag the bars up or down", X0, GY_F - GH - 10, css("--ink"), "left", 13); gateRow(ctx, GY_F, F.gates, 1.0, false);
+    // the student's gate
+    board.label("your gate: drag across the row to paint it open (1) or shut (0)" + (locked ? "; locked in, still editable" : ""), X0, GY_U - GH - 10, css("--orange"), "left", 13); gateRow(ctx, GY_U, mine, 1.0, false);
+    for (let k = 0; k < N; k++) if (mine[k]) board.label("1", X0 + k * W + W / 2, GY_U - GH / 2 + 4, "#fff", "center", 11, true);
+    board.label("the layer with your gate", X0, Y_U - 58, css("--ink"), "left", 13);
+    if (M.written > 1e-9) stateRow(ctx, Y_U, M); else { board.line([[X0, Y_U], [X0 + N * W, Y_U]], css("--line")); board.label("your gate is shut at the cue (step " + CUE + "), so nothing is written; open it there first", X0, Y_U - 20, css("--muted"), "left", 12); }
+    // the selective layer
+    board.label("the selective layer's step size per input" + (locked ? ": open for the cue, shut for the burst" : ""), X0, GY_S - GH - 10, css("--ink"), "left", 13);
+    board.label("selective layer, Delta from the input", X0, Y_S - 58, css("--ink"), "left", 13);
+    if (locked) { gateRow(ctx, GY_S, S.gates, 1.5, false); stateRow(ctx, Y_S, S); }
+    else { for (let k = 0; k < N; k++) { ctx.strokeStyle = css("--line"); ctx.setLineDash([3, 3]); ctx.strokeRect(X0 + k * W + 2, GY_S - GH, W - 4, GH); ctx.setLineDash([]); } board.line([[X0, Y_S], [X0 + N * W, Y_S]], css("--line"), 1, [3, 3]); board.label("hidden until you lock in your gate", X0 + N * W / 2, GY_S - GH / 2 + 5, css("--muted"), "center", 13); board.label("hidden until you lock in your gate", X0 + N * W / 2, Y_S - 24, css("--muted"), "center", 13); }
+    board.label("at the end: fixed layer " + pct(f.share) + " cue, your gate " + (M.written > 1e-9 ? pct(m.share) : "-") + " cue, selective layer " + (locked ? pct(s.share) : "hidden") + " cue", X0, Y_S + 40, css("--ink"), "left", 13);
+    const v = document.getElementById("seVerdict"); v.hidden = !locked;
+    if (locked) { const good = M.written > 1e-9 && m.share >= 0.8; v.className = "ask " + (good ? "ok" : "no"); v.textContent = M.written < 1e-9 ? "Your gate never opened at the cue, so your layer holds nothing. The selective layer opens wide at the cue (Delta 1.5) and keeps " + pct(s.share) + " cue." : (good ? "Your gate keeps a state that is " + pct(m.share) + " cue, against " + pct(f.share) + " for the fixed layer and " + pct(s.share) + " for the selective layer. Open at the cue, shut through the burst: that is the gate the selective layer computes from the input." : "Your gate keeps a state that is " + pct(m.share) + " cue; the selective layer keeps " + pct(s.share) + ". Every step where your gate is open during the burst writes a distractor in and decays the cue. Shut it there and lock in again."); }
+    text();
   }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const bx1 = X0 + (start + len) * W;
+  function text() {
+    let html = '<span class="k">your gate</span><p>Draw the gate you would want. Where should it close?</p>';
+    if (!locked) html += '<p>Drag across the orange row to paint the gate: 1 lets a step in and decays the state by e^-1, 0 keeps the state as it is. Lock in to reveal the selective layer\'s own gate and compare.</p><div class="gate"><button class="primary" id="seLock">Lock in</button></div>';
+    else html += '<p>Each state is drawn as two parts, which the linear recurrence keeps separate: the blue part came from the cue, the red from the burst. Drag the burst next to the cue, then far from it; stretch it; raise and lower the fixed gate; repaint your own.</p>';
+    stepEl.innerHTML = html;
+    const lock = document.getElementById("seLock"); if (lock) lock.addEventListener("click", () => { locked = true; draw(); });
+  }
+  function cellAt(mx) { const k = Math.floor((mx - X0) / W); return k >= 0 && k < N ? k : -1; }
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (my >= GY_U - GH - 4 && my <= GY_U + 4) { const k = cellAt(mx); if (k >= 0) { paint = mine[k] ? 0 : 1; mine[k] = paint; draw(); } } });
+  window.addEventListener("pointermove", ev => { if (paint === null) return; const [mx] = board.pos(ev); const k = cellAt(mx); if (k >= 0 && mine[k] !== paint) { mine[k] = paint; draw(); } });
+  window.addEventListener("pointerup", () => { paint = null; });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); const bx1 = X0 + (start + len) * W;
     if (my >= 36 && my <= 100 && Math.abs(mx - bx1) < 10) { drag = "edge"; return; }
     if (my >= 36 && my <= 100) { const k = Math.floor((mx - X0) / W); if (k >= start && k < start + len) { drag = "body"; return; } }
     if (my >= GY_F - GH - 4 && my <= GY_F + 4 && mx >= X0 && mx <= X0 + N * W) { drag = "gate"; dtFix = Math.max(0.02, Math.min(1.0, (GY_F - my) / GH)); draw(); } });
-  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); if (drag === "body") start = Math.max(CUE + 2, Math.min(N - len, Math.round((mx - X0) / W - len / 2))); else if (drag === "edge") len = Math.max(0, Math.min(N - start, Math.round((mx - X0) / W) - start)); else dtFix = Math.max(0.02, Math.min(1.0, (GY_F - my) / GH)); draw(); });
-  window.addEventListener("mouseup", () => { drag = null; });
+  window.addEventListener("pointermove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); if (drag === "body") start = Math.max(CUE + 2, Math.min(N - len, Math.round((mx - X0) / W - len / 2))); else if (drag === "edge") len = Math.max(0, Math.min(N - start, Math.round((mx - X0) / W) - start)); else dtFix = Math.max(0.02, Math.min(1.0, (GY_F - my) / GH)); draw(); });
+  window.addEventListener("pointerup", () => { drag = null; });
+  document.getElementById("seClear").addEventListener("click", () => { mine = new Array(N).fill(0); locked = false; paint = null; draw(); });
   quiz(document.getElementById("seQuiz"), { q: "Making the step size depend on the input costs the layer something at training time. What?", options: ["Linear cost; it becomes quadratic again", "The single convolution kernel: with input-dependent matrices the layer is no longer one fixed convolution, so training uses a parallel scan instead of a fast transform", "The fixed-size state"], answer: 1, why: "A fixed layer unrolls into one long convolution and trains with a transform. Selectivity makes the kernel depend on the record, which breaks that trick; Mamba's hardware-aware scan recovers most of the speed. Inference keeps its fixed state and linear cost either way." });
   window.addEventListener("themechange", draw); draw();
 })();
@@ -650,6 +803,46 @@ show(location.hash.slice(1) || "scaling", false);
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
 if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
 new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+
+<script>
+/* Classroom mode (shared patch): larger canvas text through the font setter, prose hidden, redraw via themechange. */
+(function () {
+  var desc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "font");
+  var on = false;
+  function scale(v) {
+    return String(v).replace(/(\d+(?:\.\d+)?)px/, function (m, n) {
+      var s = parseFloat(n); var t = s < 13 ? s + 5 : Math.round(s * 1.35);
+      return t + "px";
+    });
+  }
+  Object.defineProperty(CanvasRenderingContext2D.prototype, "font", {
+    configurable: true,
+    get: function () { return desc.get.call(this); },
+    set: function (v) { desc.set.call(this, on ? scale(v) : v); }
+  });
+  function apply(state) {
+    on = !!state;
+    document.body.classList.toggle("classroom", on);
+    var b = document.getElementById("classroomBtn");
+    if (b) { b.textContent = on ? "Classroom: on" : "Classroom"; b.setAttribute("aria-pressed", on ? "true" : "false"); }
+    try { localStorage.setItem("ce_classroom", on ? "1" : "0"); } catch (e) {}
+    window.dispatchEvent(new Event("themechange"));
+    window.dispatchEvent(new Event("resize"));
+  }
+  window.addEventListener("DOMContentLoaded", function () {
+    var b = document.createElement("button");
+    b.id = "classroomBtn"; b.type = "button"; b.title = "Large text for a projector; hides the explanatory prose (key: c)";
+    b.textContent = "Classroom";
+    b.addEventListener("click", function () { apply(!on); });
+    document.body.appendChild(b);
+    var saved = "0"; try { saved = localStorage.getItem("ce_classroom") || "0"; } catch (e) {}
+    if (saved === "1" || /[?&]classroom\b/.test(location.search)) apply(true);
+    window.addEventListener("keydown", function (ev) {
+      if (ev.key === "c" && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) apply(!on);
+    });
+  });
 })();
 </script>
 </body>
