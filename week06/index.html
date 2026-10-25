@@ -97,6 +97,23 @@ section.demo.active { display: block; }
 .caption p { margin: 0 0 6px; }
 footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* classroom mode and touch (shared patch) */
+canvas { touch-action: none; -webkit-user-select: none; user-select: none; }
+#classroomBtn { position: fixed; right: 14px; bottom: 14px; z-index: 50; font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; opacity: 0.85; }
+#classroomBtn:hover { opacity: 1; color: var(--ink); }
+body.classroom #classroomBtn { background: var(--blue); border-color: var(--blue); color: #fff; }
+body.classroom header, body.classroom .lead, body.classroom .caption, body.classroom footer, body.classroom .ask-note { display: none; }
+body.classroom nav { padding-block: 6px 4px; }
+body.classroom nav button { font-size: 17px; padding: 9px 16px; }
+body.classroom main { padding-block: 0 8px; }
+body.classroom .demo h2 { font-size: 26px; margin: 4px 0 8px; }
+body.classroom .step, body.classroom .ask, body.classroom .quiz, body.classroom .quiz button, body.classroom .readout, body.classroom .ctl label, body.classroom .choice button, body.classroom .bet button, body.classroom .btns button, body.classroom .legend, body.classroom .board { font-size: 18px; }
+body.classroom .step .k, body.classroom .ctl .hint, body.classroom .badge { font-size: 15px; }
+body.classroom .panel h3 { font-size: 15px; }
+body.classroom .stage { grid-template-columns: minmax(0, 1fr) 400px; }
+body.classroom .grid { grid-template-columns: minmax(0, 1fr) 360px; }
+@media (max-width: 1100px) { body.classroom .stage, body.classroom .grid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -132,6 +149,13 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 .bet button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
 .bet button.right { border-color: #2E7D5B; background: #E3F2EA; color: var(--ink); }
 .bet button.wrong { border-color: var(--red); background: #F9E4E2; color: var(--ink); }
+.gate { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; align-items: center; }
+.gate button { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.gate button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.gate button:disabled { opacity: 0.5; cursor: default; }
+.btns button:disabled { opacity: 0.5; cursor: default; }
+.records button:disabled { opacity: 0.5; cursor: default; }
+.step .prompt { font-weight: 500; margin: 0 0 6px; }
 canvas.hit { cursor: pointer; }
 canvas.grab { cursor: grab; }
 .heads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
@@ -180,7 +204,7 @@ canvas.grab { cursor: grab; }
 <!-- ============ 1. BLEND IT ============ -->
 <section class="demo active" id="blend" role="tabpanel">
   <h2>Blend it: one decoder step, six encoder states, and a target to reach</h2>
-  <p class="lead">Six encoder states sit in a feature plane as the values. Set a score for each one; the softmax turns your scores into weights, and the output is the weighted blend. Drive the blend onto the target. Then hand the scoring to a query and see where the scores come from in a real model.</p>
+  <p class="lead">Six encoder states sit in a feature plane as the values. Set a score for each one; the softmax turns your scores into weights, and the output is the weighted blend. Four target rings are drawn; decide first which of them no blend can reach, then drive the blend onto each target in turn. Hand the scoring to a query to see where the scores come from in a real model.</p>
   <div class="stage">
     <div class="plot two">
       <canvas id="blPlane" class="grab" width="760" height="560"></canvas>
@@ -189,7 +213,7 @@ canvas.grab { cursor: grab; }
     <div class="side">
       <div class="panel step" id="blStep"></div>
       <div class="panel">
-        <div class="btns"><button id="blNext">Next target</button><button id="blWhy">Why can I not reach it?</button><button id="blReset">Reset scores</button></div>
+        <div class="btns"><button id="blNext">Next target</button><button id="blWhy">Ask the hull question again</button><button id="blReset">Reset scores</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>distance to the target</dt><dd id="blDist">-</dd>
           <dt>largest weight</dt><dd id="blMax">-</dd>
@@ -200,14 +224,14 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>The weights are softmax(s) and the output is the sum of w_i v_i, the two lines on slide 5. Because the weights are positive and sum to one, every output lies inside the convex hull of the values: attention can only interpolate what the encoder offered. In query mode the scores are q dot k_i over the square root of d, with the keys set equal to the values for display, and dragging the query is what a trained decoder does when it changes what it needs, slide 7.</p>
+    <p>The weights are softmax(s) and the output is the sum of w_i v_i, the two lines on slide 5. Because the weights are positive and sum to one, every output lies inside the convex hull of the values: attention can only interpolate what the encoder offered. The hull is drawn once the unreachable ring has been named. In query mode the scores are q dot k_i over the square root of d, with the keys set equal to the values for display, and dragging the query is what a trained decoder does when it changes what it needs, slide 7.</p>
   </div>
 </section>
 
 <!-- ============ 2. THE SATURATION BENCH ============ -->
 <section class="demo" id="scale" role="tabpanel">
   <h2>The saturation bench: why the square root of d is in the formula</h2>
-  <p class="lead">One query reads eight keys. The fan of lines shows the attention it pays to each, raw on the left and divided by the square root of d on the right. Drag the query up the dimension ladder in the middle and watch the raw fan collapse onto one line while the scaled fan keeps its shape. Before the ladder lets you past d = 128, click the key you think will take all the weight.</p>
+  <p class="lead">One query reads eight keys. The fan of lines shows the attention it pays to each, raw on the left and divided by the square root of d on the right. Drag the query up the dimension ladder in the middle and watch the raw fan collapse onto one line while the scaled fan keeps its shape; the largest weight on each fan is printed under its heading so the collapse is a number. At the foot of the ladder, commit to the share of weight one key will hold at d = 1024; before the ladder lets you past d = 128, click the key you think will take it.</p>
   <div class="stage">
     <div class="plot"><canvas id="scBench" class="grab" width="1200" height="520"></canvas></div>
     <div class="side">
@@ -232,11 +256,11 @@ canvas.grab { cursor: grab; }
 <!-- ============ 3. READ THE HEADS ============ -->
 <section class="demo" id="heads" role="tabpanel">
   <h2>Read the heads: four attention maps, four jobs, label them</h2>
-  <p class="lead">A trained model with four heads has been run on a sixteen-step record. Each matrix shows where every query position (rows) placed its weight over the keys (columns). Hover a row to see it as a ribbon over the sequence. Label each head, then check.</p>
+  <p class="lead">A trained model with four heads has been run on a sixteen-step record. Each matrix shows where every query position (rows) placed its weight over the keys (columns), and the record itself is drawn under each map. Hover or press a row and the readings that query reads light up, as the Transformer Explainer does for one token. Label each head, then check.</p>
   <div class="stage">
     <div>
       <div class="heads" id="hdHeads"></div>
-      <div class="plot" style="margin-top:12px"><canvas id="hdStrip" width="1200" height="150"></canvas></div>
+      <div class="plot" style="margin-top:12px"><canvas id="hdStrip" width="1200" height="170"></canvas></div>
     </div>
     <div class="side">
       <div class="panel step" id="hdStep"></div>
@@ -257,7 +281,7 @@ canvas.grab { cursor: grab; }
 <!-- ============ 4. ORDER BLIND ============ -->
 <section class="demo" id="position" role="tabpanel">
   <h2>Order blind: shuffle the record and see whether the model notices</h2>
-  <p class="lead">Eight readings go through one self-attention layer and each output is painted as a tile. Shuffle the record and watch whether any tile changes colour. Then drag one of the three tag cards from the tray onto the record to attach a position code to every reading, and shuffle again. The barcode below is the sinusoidal code itself: click a column to see which positions it resembles.</p>
+  <p class="lead">Eight readings go through one self-attention layer and each output is painted as a tile. Commit to an answer, shuffle the record, and watch whether any tile changes colour. Then drag one of the three tag cards from the tray onto the record to attach a position code to every reading, and answer again. The barcode below is the sinusoidal code itself; hover a column to see which positions it resembles.</p>
   <div class="stage">
     <div class="plot">
       <canvas id="poStrip" class="grab" width="1200" height="300"></canvas>
@@ -270,27 +294,27 @@ canvas.grab { cursor: grab; }
         <dl class="readout" style="margin-top:10px">
           <dt>tag attached to the record</dt><dd id="poMode">none</dd>
           <dt>largest change in any reading's output</dt><dd id="poChange">-</dd>
-          <dt>reference position in the barcode</dt><dd id="poRef">8</dd>
+          <dt>position under the pointer in the barcode</dt><dd id="poRef">8</dd>
         </dl>
       </div>
       <div class="panel quiz" id="poQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>Self attention is permutation equivariant: permute the inputs and the outputs are permuted the same way, with no other change, which is the whole of slide 15's problem. The sinusoidal code gives every position a vector of sines and cosines at wavelengths from a few steps to thousands, drawn here as a barcode; click a column and the others are tinted by their similarity to it, which falls off with distance in both directions. A learned table does the same job inside its length and has nothing to say beyond it.</p>
+    <p>Self attention is permutation equivariant: permute the inputs and the outputs are permuted the same way, with no other change, which is the whole of slide 15's problem. The sinusoidal code gives every position a vector of sines and cosines at wavelengths from a few steps to thousands, drawn here as a barcode; hover a column and the others are tinted by their similarity to it, which falls off with distance in both directions. A learned table does the same job inside its length and has nothing to say beyond it.</p>
   </div>
 </section>
 
 <!-- ============ 5. BUILD THE MASK ============ -->
 <section class="demo" id="mask" role="tabpanel">
   <h2>Build the mask: let each position read as much as it honestly can</h2>
-  <p class="lead">A decoder learns to predict the next value at every position of a six-step record, all positions at once. The grid says which key positions (columns) each query position (rows) may read. Click cells to allow or block them, then train, and read which rows learned and which cheated.</p>
+  <p class="lead">A decoder learns to predict the next value at every position of a six-step record, all positions at once. The grid says which key positions (columns) each query position (rows) may read. It starts as the causal mask. Open one cell above the diagonal, name the row that will learn nothing, then train and read which rows learned and which cheated.</p>
   <div class="stage">
-    <div class="plot"><canvas id="mkGrid" class="hit" width="1200" height="520"></canvas></div>
+    <div class="plot"><canvas id="mkGrid" class="hit" width="1200" height="570"></canvas></div>
     <div class="side">
       <div class="panel step" id="mkStep"></div>
       <div class="panel">
-        <div class="btns"><button class="primary" id="mkTrain">Train</button><button id="mkAll">Allow all</button><button id="mkNone">Block all</button><button id="mkPad">Record is 4 long, pad 2</button></div>
+        <div class="btns"><button class="primary" id="mkTrain" disabled>Train</button><button id="mkAll">Allow all</button><button id="mkNone">Block all</button><button id="mkCausal">Causal mask, ask again</button><button id="mkPad">Record is 4 long, pad 2</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>rows that cheat</dt><dd id="mkCheat">-</dd>
           <dt>rows with no context</dt><dd id="mkBlind">-</dd>
@@ -309,7 +333,7 @@ canvas.grab { cursor: grab; }
 <!-- ============ 6. THE BILL ============ -->
 <section class="demo" id="cost" role="tabpanel">
   <h2>The bill: what a record of your length costs one attention layer</h2>
-  <p class="lead">Pick a record. The receipt itemizes the score matrix, its memory at half precision for eight heads, and the key-value cache that inference keeps per layer, then checks the total against a 24 GB card and an 80 GB card. Click the memory line of the receipt to swap the kernel for a tiled softmax and watch that line change. Pick the long records from your own field and see where the arithmetic breaks.</p>
+  <p class="lead">The record on the table is one day of a water meter at 10 Hz. Decide whether its attention matrix fits an 80 GB card; the receipt is then itemized: the score matrix, its memory at half precision for eight heads, and the key-value cache that inference keeps per layer, checked against a 24 GB card and an 80 GB card. Click the memory line of the receipt to swap the kernel for a tiled softmax and watch that line change. Then pick the other records and see where the arithmetic breaks.</p>
   <div class="stage">
     <div>
       <div class="ledger" id="coLedger"></div>
@@ -321,6 +345,7 @@ canvas.grab { cursor: grab; }
       <div class="panel">
         <h3>the record</h3>
         <div class="records" id="coRecords"></div>
+        <div class="btns" style="margin-top:10px"><button id="coAgain">Ask the question again</button></div>
       </div>
       <div class="panel quiz" id="coQuiz"></div>
     </div>
@@ -359,30 +384,44 @@ function quiz(el, spec) {
 /* ================= 1. BLEND IT ================= */
 (function blend() {
   const V = [[-1.6, 0.9], [-0.2, 1.5], [1.4, 1.0], [1.7, -0.6], [0.2, -1.5], [-1.5, -0.8]], N = V.length;
-  const TARGETS = [{ p: [0.4, 0.3], ok: true }, { p: [-0.6, -0.4], ok: true }, { p: [2.2, 0.4], ok: false }, { p: [1.0, 0.8], ok: true }];
+  const TARGETS = [{ p: [0.4, 0.3], ok: true }, { p: [-0.6, -0.4], ok: true }, { p: [2.2, 0.4], ok: false }, { p: [1.0, 0.8], ok: true }], OUTSIDE = 2;
   const plane = new Board(document.getElementById("blPlane")), bars = new Board(document.getElementById("blScores"));
   const px = v => plane.W / 2 + v * 150, py = v => plane.H / 2 + 10 - v * 150;
-  let s = new Array(N).fill(0), mode = "hand", q = [0.5, 0.5], round = 0, reached = 0, played = 0, done = false, hull = false, drag = null;
+  let s = new Array(N).fill(0), mode = "hand", q = [0.5, 0.5], round = 0, reached = 0, played = 0, done = false, doneW = 0, drag = null, gateAns = null, skipDrag = false;
   const stepEl = document.getElementById("blStep");
   function scores() { return mode === "hand" ? s : V.map(v => (q[0] * v[0] + q[1] * v[1]) * 3 / Math.sqrt(2)); }
   function output(w) { return [V.reduce((a, v, i) => a + w[i] * v[0], 0), V.reduce((a, v, i) => a + w[i] * v[1], 0)]; }
   function hullPts() { // gift wrapping on six points
     const pts = V.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]); const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); const lower = []; for (const p of pts) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop(); lower.push(p); } const upper = []; for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop(); upper.push(p); } upper.pop(); lower.pop(); return lower.concat(upper);
   }
-  function text() { const t = TARGETS[round]; stepEl.innerHTML = '<span class="k">target ' + (round + 1) + ' of ' + TARGETS.length + '</span><p>' + (mode === "hand" ? 'Drag the six score bars. A high score makes that state dominate the blend; equal scores give the plain average. Drag the orange query arrow on the plane to let a dot product set the scores instead.' : 'Drag the query arrow. Each score is the dot product of the query with that state, so the query decides which states count. Drag a bar to take the scores back by hand.') + '</p><p>Bring the output star within 0.10 of the ring.</p>' + (hull ? '<div class="ask">The shaded region is the convex hull of the six values. Softmax weights are positive and sum to one, so the output can never leave it. Target 3 sits outside: no scores, and no query, can reach it. The encoder has to offer a state there first.</div>' : ''); }
+  function text() {
+    let gate;
+    if (gateAns === null) gate = '<p class="prompt">Which of the four targets can no blend of the six values reach?</p><p>Click that target ring on the plane. The hull is drawn after you commit.</p>';
+    else if (gateAns === OUTSIDE) gate = '<div class="ask ok">Right. Target 3 lies outside the shaded convex hull of the six values. Softmax weights are positive and sum to one, so the output star never leaves the hull; no scores and no query reach that ring. The encoder has to offer a state there first.</div>';
+    else gate = '<div class="ask no">No. Target ' + (gateAns + 1) + ' lies inside the shaded convex hull, so some set of scores reaches it. Target 3 is the one outside: softmax weights are positive and sum to one, so the output star never leaves the hull.</div>';
+    const task = done ? '<span class="k">target ' + (round + 1) + ' reached</span><div class="ask ok">Within 0.10 with largest weight ' + doneW.toFixed(2) + '. ' + (doneW > 0.9 ? 'That is nearly a hard lookup: one state carries the output.' : 'That is a soft lookup: several states share the output.') + '</div><p>Press Next target.</p>'
+      : '<span class="k">target ' + (round + 1) + ' of ' + TARGETS.length + '</span><p>' + (mode === "hand" ? 'Drag the six score bars. A high score makes that state dominate the blend; equal scores give the plain average. Drag the orange query arrow on the plane to let a dot product set the scores instead.' : 'Drag the query arrow. Each score is the dot product of the query with that state, so the query decides which states count. Drag a bar to take the scores back by hand.') + '</p><p>Bring the output star within 0.10 of the red ring.</p>';
+    stepEl.innerHTML = gate + task;
+  }
   function draw() {
-    const sc = scores(), w = softmax(sc), o = output(w), t = TARGETS[round], d = Math.hypot(o[0] - t.p[0], o[1] - t.p[1]);
-    document.getElementById("blDist").textContent = d.toFixed(3); document.getElementById("blMax").textContent = Math.max.apply(null, w).toFixed(2); document.getElementById("blScore").textContent = reached + " / " + played;
-    if (!done && d <= 0.10) { done = true; reached++; played++; stepEl.innerHTML = '<span class="k">target ' + (round + 1) + ' reached</span><div class="ask ok">Within 0.10 with largest weight ' + Math.max.apply(null, w).toFixed(2) + '. ' + (Math.max.apply(null, w) > 0.9 ? 'That is nearly a hard lookup: one state carries the output.' : 'That is a soft lookup: several states share the output.') + '</div><p>Press Next target.</p>'; }
-    plane.clear("the feature plane: six encoder states (values), the output star, the target ring"); const ctx = plane.ctx;
-    if (hull) { const h = hullPts(); ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.1); ctx.beginPath(); h.forEach((p, i) => { if (i === 0) ctx.moveTo(px(p[0]), py(p[1])); else ctx.lineTo(px(p[0]), py(p[1])); }); ctx.closePath(); ctx.fill(); ctx.strokeStyle = css("--blue"); ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]); }
+    const sc = scores(), w = softmax(sc), o = output(w), t = TARGETS[round], d = Math.hypot(o[0] - t.p[0], o[1] - t.p[1]), wmax = Math.max.apply(null, w);
+    document.getElementById("blDist").textContent = d.toFixed(3); document.getElementById("blMax").textContent = wmax.toFixed(2); document.getElementById("blScore").textContent = reached + " / " + played;
+    if (!done && d <= 0.10) { done = true; doneW = wmax; reached++; played++; text(); }
+    plane.clear("the feature plane: six encoder states (values), the output star, four target rings"); const ctx = plane.ctx;
+    if (gateAns !== null) { const h = hullPts(); ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.1); ctx.beginPath(); h.forEach((p, i) => { if (i === 0) ctx.moveTo(px(p[0]), py(p[1])); else ctx.lineTo(px(p[0]), py(p[1])); }); ctx.closePath(); ctx.fill(); ctx.strokeStyle = css("--blue"); ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]); plane.label("convex hull of the six values", px(0.75), py(-1.08), css("--blue"), "center", 12); }
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px(-2.3), py(0)); ctx.lineTo(px(2.3), py(0)); ctx.moveTo(px(0), py(-1.7)); ctx.lineTo(px(0), py(1.7)); ctx.stroke();
     V.forEach((v, i) => { ctx.strokeStyle = mix(css("--panel"), PAL[i], Math.min(1, 0.15 + 2 * w[i])); ctx.lineWidth = 1 + 14 * w[i]; ctx.beginPath(); ctx.moveTo(px(v[0]), py(v[1])); ctx.lineTo(px(o[0]), py(o[1])); ctx.stroke(); });
     V.forEach((v, i) => { ctx.fillStyle = PAL[i]; ctx.beginPath(); ctx.arc(px(v[0]), py(v[1]), 11 + 10 * w[i], 0, 2 * Math.PI); ctx.fill(); plane.label("h" + (i + 1) + "  w = " + w[i].toFixed(2), px(v[0]) + 16 + 10 * w[i], py(v[1]) + 4, PAL[i], "left", 12, true); });
-    ctx.strokeStyle = css("--red"); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(px(t.p[0]), py(t.p[1]), 14, 0, 2 * Math.PI); ctx.stroke(); plane.label("target", px(t.p[0]) + 18, py(t.p[1]) - 12, css("--red"), "left", 12);
+    TARGETS.forEach((tg, k) => {
+      const cur = k === round, chosen = gateAns === k, X = px(tg.p[0]), Y = py(tg.p[1]);
+      ctx.strokeStyle = cur ? css("--red") : (chosen ? css("--orange") : css("--grey")); ctx.lineWidth = cur ? 3 : 2; ctx.setLineDash(cur ? [] : [4, 3]); ctx.beginPath(); ctx.arc(X, Y, cur ? 14 : 12, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+      plane.label(String(k + 1), X, Y + 4, cur ? css("--red") : css("--grey"), "center", 12, true);
+      if (cur) plane.label("target " + (k + 1), X + 18, Y + 24, css("--red"), "left", 12);
+      if (chosen && !cur) plane.label("your pick", X, Y + 28, css("--orange"), "center", 12);
+    });
     ctx.fillStyle = css("--ink"); ctx.beginPath(); for (let k = 0; k < 10; k++) { const r = k % 2 ? 6 : 13, a = Math.PI / 5 * k - Math.PI / 2; ctx.lineTo(px(o[0]) + r * Math.cos(a), py(o[1]) + r * Math.sin(a)); } ctx.closePath(); ctx.fill();
     { ctx.strokeStyle = mode === "query" ? css("--orange") : alpha(css("--orange"), 0.45); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(px(0), py(0)); ctx.lineTo(px(q[0]), py(q[1])); ctx.stroke(); ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(px(q[0]), py(q[1]), 9, 0, 2 * Math.PI); ctx.fill(); plane.label(mode === "query" ? "query q (drag)" : "query q: drag it to score with a dot product", px(q[0]) + 12, py(q[1]) - 10, css("--orange"), "left", 12); }
-    plane.label("ribbon width is the weight on that state", 16, plane.H - 14, css("--muted"), "left", 12);
+    plane.label(gateAns === null ? "click the numbered ring that no blend can reach; ribbon width is the weight on that state" : "ribbon width is the weight on that state", 16, plane.H - 14, css("--muted"), "left", 12);
     bars.clear(mode === "hand" ? "scores (drag the bars) and softmax weights" : "scores q . k / sqrt(d) from the query; drag a bar to take over by hand"); const b = bars.ctx, L = 70, mid = bars.H / 2 + 10, scl = 42;
     b.strokeStyle = css("--line"); b.beginPath(); b.moveTo(L - 10, mid); b.lineTo(bars.W - 100, mid); b.stroke(); bars.label("score 0", L - 14, mid + 4, css("--muted"), "right", 11, true);
     scores().forEach((v, i) => { const x = L + i * 52; b.fillStyle = PAL[i]; b.fillRect(x, Math.min(mid, mid - v * scl), 26, Math.abs(v * scl)); bars.label("h" + (i + 1), x + 13, mid + 190, PAL[i], "center", 12, true); bars.label(v.toFixed(1), x + 13, (v >= 0 ? mid - v * scl - 6 : mid - v * scl + 14), css("--ink"), "center", 11, true); });
@@ -390,111 +429,144 @@ function quiz(el, spec) {
     bars.label("weights (sum to one)", L, mid + 212, css("--muted"), "left", 12);
     bars.label("drag up or down", bars.W - 96, mid + 4, css("--muted"), "left", 11);
   }
-  plane.c.addEventListener("mousedown", ev => { const [mx, my] = plane.pos(ev); if (mode !== "query" && Math.hypot(mx - px(q[0]), my - py(q[1])) > 40) return; if (mode !== "query") { mode = "query"; text(); } drag = "q"; moveQ(ev); });
+  // the hull gate: a pointer press on one of the four rings commits the answer
+  plane.c.addEventListener("pointerdown", ev => { if (gateAns !== null) return; const [mx, my] = plane.pos(ev); let hit = -1; TARGETS.forEach((tg, k) => { if (Math.hypot(mx - px(tg.p[0]), my - py(tg.p[1])) <= 20) hit = k; }); if (hit < 0) return; ev.preventDefault(); skipDrag = true; setTimeout(() => { skipDrag = false; }, 0); gateAns = hit; text(); draw(); });
+  plane.c.addEventListener("pointerdown", ev => { if (skipDrag) { skipDrag = false; return; } const [mx, my] = plane.pos(ev); if (mode !== "query" && Math.hypot(mx - px(q[0]), my - py(q[1])) > 40) return; if (mode !== "query") { mode = "query"; text(); } drag = "q"; moveQ(ev); });
   function moveQ(ev) { const [mx, my] = plane.pos(ev); q = [Math.max(-2, Math.min(2, (mx - plane.W / 2) / 150)), Math.max(-1.6, Math.min(1.6, (plane.H / 2 + 10 - my) / 150))]; draw(); }
-  bars.c.addEventListener("mousedown", ev => { const [mx] = bars.pos(ev); const i = Math.floor((mx - 70 + 13) / 52); if (i >= 0 && i < N) { if (mode !== "hand") { s = scores().slice(); mode = "hand"; text(); } drag = i; moveBar(ev); } });
+  bars.c.addEventListener("pointerdown", ev => { const [mx] = bars.pos(ev); const i = Math.floor((mx - 70 + 13) / 52); if (i >= 0 && i < N) { if (mode !== "hand") { s = scores().slice(); mode = "hand"; text(); } drag = i; moveBar(ev); } });
   function moveBar(ev) { const [, my] = bars.pos(ev); s[drag] = Math.max(-4, Math.min(4, (bars.H / 2 + 10 - my) / 42)); draw(); }
-  window.addEventListener("mousemove", ev => { if (drag === null) return; if (drag === "q") moveQ(ev); else moveBar(ev); });
-  window.addEventListener("mouseup", () => { drag = null; });
-  document.getElementById("blNext").addEventListener("click", () => { if (!done) played++; round = (round + 1) % TARGETS.length; if (round === 0) { reached = 0; played = 0; } done = false; hull = false; s = new Array(N).fill(0); text(); draw(); });
-  document.getElementById("blWhy").addEventListener("click", () => { hull = true; text(); draw(); });
+  window.addEventListener("pointermove", ev => { if (drag === null) return; if (drag === "q") moveQ(ev); else moveBar(ev); });
+  window.addEventListener("pointerup", () => { drag = null; });
+  document.getElementById("blNext").addEventListener("click", () => { if (!done) played++; round = (round + 1) % TARGETS.length; if (round === 0) { reached = 0; played = 0; } done = false; s = new Array(N).fill(0); text(); draw(); });
+  document.getElementById("blWhy").addEventListener("click", () => { gateAns = null; text(); draw(); });
   document.getElementById("blReset").addEventListener("click", () => { s = new Array(N).fill(0); q = [0.5, 0.5]; draw(); });
   quiz(document.getElementById("blQuiz"), { q: "Why must the choice of encoder state be soft rather than a hard pick of the best one?", options: ["A soft blend is cheaper to compute", "A hard pick has no gradient, so the scoring function could never be learned", "Soft blends are more accurate in every case"], answer: 1, why: "An argmax is piecewise constant: a small change in the scores changes nothing until it flips, so no gradient reaches the scorer. The softmax is a differentiable relaxation of the pick, and that is what lets the model learn where to look." });
-  text(); draw();
+  window.addEventListener("themechange", draw); text(); draw();
 })();
 
 /* ================= 2. THE SATURATION BENCH ================= */
 (function scale() {
-  const board = new Board(document.getElementById("scBench")), NK = 8, RUNGS = [4, 8, 16, 32, 64, 128, 256, 512, 1024];
-  let rung = 0, seed = 4, pred = null, revealed = null, drag = false;
+  const board = new Board(document.getElementById("scBench")), NK = 8, RUNGS = [4, 8, 16, 32, 64, 128, 256, 512, 1024], TOP = RUNGS.length - 1;
+  const SHARES = ["about 12 %, an even split over eight keys", "about 50 %", "about 90 %", "more than 99 %"];
+  let rung = 0, seed = 4, pred = null, share = null, revealed = null, drag = false;
   const stepEl = document.getElementById("scStep");
   const LX = 560, LY0 = 470, LY1 = 70, rungY = i => LY0 - (LY0 - LY1) * i / (RUNGS.length - 1);
   const fans = [{ x0: 70, x1: 420, label: "raw scores q . k", scaled: false }, { x0: 700, x1: 1050, label: "scores divided by sqrt(d)", scaled: true }];
-  let vecs = null; function raw() { const d = RUNGS[rung]; if (!vecs || vecs.seed !== seed) { const rng = mulberry32(seed), q = randn(rng, 1024), keys = []; for (let k = 0; k < NK; k++) keys.push(randn(rng, 1024)); vecs = { seed, q, keys }; } return vecs.keys.map(k => { let s = 0; for (let i = 0; i < d; i++) s += vecs.q[i] * k[i]; return s; }); }
+  let vecs = null; function raw(dim) { const d = dim || RUNGS[rung]; if (!vecs || vecs.seed !== seed) { const rng = mulberry32(seed), q = randn(rng, 1024), keys = []; for (let k = 0; k < NK; k++) keys.push(randn(rng, 1024)); vecs = { seed, q, keys }; } return vecs.keys.map(k => { let s = 0; for (let i = 0; i < d; i++) s += vecs.q[i] * k[i]; return s; }); }
   function jac(w) { let f = 0; for (let i = 0; i < w.length; i++) for (let j = 0; j < w.length; j++) { const v = i === j ? w[i] * (1 - w[i]) : -w[i] * w[j]; f += v * v; } return Math.sqrt(f); }
-  function text(extra) { stepEl.innerHTML = extra || '<span class="k">how to read the bench</span><p>Each line is the weight the query gives a key; thicker is more. The bar under a fan is the size of the gradient that passes back through its softmax. Drag the query up the ladder.</p><p>Up to d = 128 the ladder moves freely. To go higher you must first click the key in the raw fan that you think will take all the weight.</p>'; }
+  function bucket(m) { return m > 0.99 ? 3 : (m > 0.7 ? 2 : (m > 0.3 ? 1 : 0)); }
+  function locked() { return share === null || pred === null; }
+  function lockedAt(i) { return (i >= 1 && share === null) || (i >= 6 && pred === null); }
+  function text(extra) {
+    const prompt = '<p class="prompt">At d = 1024, what share of the weight sits on one key without scaling?</p>';
+    if (extra) { stepEl.innerHTML = prompt + extra; return; }
+    if (share === null) stepEl.innerHTML = prompt + '<div class="gate">' + SHARES.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div><span class="k">how to read the bench</span><p>Each line is the weight the query gives a key; thicker is more. The number under each heading is the largest weight on that fan. The bar under a fan is the size of the gradient that passes back through its softmax.</p><p>The ladder is locked at its foot until you commit to a share above. Up to d = 128 it then moves freely; to go higher, click the key in the raw fan that you think will hold the weight.</p>';
+    else if (pred === null) stepEl.innerHTML = prompt + '<p>Your answer: ' + SHARES[share] + '.</p><span class="k">one more commitment</span><p>Click the key in the raw fan that you think will hold the largest weight at d = 1024. The ladder unlocks after that.</p>';
+    else stepEl.innerHTML = prompt + '<p>Your answer: ' + SHARES[share] + ', on k' + (pred + 1) + '.</p><span class="k">bet placed</span><p>The ladder is unlocked. Drag q up to d = 1024 and read the largest weight on each fan.</p>';
+    stepEl.querySelectorAll(".gate button").forEach(bt => bt.addEventListener("click", () => { share = parseInt(bt.dataset.g, 10); text(); draw(); }));
+  }
   function draw() {
     const d = RUNGS[rung], sc = raw(), typ = Math.sqrt(d), ctx = board.ctx;
     board.clear("d = " + d + ": the raw fan on the left, the scaled fan on the right, the dimension ladder between them");
     const out = [];
     fans.forEach(f => {
-      const s = f.scaled ? sc.map(v => v / typ) : sc, w = softmax(s), J = jac(w); out.push({ w, J });
+      const s = f.scaled ? sc.map(v => v / typ) : sc, w = softmax(s), J = jac(w), wm = Math.max.apply(null, w); out.push({ w, J });
       board.label(f.label, (f.x0 + f.x1) / 2, 44, css("--ink"), "center", 13);
+      board.label("largest weight " + wm.toFixed(3) + "  (" + (100 * wm).toFixed(wm > 0.99 ? 1 : 0) + " % on one key)", (f.x0 + f.x1) / 2, 62, wm > 0.9 ? css("--red") : css("--blue"), "center", 13, true);
       const qy = 270; ctx.fillStyle = css("--blue"); ctx.fillRect(f.x0 - 30, qy - 16, 60, 32); board.label("query", f.x0, qy + 5, "#fff", "center", 12);
       s.forEach((v, k) => { const ky = 80 + k * 54; ctx.strokeStyle = alpha(css("--orange"), 0.15 + 0.85 * w[k]); ctx.lineWidth = 1 + 14 * w[k]; ctx.beginPath(); ctx.moveTo(f.x0 + 30, qy); ctx.lineTo(f.x1 - 34, ky); ctx.stroke(); ctx.lineWidth = 1; });
-      s.forEach((v, k) => { const ky = 80 + k * 54; const isPred = !f.scaled && pred === k, isWin = revealed && !f.scaled && revealed.win === k; ctx.fillStyle = css("--bg"); ctx.fillRect(f.x1 - 34, ky - 14, 68, 28); ctx.strokeStyle = isWin ? "#2E7D5B" : (isPred ? css("--orange") : css("--line")); ctx.lineWidth = isPred || isWin ? 2.5 : 1; ctx.strokeRect(f.x1 - 34, ky - 14, 68, 28); ctx.lineWidth = 1; board.label("k" + (k + 1) + "  " + w[k].toFixed(2), f.x1, ky + 4, css("--ink"), "center", 11, true); board.label(v.toFixed(1), f.x1 + 44, ky + 4, css("--muted"), "left", 10, true); });
-      board.label("score", f.x1 + 44, 66, css("--muted"), "left", 10);
+      s.forEach((v, k) => { const ky = 80 + k * 54; const isPred = !f.scaled && pred === k, isWin = revealed && !f.scaled && revealed.win === k; ctx.fillStyle = css("--bg"); ctx.fillRect(f.x1 - 34, ky - 14, 68, 28); ctx.strokeStyle = isWin ? "#2E7D5B" : (isPred ? css("--orange") : css("--line")); ctx.lineWidth = isPred || isWin ? 2.5 : 1; ctx.strokeRect(f.x1 - 34, ky - 14, 68, 28); ctx.lineWidth = 1; board.label("k" + (k + 1) + "  " + w[k].toFixed(2), f.x1, ky + 4, css("--ink"), "center", 11, true); board.label(v.toFixed(1), f.x1 + 44, ky + 4, css("--muted"), "left", 11, true); });
+      board.label("score", f.x1 + 44, 78 - 14, css("--muted"), "left", 11);
       // gradient bar
       const bx = f.x0 - 30, by = 500, bw = f.x1 + 70 - bx; ctx.strokeStyle = css("--line"); ctx.strokeRect(bx, by - 12, bw, 12); const frac = Math.min(1, J / 0.35); ctx.fillStyle = mix(css("--red"), "#2E7D5B", frac); ctx.fillRect(bx + 1, by - 11, (bw - 2) * frac, 10); board.label("gradient through the softmax " + J.toFixed(3) + (J < 0.02 ? "  saturated: nothing trains" : (J < 0.15 ? "  sharp" : "  healthy")), bx, by - 18, J < 0.02 ? css("--red") : css("--muted"), "left", 11);
     });
     // ladder
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(LX - 22, LY0 + 10); ctx.lineTo(LX - 22, LY1 - 10); ctx.moveTo(LX + 22, LY0 + 10); ctx.lineTo(LX + 22, LY1 - 10); ctx.stroke(); ctx.lineWidth = 1;
-    RUNGS.forEach((r, i) => { const y = rungY(i); const locked = i >= 6 && pred === null; ctx.strokeStyle = locked ? css("--red") : css("--line"); ctx.lineWidth = 2; ctx.setLineDash(locked ? [3, 3] : []); ctx.beginPath(); ctx.moveTo(LX - 22, y); ctx.lineTo(LX + 22, y); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; board.label("d = " + r, LX + 30, y + 4, locked ? css("--red") : css("--muted"), "left", 11, true); });
+    RUNGS.forEach((r, i) => { const y = rungY(i); const lk = lockedAt(i); ctx.strokeStyle = lk ? css("--red") : css("--line"); ctx.lineWidth = 2; ctx.setLineDash(lk ? [3, 3] : []); ctx.beginPath(); ctx.moveTo(LX - 22, y); ctx.lineTo(LX + 22, y); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; board.label("d = " + r, LX + 30, y + 4, lk ? css("--red") : css("--muted"), "left", 11, true); });
     const hy = rungY(rung); ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(LX, hy, 13, 0, 2 * Math.PI); ctx.fill(); board.label("q", LX, hy + 4, "#fff", "center", 12, true);
     board.label("the dimension ladder (drag q)", LX, LY1 - 26, css("--ink"), "center", 12);
-    if (pred === null && rung < 6) board.label("locked until you bet", LX, LY0 + 30, css("--red"), "center", 11);
+    if (locked() && rung < 6) board.label(share === null ? "locked until you answer" : "locked until you pick a key", LX, LY0 + 30, css("--red"), "center", 11);
     document.getElementById("scDv").textContent = String(d); document.getElementById("scTyp").textContent = typ.toFixed(1); document.getElementById("scMaxW").textContent = Math.max.apply(null, out[0].w).toFixed(3) + " / " + Math.max.apply(null, out[1].w).toFixed(3); document.getElementById("scGrad").textContent = out[0].J.toFixed(3) + " / " + out[1].J.toFixed(3);
   }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (Math.hypot(mx - LX, my - rungY(rung)) < 22) { drag = true; return; } const f = fans[0]; if (mx >= f.x1 - 34 && mx <= f.x1 + 34) { const k = Math.round((my - 80) / 54); if (k >= 0 && k < NK && my >= 80 + k * 54 - 14 && my <= 80 + k * 54 + 14 && !revealed) { pred = k; text('<span class="k">bet placed</span><p>You picked k' + (k + 1) + ' to take all the weight at d = 512. The ladder is unlocked: drag q up and see.</p>'); draw(); } } });
-  window.addEventListener("mousemove", ev => { if (!drag) return; const [, my] = board.pos(ev); let best = 0; RUNGS.forEach((r, i) => { if (Math.abs(rungY(i) - my) < Math.abs(rungY(best) - my)) best = i; }); if (best >= 6 && pred === null) { best = 5; text('<span class="k">locked</span><p>Before d = 256, click the key in the raw fan that you think will end up with all the weight.</p>'); } if (best !== rung) { rung = best; if (rung >= 7 && !revealed && pred !== null) { const sc = raw(); let win = 0; sc.forEach((v, i) => { if (v > sc[win]) win = i; }); const w = softmax(sc); revealed = { win }; text('<span class="k">the reveal at d = ' + RUNGS[rung] + '</span><div class="ask ' + (win === pred ? 'ok' : 'no') + '">' + (win === pred ? 'Right: ' : 'Not that one: ') + 'k' + (win + 1) + ' holds ' + Math.max.apply(null, w).toFixed(3) + ' of the weight and the raw gradient bar reads ' + jac(w).toFixed(4) + '.</div><p>The raw scores spread over tens of units, the softmax has become a one-hot pick, and almost no gradient passes. The scaled fan on the right kept its shape at every rung: dividing by sqrt(d) is what makes the layer trainable at width.</p>'); } draw(); } });
-  window.addEventListener("mouseup", () => { drag = false; });
-  document.getElementById("scNew").addEventListener("click", () => { seed += 1; pred = null; revealed = null; rung = Math.min(rung, 5); text(); draw(); });
-  quiz(document.getElementById("scQuiz"), { q: "A colleague doubles the key dimension from 64 to 128 and keeps the division by sqrt(64). What happens to the scores?", options: ["Nothing; the constant is a convention", "Their spread grows by sqrt(2), so the softmax sharpens and gradients shrink", "Their spread halves"], answer: 1, why: "The variance of the dot product scales with d, so the standard deviation grows by sqrt(128/64). The divisor has to track the key dimension in use; it is a normalization, not a tuning constant." });
+  function reveal() {
+    const sc = raw(); let win = 0; sc.forEach((v, i) => { if (v > sc[win]) win = i; }); const w = softmax(sc), wm = Math.max.apply(null, w), ws = softmax(sc.map(v => v / Math.sqrt(RUNGS[rung]))), wsm = Math.max.apply(null, ws), b = bucket(wm), shareOk = b === share, keyOk = win === pred; revealed = { win };
+    text('<div class="ask ' + (shareOk && keyOk ? 'ok' : 'no') + '">' + (shareOk ? 'Right on the share: ' : 'Share answer was off: ') + 'without scaling, k' + (win + 1) + ' holds ' + wm.toFixed(3) + ' of the weight, ' + (100 * wm).toFixed(1) + ' %. ' + (keyOk ? 'You picked the right key.' : 'You picked k' + (pred + 1) + '.') + ' On the scaled fan the largest weight is ' + wsm.toFixed(3) + ' and the raw gradient bar reads ' + jac(w).toFixed(4) + '.</div><p>The raw scores spread over tens of units, the softmax has become a one-hot pick, and almost no gradient passes. The scaled fan on the right kept its shape at every rung: dividing by sqrt(d) is what makes the layer trainable at width.</p>');
+  }
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (Math.hypot(mx - LX, my - rungY(rung)) < 22) { drag = true; return; } const f = fans[0]; if (mx >= f.x1 - 34 && mx <= f.x1 + 34) { const k = Math.round((my - 80) / 54); if (k >= 0 && k < NK && my >= 80 + k * 54 - 14 && my <= 80 + k * 54 + 14 && !revealed && share !== null) { pred = k; text(); draw(); } } });
+  window.addEventListener("pointermove", ev => { if (!drag) return; const [, my] = board.pos(ev); let best = 0; RUNGS.forEach((r, i) => { if (Math.abs(rungY(i) - my) < Math.abs(rungY(best) - my)) best = i; }); if (lockedAt(best)) { best = share === null ? 0 : 5; text('<span class="k">locked</span><p>' + (share === null ? 'Before d = 8, answer the question above' : 'Before d = 256, click the key in the raw fan that you think will hold the largest weight') + '.</p>' + (share === null ? '<div class="gate">' + SHARES.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>' : '')); stepEl.querySelectorAll(".gate button").forEach(bt => bt.addEventListener("click", () => { share = parseInt(bt.dataset.g, 10); text(); draw(); })); } if (best !== rung) { rung = best; if (rung === TOP && !revealed && !locked()) reveal(); draw(); } });
+  window.addEventListener("pointerup", () => { drag = false; });
+  document.getElementById("scNew").addEventListener("click", () => { seed += 1; pred = null; share = null; revealed = null; rung = 0; text(); draw(); });
+  quiz(document.getElementById("scQuiz"), { q: "A colleague doubles the key dimension from 64 to 128 and keeps the division by sqrt(64). What happens to the scores?", options: ["Nothing; the constant is a convention", "Their spread grows by sqrt(2), so the softmax sharpens and gradients shrink", "Their spread halves"], answer: 1, why: "The variance of the dot product scales with d, so the standard deviation grows by sqrt(128/64). The divisor has to track the key dimension in use; it is a normalization that follows d." });
   window.addEventListener("themechange", draw); text(); draw();
 })();
 
 /* ================= 3. READ THE HEADS ================= */
 (function heads() {
-  const T = 16, KINDS = [{ k: "local", name: "local: the neighbouring steps" }, { k: "anchor", name: "anchor: one fixed position" }, { k: "offset", name: "offset: a fixed number of steps back" }, { k: "periodic", name: "periodic: the same phase of a cycle" }];
-  let seed = 3, order = [], mats = [], labels = [null, null, null, null], checked = false, score = 0, played = 0, hover = null;
+  const T = 16, OFF = 3, KINDS = [{ k: "local", name: "local: the neighbouring steps" }, { k: "anchor", name: "anchor: one fixed position" }, { k: "offset", name: "offset: three steps back" }, { k: "periodic", name: "periodic: the same phase of a cycle" }];
+  let seed = 3, order = [], mats = [], labels = [null, null, null, null], checked = false, score = 0, played = 0, hover = null, boards = [], labBtns = [];
   const strip = new Board(document.getElementById("hdStrip")), wrap = document.getElementById("hdHeads"), stepEl = document.getElementById("hdStep");
-  function matrix(kind, rng) { const M = []; const anchor = Math.floor(rng() * 3), off = 3 + Math.floor(rng() * 3), per = 4 + Math.floor(rng() * 2); for (let i = 0; i < T; i++) { const s = []; for (let j = 0; j < T; j++) { let v = -2; if (kind === "local") v = -Math.abs(i - j) * 1.6; else if (kind === "anchor") v = j === anchor ? 2.5 : (Math.abs(i - j) < 1 ? 0.5 : -2); else if (kind === "offset") v = (i - j === off) ? 3 : (i - j === off - 1 || i - j === off + 1 ? 0.5 : -2); else v = ((i - j) % per === 0 && j <= i) ? 2.2 : -2; if (kind === "offset" && i < off) v = j === 0 ? 1.5 : -2; s.push(v + 0.5 * (rng() - 0.5)); } M.push(softmax(s)); } return M; }
+  const REC = []; { const rng = mulberry32(21); for (let j = 0; j < T; j++) REC.push(Math.sin(2 * Math.PI * j / 5) + 0.6 * (rng() - 0.5)); }
+  const MAPH = 260, RECY = 272, RECH = 60, CVH = 350, cell = MAPH / T;
+  function matrix(kind, rng) { const M = []; const anchor = Math.floor(rng() * 3), off = OFF, per = 4 + Math.floor(rng() * 2); for (let i = 0; i < T; i++) { const s = []; for (let j = 0; j < T; j++) { let v = -2; if (kind === "local") v = -Math.abs(i - j) * 1.6; else if (kind === "anchor") v = j === anchor ? 2.5 : (Math.abs(i - j) < 1 ? 0.5 : -2); else if (kind === "offset") v = (i - j === off) ? 3 : (i - j === off - 1 || i - j === off + 1 ? 0.5 : -2); else v = ((i - j) % per === 0 && j <= i) ? 2.2 : -2; if (kind === "offset" && i < off) v = j === 0 ? 1.5 : -2; s.push(v + 0.5 * (rng() - 0.5)); } M.push(softmax(s)); } return M; }
   function make() { const rng = mulberry32(seed); order = [0, 1, 2, 3]; for (let i = 3; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } mats = order.map(k => matrix(KINDS[k].k, rng)); labels = [null, null, null, null]; checked = false; hover = null; }
-  function render() {
-    wrap.innerHTML = "";
+  function rowAt(bd, ev) { const [, my] = bd.pos(ev); const i = Math.floor(my / cell); return i >= 0 && i < T ? i : null; }
+  function build() {
+    wrap.innerHTML = ""; boards = []; labBtns = [];
     mats.forEach((M, h) => {
-      const div = document.createElement("div"); div.className = "head"; div.innerHTML = '<span class="badge">head ' + (h + 1) + '</span><canvas width="260" height="260"></canvas><div class="labs"></div>';
-      const cv = div.querySelector("canvas"), ctx = cv.getContext("2d"), s = 260 / T;
-      for (let i = 0; i < T; i++) for (let j = 0; j < T; j++) { ctx.fillStyle = mix(css("--panel"), css("--blue"), Math.min(1, M[i][j] * 1.6)); ctx.fillRect(j * s, i * s, s + 0.5, s + 0.5); }
-      if (hover && hover.h === h) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.strokeRect(0, hover.i * s, 260, s); }
-      cv.addEventListener("mousemove", ev => { const r = cv.getBoundingClientRect(); const i = Math.floor((ev.clientY - r.top) / r.height * T); if (!hover || hover.h !== h || hover.i !== i) { hover = { h, i }; render(); } });
-      const labs = div.querySelector(".labs");
-      KINDS.forEach((kd, ki) => { const b = document.createElement("button"); b.textContent = kd.name; b.setAttribute("aria-pressed", labels[h] === ki ? "true" : "false"); if (checked) { if (ki === order[h]) b.classList.add("right"); else if (labels[h] === ki) b.classList.add("wrong"); } b.addEventListener("click", () => { if (checked) return; labels[h] = ki; render(); }); labs.appendChild(b); });
-      wrap.appendChild(div);
+      const div = document.createElement("div"); div.className = "head"; div.innerHTML = '<span class="badge">head ' + (h + 1) + '</span><canvas class="hit" width="260" height="' + CVH + '"></canvas><div class="labs"></div>';
+      const cv = div.querySelector("canvas"), bd = new Board(cv); boards.push(bd);
+      const onRow = ev => { const i = rowAt(bd, ev); if (i === null) return; if (!hover || hover.h !== h || hover.i !== i) { hover = { h, i }; paint(); } };
+      cv.addEventListener("pointermove", onRow); cv.addEventListener("pointerdown", ev => { ev.preventDefault(); onRow(ev); });
+      const labs = div.querySelector(".labs"), row = [];
+      KINDS.forEach((kd, ki) => { const b = document.createElement("button"); b.textContent = kd.name; b.addEventListener("click", () => { if (checked) return; labels[h] = ki; paint(); }); labs.appendChild(b); row.push(b); });
+      labBtns.push(row); wrap.appendChild(div);
+    });
+  }
+  function paint() {
+    boards.forEach((bd, h) => {
+      const M = mats[h], ctx = bd.ctx; bd.clear("");
+      for (let i = 0; i < T; i++) for (let j = 0; j < T; j++) { ctx.fillStyle = mix(css("--panel"), css("--blue"), Math.min(1, M[i][j] * 1.6)); ctx.fillRect(j * cell, i * cell, cell + 0.5, cell + 0.5); }
+      const on = hover && hover.h === h;
+      if (on) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.strokeRect(1, hover.i * cell, MAPH - 2, cell); ctx.lineWidth = 1; }
+      // the record under the map: sixteen readings as bars, lit by the weight the hovered query gives them
+      const mid = RECY + RECH / 2 + 4; ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(MAPH, mid); ctx.stroke();
+      for (let j = 0; j < T; j++) { const w = on ? M[hover.i][j] : 0, hgt = REC[j] * 22; if (on && w > 0.05) { ctx.fillStyle = alpha(css("--blue"), Math.min(0.85, 0.15 + 1.2 * w)); ctx.fillRect(j * cell, RECY, cell, RECH); } ctx.fillStyle = on ? (w > 0.05 ? css("--ink") : alpha(css("--grey"), 0.35)) : alpha(css("--grey"), 0.6); ctx.fillRect(j * cell + 2, Math.min(mid, mid - hgt), cell - 4, Math.abs(hgt)); if (on && hover.i === j) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.strokeRect(j * cell + 1, RECY - 2, cell - 2, RECH + 4); ctx.lineWidth = 1; } }
+      bd.label(on ? "query " + (hover.i + 1) + " reads the blue readings" : "the record: hover a row above", 4, CVH - 6, on ? css("--ink") : css("--muted"), "left", 12);
+      labBtns[h].forEach((b, ki) => { b.setAttribute("aria-pressed", labels[h] === ki ? "true" : "false"); b.classList.remove("right", "wrong"); if (checked) { if (ki === order[h]) b.classList.add("right"); else if (labels[h] === ki) b.classList.add("wrong"); } });
     });
     document.getElementById("hdCheck").disabled = checked || labels.some(l => l === null);
     document.getElementById("hdScore").textContent = score + " / " + played;
-    strip.clear(hover ? "head " + (hover.h + 1) + ", query position " + (hover.i + 1) + ": where its weight went" : "hover a row of any head to read it as a ribbon over the record"); const c = strip.ctx;
+    strip.clear(hover ? "head " + (hover.h + 1) + ", query position " + (hover.i + 1) + ": where its weight went over the record" : "hover or press a row of any head to read it as a ribbon over the record"); const c = strip.ctx;
     const x0 = 60, w = (strip.W - 120) / T;
-    for (let j = 0; j < T; j++) { const v = hover ? mats[hover.h][hover.i][j] : 0; c.fillStyle = mix(css("--panel"), css("--blue"), Math.min(1, v * 1.6)); c.fillRect(x0 + j * w + 3, 60, w - 6, 50); c.strokeStyle = css("--line"); c.strokeRect(x0 + j * w + 3, 60, w - 6, 50); strip.label(String(j + 1), x0 + j * w + w / 2, 130, css("--muted"), "center", 11, true); if (hover && hover.i === j) { c.strokeStyle = css("--orange"); c.lineWidth = 3; c.strokeRect(x0 + j * w + 1, 58, w - 2, 54); c.lineWidth = 1; } if (hover && v > 0.08) strip.label(v.toFixed(2), x0 + j * w + w / 2, 50, css("--ink"), "center", 11, true); }
-    strip.label("orange: the query position; blue: weight on each key position", x0, strip.H - 6, css("--muted"), "left", 12);
+    for (let j = 0; j < T; j++) { const v = hover ? mats[hover.h][hover.i][j] : 0; c.fillStyle = mix(css("--panel"), css("--blue"), Math.min(1, v * 1.6)); c.fillRect(x0 + j * w + 3, 60, w - 6, 50); c.strokeStyle = css("--line"); c.strokeRect(x0 + j * w + 3, 60, w - 6, 50); strip.label(String(j + 1), x0 + j * w + w / 2, 128, css("--muted"), "center", 11, true); strip.label(REC[j].toFixed(2), x0 + j * w + w / 2, 144, css("--muted"), "center", 11, true); if (hover && hover.i === j) { c.strokeStyle = css("--orange"); c.lineWidth = 3; c.strokeRect(x0 + j * w + 1, 58, w - 2, 54); c.lineWidth = 1; } if (hover && v > 0.08) strip.label(v.toFixed(2), x0 + j * w + w / 2, 50, css("--ink"), "center", 11, true); }
+    strip.label("orange: the query position; blue: weight on each key position; the second line is the reading's value", x0, strip.H - 6, css("--muted"), "left", 12);
   }
-  function text() { stepEl.innerHTML = '<span class="k">the task</span><p>Each head has learned one relation. Match the four relations to the four maps. Rows are query positions, top to bottom; columns are key positions, left to right; dark is high weight.</p><p>Hover rows to see a single query as a ribbon before you decide.</p>'; }
-  document.getElementById("hdCheck").addEventListener("click", () => { checked = true; played++; const right = labels.filter((l, h) => l === order[h]).length; if (right === 4) score++; stepEl.innerHTML = '<span class="k">result</span><div class="ask ' + (right === 4 ? 'ok' : 'no') + '">' + right + ' of 4 heads labelled correctly.</div><p>Local heads show a diagonal band; anchor heads a bright column; offset heads a diagonal shifted by a fixed number of columns; periodic heads a comb of stripes. Trained models show all four, and nobody assigned them: the maps are evidence of what the model reads, and nothing more.</p>'; render(); });
-  document.getElementById("hdNew").addEventListener("click", () => { seed += 1; make(); text(); render(); });
-  quiz(document.getElementById("hdQuiz"), { q: "A head puts 0.9 of its weight on position 1 for every query. What may you conclude?", options: ["Position 1 is the most important input for the prediction", "The head reads position 1; whether that matters depends on the value vector there, which may carry almost nothing", "The model is broken"], answer: 1, why: "Attention weight is where the head looks, not how much it took. Anchor heads often park weight on a start token whose value is near zero, which acts as a no-op. Influence needs its own evidence, such as ablating the position and measuring the change, the same discipline as permutation importance." });
-  make(); text(); render();
+  function text() { stepEl.innerHTML = '<p class="prompt">Which head is the local one? Which looks three steps back?</p><span class="k">the task</span><p>Each head has learned one relation. Match the four relations to the four maps. Rows are query positions, top to bottom; columns are key positions, left to right; dark is high weight.</p><p>Hover or press a row: the record under that map lights the readings the query reads, with the query itself outlined in orange. Label all four heads, then check.</p>'; }
+  document.getElementById("hdCheck").addEventListener("click", () => { checked = true; played++; const right = labels.filter((l, h) => l === order[h]).length; if (right === 4) score++; const loc = order.indexOf(0) + 1, off = order.indexOf(2) + 1; stepEl.innerHTML = '<p class="prompt">Which head is the local one? Which looks three steps back?</p><div class="ask ' + (right === 4 ? 'ok' : 'no') + '">' + right + ' of 4 heads labelled correctly. Head ' + loc + ' is the local one and head ' + off + ' looks three steps back.</div><p>Local heads show a diagonal band; anchor heads a bright column; offset heads a diagonal shifted by a fixed number of columns; periodic heads a comb of stripes. Trained models show all four, and nobody assigned them: the maps are evidence of what the model reads, and nothing more.</p>'; paint(); });
+  document.getElementById("hdNew").addEventListener("click", () => { seed += 1; make(); build(); text(); paint(); });
+  quiz(document.getElementById("hdQuiz"), { q: "A head puts 0.9 of its weight on position 1 for every query. What may you conclude?", options: ["Position 1 is the most important input for the prediction", "The head reads position 1; whether that matters depends on the value vector there, which may carry almost nothing", "The model is broken"], answer: 1, why: "Attention weight records where the head looks. Anchor heads often park weight on a start token whose value is near zero, which acts as a no-op. Influence needs its own evidence, such as ablating the position and measuring the change, the same discipline as permutation importance." });
+  window.addEventListener("themechange", paint); make(); build(); text(); paint();
 })();
 
 /* ================= 4. ORDER BLIND ================= */
 (function position() {
-  const T = 8, D = 4, rng0 = mulberry32(11);
+  const T = 8, D = 4, rng0 = mulberry32(11), ID = [0, 1, 2, 3, 4, 5, 6, 7];
   const X = []; for (let t = 0; t < T; t++) X.push(Array.from(randn(rng0, D)));
   const Wq = [], Wk = [], Wv = []; for (let i = 0; i < D; i++) { Wq.push(Array.from(randn(rng0, D)).map(v => v * 0.7)); Wk.push(Array.from(randn(rng0, D)).map(v => v * 0.7)); Wv.push(Array.from(randn(rng0, D)).map(v => v * 0.7)); }
   const mv = (W, x) => W.map(r => r.reduce((s, v, i) => s + v * x[i], 0));
   const PEMAX = 32, PED = 8; const pe = p => { const v = []; for (let i = 0; i < PED / 2; i++) { const wl = Math.pow(100, 2 * i / PED); v.push(Math.sin(p / wl), Math.cos(p / wl)); } return v; };
   const strip = new Board(document.getElementById("poStrip")), code = new Board(document.getElementById("poCode"));
-  let perm = [0, 1, 2, 3, 4, 5, 6, 7], mode = "none", base = null, ref = 8, anim = null, slide = 1, prevPerm = null, dragCard = null, dragPos = null;
+  let perm = ID.slice(), mode = "none", base = null, ref = 8, anim = null, slide = 1, prevPerm = null, dragCard = null, dragPos = null, gateAns = null, judged = null;
   const CARDS = [{ m: "none", name: "no tag", color: css("--grey") }, { m: "sin", name: "sinusoidal tag", color: css("--orange") }, { m: "table", name: "learned table tag (32 rows)", color: css("--blue") }], CARDX = [60, 330, 600], CARDY = 236, CARDW = 240, CARDH = 44;
   function inputs(order) { return order.map((tok, pos) => { const x = X[tok].slice(); if (mode === "sin") { const p = pe(pos); for (let i = 0; i < D; i++) x[i] += 0.8 * p[i]; } else if (mode === "table") { const g = randn(mulberry32(500 + pos), D); for (let i = 0; i < D; i++) x[i] += 0.8 * g[i]; } return x; }); }
   function attend(order) { const xs = inputs(order), Q = xs.map(x => mv(Wq, x)), K = xs.map(x => mv(Wk, x)), Vv = xs.map(x => mv(Wv, x)); return Q.map(q => { const s = K.map(k => k.reduce((a, v, i) => a + v * q[i], 0) / Math.sqrt(D)), w = softmax(s); return Vv[0].map((_, i) => w.reduce((a, wi, j) => a + wi * Vv[j][i], 0)); }); }
   function tile(o) { const h = ((Math.atan2(o[1], o[0]) / Math.PI + 1) * 180), l = 35 + 30 * Math.max(0, Math.min(1, (o[2] + 1.5) / 3)); return "hsl(" + h.toFixed(0) + ",55%," + l.toFixed(0) + "%)"; }
+  function change(order) { const out = attend(order); if (!base) base = attend(ID); let maxd = 0; order.forEach((tok, pos) => { const d = Math.sqrt(out[pos].reduce((s, v, i) => s + (v - base[tok][i]) ** 2, 0)); maxd = Math.max(maxd, d); }); return { out, maxd }; }
   const stepEl = document.getElementById("poStep");
+  function modeName() { return mode === "none" ? "no tag attached" : (mode === "sin" ? "sinusoidal tag attached" : "learned table attached"); }
   function draw() {
-    const out = attend(perm); if (!base) base = attend([0, 1, 2, 3, 4, 5, 6, 7]);
-    // change per reading: compare the output of reading tok now with its output in the original order
-    let maxd = 0; perm.forEach((tok, pos) => { const d = Math.sqrt(out[pos].reduce((s, v, i) => s + (v - base[tok][i]) ** 2, 0)); maxd = Math.max(maxd, d); });
-    document.getElementById("poChange").textContent = maxd.toFixed(3); document.getElementById("poRef").textContent = ref + 1;
+    const r = change(perm), out = r.out;
+    document.getElementById("poChange").textContent = r.maxd.toFixed(3); document.getElementById("poRef").textContent = ref + 1;
     strip.clear("the record (top) and each reading's attention output as a tile (bottom)"); const c = strip.ctx, x0 = 60, w = (strip.W - 120) / T;
     perm.forEach((tok, pos) => {
       const from = prevPerm ? prevPerm.indexOf(tok) : pos, x = x0 + (from + (pos - from) * slide) * w;
@@ -502,97 +574,146 @@ function quiz(el, spec) {
       strip.label("r" + (tok + 1), x + w / 2, 70, css("--ink"), "center", 15, true); strip.label(X[tok][0].toFixed(2) + ", " + X[tok][1].toFixed(2), x + w / 2, 92, css("--muted"), "center", 11, true);
       c.fillStyle = tile(out[pos]); c.fillRect(x + 4, 120, w - 8, 60); c.strokeStyle = css("--line"); c.strokeRect(x + 4, 120, w - 8, 60);
       strip.label("slot " + (pos + 1), x + w / 2, 205, css("--muted"), "center", 11, true);
-      if (mode !== "none") { const col = mode === "sin" ? css("--orange") : css("--blue"); c.fillStyle = col; c.fillRect(x + 8, 22, w - 16, 16); strip.label("pos " + (pos + 1), x + w / 2, 34, "#fff", "center", 10, true); }
+      if (mode !== "none") { const col = mode === "sin" ? css("--orange") : css("--blue"); c.fillStyle = col; c.fillRect(x + 8, 22, w - 16, 16); strip.label("pos " + (pos + 1), x + w / 2, 34, "#fff", "center", 11, true); }
     });
-    strip.label("tile colour encodes the output vector; a reading whose tile changes after a shuffle has noticed its new position", x0, 222, css("--muted"), "left", 11);
+    strip.label("tile colour encodes the output vector; a reading whose tile changes after a shuffle has noticed its new position", x0, 222, css("--muted"), "left", 12);
     // the tray of tag cards
     CARDS.forEach((cd, i) => { const on = mode === cd.m; const cx = CARDX[i], cy = CARDY; c.fillStyle = on ? alpha(cd.color, 0.25) : css("--bg"); c.fillRect(cx, cy, CARDW, CARDH); c.strokeStyle = on ? cd.color : css("--line"); c.lineWidth = on ? 2.5 : 1; c.strokeRect(cx, cy, CARDW, CARDH); c.lineWidth = 1; c.fillStyle = cd.color; c.fillRect(cx + 10, cy + 14, 16, 16); strip.label(cd.name + (on ? "  (attached)" : ""), cx + 34, cy + 27, css("--ink"), "left", 13); });
     strip.label("the tray: drag a card up onto the record", 860, CARDY + 27, css("--muted"), "left", 12);
     if (dragCard !== null && dragPos) { const cd = CARDS[dragCard]; c.fillStyle = alpha(cd.color, 0.6); c.fillRect(dragPos[0] - CARDW / 2, dragPos[1] - CARDH / 2, CARDW, CARDH); strip.label(cd.name, dragPos[0], dragPos[1] + 5, "#fff", "center", 13); }
     document.getElementById("poMode").textContent = mode === "none" ? "none" : (mode === "sin" ? "sinusoidal" : "learned table");
-    code.clear(mode === "table" ? "a learned position table: 32 rows of free parameters, nothing beyond" : "the sinusoidal position code, 8 dimensions by 32 positions (click a column)"); const k = code.ctx, cx0 = 90, cw = (code.W - 150) / PEMAX, ch = 22, cy0 = 50;
+    code.clear(mode === "table" ? "a learned position table: 32 rows of free parameters, nothing beyond" : "the sinusoidal position code, 8 dimensions by 32 positions (hover a column)"); const k = code.ctx, cx0 = 90, cw = (code.W - 150) / PEMAX, ch = 22, cy0 = 50;
     const refv = mode === "table" ? Array.from(randn(mulberry32(500 + ref), PED)) : pe(ref);
     for (let p = 0; p < PEMAX; p++) { const v = mode === "table" ? Array.from(randn(mulberry32(500 + p), PED)) : pe(p); let dot = 0, n1 = 0, n2 = 0; for (let i = 0; i < PED; i++) { dot += v[i] * refv[i]; n1 += v[i] * v[i]; n2 += refv[i] * refv[i]; } const sim = dot / Math.sqrt(n1 * n2); for (let i = 0; i < PED; i++) { const g = (v[i] + 1.5) / 3; k.fillStyle = mix(css("--panel"), css("--ink"), Math.max(0, Math.min(1, g))); k.fillRect(cx0 + p * cw, cy0 + i * ch, cw - 1, ch - 1); } k.fillStyle = mix(css("--panel"), css("--orange"), Math.max(0, sim)); k.fillRect(cx0 + p * cw, cy0 + PED * ch + 8, cw - 1, 18); if (p === ref) { k.strokeStyle = css("--orange"); k.lineWidth = 3; k.strokeRect(cx0 + p * cw - 1, cy0 - 2, cw + 1, PED * ch + 30); k.lineWidth = 1; } if (p % 4 === 0) code.label(String(p + 1), cx0 + p * cw + cw / 2, cy0 + PED * ch + 44, css("--muted"), "center", 11, true); }
-    for (let i = 0; i < PED; i++) code.label(i % 2 === 0 ? "sin, wavelength " + Math.pow(100, i / PED).toFixed(0) : "cos", cx0 - 8, cy0 + i * ch + 15, css("--muted"), "right", 10, true);
-    code.label("similarity to the clicked position (orange, cosine)", cx0, cy0 + PED * ch + 62, css("--muted"), "left", 12);
-    code.label("position", code.W / 2, code.H - 10, css("--muted"), "center", 12);
+    for (let i = 0; i < PED; i++) code.label(i % 2 === 0 ? "sin, wl " + Math.pow(100, i / PED).toFixed(0) : "cos", cx0 - 8, cy0 + i * ch + 15, css("--muted"), "right", 11, true);
+    code.label("similarity to the position under the pointer (orange, cosine)", cx0, cy0 + PED * ch + 62, css("--muted"), "left", 12);
+    code.label("position (wl is the wavelength of the row, in positions)", code.W / 2, code.H - 10, css("--muted"), "center", 12);
     if (mode === "none") { k.fillStyle = mix(css("--panel"), css("--grey"), 0.55); k.fillRect(cx0 - 4, cy0 - 4, PEMAX * cw + 8, PED * ch + 34); code.label("no position code is added in this mode", code.W / 2, cy0 + PED * ch / 2 + 6, css("--ink"), "center", 15); }
   }
-  function text() { stepEl.innerHTML = '<span class="k">' + (mode === "none" ? "no tag attached" : (mode === "sin" ? "sinusoidal tag attached" : "learned table attached")) + '</span><p>' + (mode === "none" ? 'Shuffle. Every tile keeps its colour and simply moves with its reading: the layer computed the same thing, because a weighted sum has no notion of order. Then drag a tag card onto the record.' : 'Shuffle. The tiles change colour, since each reading now carries a different position vector and attends differently. Order has become visible to the model.') + '</p>' + (mode === "table" ? '<p>The table has 32 rows. A record of position 33 has no vector at all, which is why fixed codes survive longer records and learned tables do not.</p>' : '') ; }
-  function shuffle() { const rng = mulberry32(Date.now() % 100000); prevPerm = perm.slice(); const p = perm.slice(); for (let i = T - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; } perm = p; animate(); }
+  function text() {
+    const prompt = '<p class="prompt">Shuffle the record. Does any output change?</p>';
+    let body;
+    if (gateAns === null) body = '<div class="gate"><button data-g="yes">yes</button><button data-g="no">no</button></div><p>Commit first; the Shuffle button unlocks after that.</p>';
+    else if (judged === null) body = '<p>You said ' + gateAns + '. Press Shuffle the readings.</p>';
+    else {
+      const expect = mode === "none" ? "no" : "yes", ok = gateAns === expect;
+      body = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + 'The largest change in any reading\'s output is ' + judged.toFixed(3) + '. ' + (mode === "none" ? 'Every tile kept its colour and moved with its reading: a weighted sum has no notion of order, so the layer computed the same thing.' : 'The tiles changed colour: each reading now carries a different position vector and attends differently, so order has become visible to the model.') + '</div>' + (mode === "none" ? '<p>Drag a tag card onto the record and the question is asked again.</p>' : '<p>Drag the no-tag card back onto the record to compare, or try the other tag.</p>');
+    }
+    stepEl.innerHTML = prompt + body + '<span class="k">' + modeName() + '</span>' + (mode === "table" ? '<p>The table has 32 rows. A record of position 33 has no vector at all, which is why fixed codes survive longer records and learned tables do not.</p>' : '<p>' + (mode === "none" ? 'Without a tag the layer sees a set of readings, with no slot numbers.' : 'The tag adds a position vector to every reading before the layer sees it.') + '</p>');
+    stepEl.querySelectorAll(".gate button").forEach(bt => bt.addEventListener("click", () => { gateAns = bt.dataset.g; judged = null; text(); }));
+    document.getElementById("poShuffle").disabled = gateAns === null;
+  }
+  function shuffle() { if (gateAns === null) return; const rng = mulberry32(Date.now() % 100000); prevPerm = perm.slice(); const p = perm.slice(); for (let i = T - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; } perm = p; judged = change(perm).maxd; text(); animate(); }
   function animate() { if (anim) cancelAnimationFrame(anim); slide = 0; const t0 = performance.now(); (function f(now) { slide = Math.min(1, (now - t0) / 600); draw(); if (slide < 1) anim = requestAnimationFrame(f); })(t0); }
-  code.c.addEventListener("click", ev => { const [mx] = code.pos(ev); const p = Math.floor((mx - 90) / ((code.W - 150) / PEMAX)); if (p >= 0 && p < PEMAX) { ref = p; draw(); } });
+  const hoverCode = ev => { const [mx] = code.pos(ev); const p = Math.floor((mx - 90) / ((code.W - 150) / PEMAX)); if (p >= 0 && p < PEMAX && p !== ref) { ref = p; draw(); } };
+  code.c.addEventListener("pointermove", hoverCode); code.c.addEventListener("pointerdown", hoverCode);
   document.getElementById("poShuffle").addEventListener("click", shuffle);
-  document.getElementById("poRestore").addEventListener("click", () => { prevPerm = perm.slice(); perm = [0, 1, 2, 3, 4, 5, 6, 7]; animate(); });
-  strip.c.addEventListener("mousedown", ev => { const [mx, my] = strip.pos(ev); CARDS.forEach((cd, i) => { if (mx >= CARDX[i] && mx <= CARDX[i] + CARDW && my >= CARDY && my <= CARDY + CARDH) { dragCard = i; dragPos = [mx, my]; } }); });
-  window.addEventListener("mousemove", ev => { if (dragCard === null) return; dragPos = strip.pos(ev); draw(); });
-  window.addEventListener("mouseup", ev => { if (dragCard === null) return; const [, my] = strip.pos(ev); if (my < 215) { mode = CARDS[dragCard].m; base = null; text(); } dragCard = null; dragPos = null; draw(); });
-  quiz(document.getElementById("poQuiz"), { q: "Self attention is permutation equivariant. For a sequence model this means", options: ["It handles any order equally well, which is an advantage", "It cannot tell the order at all, so position must be supplied as input", "It only works on sorted data"], answer: 1, why: "Equivariance means a permuted input gives the identically permuted output: the layer carries no information about which position is which. Order is the structure of a sequence, so the position code is a necessary input, not a refinement." });
-  text(); draw();
+  document.getElementById("poRestore").addEventListener("click", () => { prevPerm = perm.slice(); perm = ID.slice(); animate(); });
+  strip.c.addEventListener("pointerdown", ev => { const [mx, my] = strip.pos(ev); CARDS.forEach((cd, i) => { if (mx >= CARDX[i] && mx <= CARDX[i] + CARDW && my >= CARDY && my <= CARDY + CARDH) { dragCard = i; dragPos = [mx, my]; } }); });
+  window.addEventListener("pointermove", ev => { if (dragCard === null) return; dragPos = strip.pos(ev); draw(); });
+  window.addEventListener("pointerup", ev => { if (dragCard === null) return; const [, my] = strip.pos(ev); if (my < 215) { mode = CARDS[dragCard].m; base = null; perm = ID.slice(); prevPerm = null; gateAns = null; judged = null; text(); } dragCard = null; dragPos = null; draw(); });
+  quiz(document.getElementById("poQuiz"), { q: "Self attention is permutation equivariant. For a sequence model this means", options: ["It handles any order equally well, which is an advantage", "It cannot tell the order at all, so position must be supplied as input", "It only works on sorted data"], answer: 1, why: "Equivariance means a permuted input gives the identically permuted output: the layer carries no information about which position is which. Order is the structure of a sequence, so the position code is a necessary input." });
+  window.addEventListener("themechange", draw); text(); draw();
 })();
 
 /* ================= 5. BUILD THE MASK ================= */
 (function mask() {
-  const T = 6; let allow = [], padded = false, trained = false, losses = null;
-  const board = new Board(document.getElementById("mkGrid")), stepEl = document.getElementById("mkStep");
-  const s = 66, ox = 250, oy = 70;
-  function reset(all) { allow = []; for (let i = 0; i < T; i++) { allow.push([]); for (let j = 0; j < T; j++) allow[i].push(all); } trained = false; losses = null; document.getElementById("mkVerdict").hidden = true; }
+  const T = 6; let allow = [], padded = false, trained = false, losses = null, stage = 0, cell = null, named = null, judged = false, note = "";
+  const board = new Board(document.getElementById("mkGrid")), stepEl = document.getElementById("mkStep"), trainBtn = document.getElementById("mkTrain");
+  const s = 76, ox = 250, oy = 80, LBW = 420;
+  function fill(f) { allow = []; for (let i = 0; i < T; i++) { allow.push([]); for (let j = 0; j < T; j++) allow[i].push(f(i, j)); } trained = false; losses = null; document.getElementById("mkVerdict").hidden = true; }
   function len() { return padded ? 4 : T; }
   function train() {
     losses = []; const L = len();
     for (let i = 0; i < L - 1; i++) { let cheat = false, ctx = 0, padRead = false; for (let j = 0; j < T; j++) if (allow[i][j]) { if (j >= i + 1 && j < L) cheat = true; if (j >= L) padRead = true; if (j <= i) ctx++; } losses.push({ cheat, ctx, padRead, loss: cheat ? 0.0 : (ctx === 0 ? 1.0 : 1.0 - 0.6 * (1 - Math.exp(-0.7 * ctx))) }); }
     trained = true;
   }
+  function text() {
+    const prompt = '<p class="prompt">Open one cell above the diagonal. Which row\'s loss drops for the wrong reason?</p>';
+    let body;
+    if (stage === 0) body = '<span class="k">step 1 of 2</span><p>The grid starts as the causal mask: every row reads itself and its past. Click one blocked cell above the diagonal to open it.</p>' + (note ? '<p>' + note + '</p>' : '') + '<p>A blocked cell is a score set to minus infinity before the softmax, so its weight is exactly zero.</p>';
+    else if (stage === 1) body = '<span class="k">step 2 of 2</span><p>Cell q' + (cell.i + 1) + ', k' + (cell.j + 1) + ' is open. Click the row label on the left for the row you think now learns nothing. Train unlocks after that.</p>';
+    else if (!judged) body = '<span class="k">committed</span><p>You named q' + (named + 1) + '. Press Train and read the loss bars.</p>';
+    else {
+      const ok = named === cell.i, i = cell.i, j = cell.j;
+      body = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No, the row is q' + (i + 1) + '. ') + 'q' + (i + 1) + ' is asked for x' + (i + 2) + ' and may now read k' + (j + 1) + ', which is at or beyond that value. It copies the answer, its loss falls to zero, and nothing is learned there. Every other row still has to predict.</div><p>Now block cells until every row is honest and still reads as much as it can. Allow all shows every row cheating at once.</p>';
+    }
+    stepEl.innerHTML = prompt + body;
+    trainBtn.disabled = stage < 2;
+  }
   function draw() {
     board.clear(""); const ctx = board.ctx, L = len();
-    board.label("key positions the row may read", ox + T * s / 2, oy - 34, css("--muted"), "center", 12); board.label("query position, predicting the next value", 16, oy - 14, css("--muted"), "left", 12);
-    for (let j = 0; j < T; j++) board.label("k" + (j + 1) + (j >= L ? " pad" : ""), ox + j * s + s / 2, oy - 12, j >= L ? css("--red") : css("--muted"), "center", 12, true);
+    board.label("key positions the row may read", ox + T * s / 2, oy - 40, css("--muted"), "center", 14); board.label("query position, predicting the next value", 16, oy - 40, css("--muted"), "left", 14);
+    for (let j = 0; j < T; j++) board.label("k" + (j + 1) + (j >= L ? " pad" : ""), ox + j * s + s / 2, oy - 12, j >= L ? css("--red") : css("--muted"), "center", 14, true);
     for (let i = 0; i < T; i++) {
-      board.label("q" + (i + 1) + (i >= L ? " pad" : (i === L - 1 ? " (nothing to predict)" : " -> x" + (i + 2))), ox - 12, oy + i * s + s / 2 + 4, i >= L ? css("--red") : css("--ink"), "right", 12, true);
+      const ly = oy + i * s + s / 2, lab = "q" + (i + 1) + (i >= L ? " pad" : (i === L - 1 ? " (nothing to predict)" : " -> x" + (i + 2)));
+      if (stage === 1) { ctx.fillStyle = alpha(css("--orange"), 0.12); ctx.fillRect(14, oy + i * s + 8, ox - 26, s - 16); ctx.strokeStyle = css("--orange"); ctx.setLineDash([4, 3]); ctx.strokeRect(14, oy + i * s + 8, ox - 26, s - 16); ctx.setLineDash([]); }
+      if (stage >= 2 && named === i) { ctx.fillStyle = alpha(css("--orange"), 0.2); ctx.fillRect(14, oy + i * s + 8, ox - 26, s - 16); }
+      board.label(lab, ox - 12, ly + 5, i >= L ? css("--red") : css("--ink"), "right", 14, true);
       for (let j = 0; j < T; j++) {
         const X = ox + j * s, Y = oy + i * s, a = allow[i][j], pad = j >= L || i >= L;
         ctx.fillStyle = pad ? mix(css("--panel"), css("--red"), a ? 0.25 : 0.06) : (a ? mix(css("--panel"), css("--blue"), 0.55) : css("--bg")); ctx.fillRect(X + 2, Y + 2, s - 4, s - 4); ctx.strokeStyle = css("--line"); ctx.strokeRect(X + 2, Y + 2, s - 4, s - 4);
-        board.label(a ? "read" : "-inf", X + s / 2, Y + s / 2 + 4, a ? css("--ink") : css("--muted"), "center", 12, true);
+        board.label(a ? "read" : "-inf", X + s / 2, Y + s / 2 + 5, a ? css("--ink") : css("--muted"), "center", 14, true);
+        if (cell && cell.i === i && cell.j === j && stage >= 1) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.strokeRect(X + 4, Y + 4, s - 8, s - 8); ctx.lineWidth = 1; }
         if (trained && i < L - 1 && a && j >= i + 1 && j < L) { ctx.strokeStyle = css("--red"); ctx.lineWidth = 3; ctx.strokeRect(X + 4, Y + 4, s - 8, s - 8); ctx.lineWidth = 1; }
       }
-      if (trained && i < L - 1) { const r = losses[i], bx = ox + T * s + 40; ctx.fillStyle = css("--bg"); ctx.fillRect(bx, oy + i * s + 18, 300, 28); ctx.fillStyle = r.cheat ? css("--red") : (r.ctx === 0 ? css("--grey") : "#2E7D5B"); ctx.fillRect(bx, oy + i * s + 18, 300 * r.loss, 28); board.label((r.cheat ? "loss 0.00: copied the answer" : (r.ctx === 0 ? "loss 1.00: nothing to read" : "loss " + r.loss.toFixed(2) + ": honest, " + r.ctx + " of " + (i + 1) + " past values")) + (r.padRead ? ", reads padding" : ""), bx + 8, oy + i * s + 37, r.cheat ? css("--red") : css("--ink"), "left", 12, true); }
+      if (trained && i < L - 1) { const r = losses[i], bx = ox + T * s + 40; ctx.fillStyle = css("--bg"); ctx.fillRect(bx, oy + i * s + 22, LBW, 32); ctx.fillStyle = r.cheat ? css("--red") : (r.ctx === 0 ? css("--grey") : "#2E7D5B"); ctx.fillRect(bx, oy + i * s + 22, LBW * r.loss, 32); board.label((r.cheat ? "loss 0.00: copied the answer" : (r.ctx === 0 ? "loss 1.00: nothing to read" : "loss " + r.loss.toFixed(2) + ": honest, " + r.ctx + " of " + (i + 1) + " past values")) + (r.padRead ? ", reads pad" : ""), bx + 8, oy + i * s + 44, r.cheat ? css("--red") : css("--ink"), "left", 13, true); }
     }
-    if (trained) board.label("training loss per query position after training", ox + T * s + 40, oy - 12, css("--muted"), "left", 12);
+    if (stage === 1) board.label("click the row label that will learn nothing", 16, oy - 18, css("--orange"), "left", 14);
+    if (trained) board.label("training loss per query position after training", ox + T * s + 40, oy - 12, css("--muted"), "left", 14);
+    else if (stage >= 2) board.label("press Train to see the loss per row", ox + T * s + 40, oy - 12, css("--muted"), "left", 14);
     if (trained) { const cheat = losses.filter(r => r.cheat).length, blind = losses.filter(r => !r.cheat && r.ctx === 0).length, ctxN = losses.reduce((a, r) => a + (r.cheat ? 0 : r.ctx), 0), maxCtx = losses.reduce((a, r, i) => a + i + 1, 0), padR = losses.some(r => r.padRead); document.getElementById("mkCheat").textContent = cheat; document.getElementById("mkBlind").textContent = blind; document.getElementById("mkCtx").textContent = ctxN + " / " + maxCtx; const v = document.getElementById("mkVerdict"); v.hidden = false; const perfect = cheat === 0 && blind === 0 && ctxN === maxCtx && !padR; v.className = "ask " + (perfect ? "ok" : (cheat ? "no" : "")); v.textContent = perfect ? "Honest everywhere and nothing wasted: this is the causal mask, the lower triangle with the diagonal" + (padded ? ", with the padding columns blocked too" : "") + "." : (cheat ? cheat + (cheat === 1 ? " row can" : " rows can") + " read a position at or beyond the one it predicts. Its loss collapses to zero and it learns to copy, which is leakage built into the architecture." : (blind ? blind + (blind === 1 ? " row reads" : " rows read") + " nothing and must guess." : (padR ? "Honest, but some rows read padding, which contributes noise from positions that do not exist." : "Honest, but " + (maxCtx - ctxN) + " past values are blocked that could have been read."))); }
     else { document.getElementById("mkCheat").textContent = "-"; document.getElementById("mkBlind").textContent = "-"; document.getElementById("mkCtx").textContent = "-"; }
   }
-  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const j = Math.floor((mx - ox) / s), i = Math.floor((my - oy) / s); if (i < 0 || j < 0 || i >= T || j >= T) return; allow[i][j] = !allow[i][j]; trained = false; document.getElementById("mkVerdict").hidden = true; draw(); });
-  document.getElementById("mkTrain").addEventListener("click", () => { train(); draw(); });
-  document.getElementById("mkAll").addEventListener("click", () => { reset(true); draw(); });
-  document.getElementById("mkNone").addEventListener("click", () => { reset(false); draw(); });
+  board.c.addEventListener("pointerdown", ev => {
+    ev.preventDefault(); const [mx, my] = board.pos(ev); const j = Math.floor((mx - ox) / s), i = Math.floor((my - oy) / s); if (i < 0 || i >= T) return; const L = len();
+    if (mx < ox - 8 && mx > 10) { if (stage === 1) { named = i; stage = 2; judged = false; text(); draw(); } return; }
+    if (j < 0 || j >= T) return;
+    allow[i][j] = !allow[i][j]; trained = false; document.getElementById("mkVerdict").hidden = true;
+    if (stage === 0 && allow[i][j] && j > i) { if (i < L - 1 && j < L) { cell = { i, j }; stage = 1; note = ""; } else note = (i >= L - 1 ? "q" + (i + 1) + " has nothing to predict, so that cell changes no loss." : "k" + (j + 1) + " is padding, so that cell changes no loss.") + " Open a cell in another place."; text(); }
+    draw();
+  });
+  trainBtn.addEventListener("click", () => { if (stage < 2) return; train(); if (!judged) { judged = true; text(); } draw(); });
+  document.getElementById("mkAll").addEventListener("click", () => { fill(() => true); draw(); });
+  document.getElementById("mkNone").addEventListener("click", () => { fill(() => false); draw(); });
+  document.getElementById("mkCausal").addEventListener("click", () => { fill((i, j) => j <= i); stage = 0; cell = null; named = null; judged = false; note = ""; text(); draw(); });
   document.getElementById("mkPad").addEventListener("click", () => { padded = !padded; document.getElementById("mkPad").textContent = padded ? "Record is 6 long again" : "Record is 4 long, pad 2"; trained = false; document.getElementById("mkVerdict").hidden = true; draw(); });
-  stepEl.innerHTML = '<span class="k">the task</span><p>Everything is allowed at the start. Train once and watch every row cheat. Then block cells until every row is honest and still reads as much as it can.</p><p>A blocked cell is a score set to minus infinity before the softmax, so its weight is exactly zero.</p>';
   quiz(document.getElementById("mkQuiz"), { q: "Why is the causal mask what allows a decoder to train on all positions in one parallel pass?", options: ["It makes the attention matrix smaller", "It makes every position's view identical to what it will have at inference, so the whole target can be fed at once without leakage", "It removes the need for position codes"], answer: 1, why: "At inference position t has seen only positions up to t. The mask reproduces exactly that view during training, so the full sequence can be processed in parallel and every position is an honest training example. A recurrent model has to walk the sequence to get the same honesty." });
-  reset(true); draw();
+  window.addEventListener("themechange", draw); fill((i, j) => j <= i); text(); draw();
 })();
 
 /* ================= 6. THE BILL ================= */
 (function cost() {
   const RECORDS = [{ name: "a 30-word sentence", T: 30 }, { name: "a 224 px image as 16 px patches", T: 196 }, { name: "a lidar scan line", T: 2048 }, { name: "a 1 km strain profile at 1 cm", T: 100000 }, { name: "one hour of a bridge accelerometer at 100 Hz", T: 360000 }, { name: "one day of a water meter at 10 Hz", T: 864000 }];
-  const HEADS = 8, DM = 512, LAYERS = 12, BYTES = 2;
-  let rec = 0, tiled = false;
+  const HEADS = 8, DM = 512, LAYERS = 12, BYTES = 2, DAY = 5;
+  let rec = DAY, tiled = false, gateAns = null;
   const ledger = document.getElementById("coLedger"), recs = document.getElementById("coRecords"), stepEl = document.getElementById("coStep");
   function fmt(n) { if (n >= 1e12) return (n / 1e12).toFixed(2) + " T"; if (n >= 1e9) return (n / 1e9).toFixed(2) + " G"; if (n >= 1e6) return (n / 1e6).toFixed(2) + " M"; if (n >= 1e3) return (n / 1e3).toFixed(1) + " k"; return String(n); }
-  function bytes(n) { if (n >= 2 ** 40) return (n / 2 ** 40).toFixed(1) + " TB"; if (n >= 2 ** 30) return (n / 2 ** 30).toFixed(2) + " GB"; if (n >= 2 ** 20) return (n / 2 ** 20).toFixed(1) + " MB"; return (n / 1024).toFixed(1) + " kB"; }
+  function bytes(n) { if (n >= 2 ** 40) return (n / 2 ** 40).toFixed(1) + " TB"; if (n >= 2 ** 30) return (n / 2 ** 30).toFixed(1) + " GB"; if (n >= 2 ** 20) return (n / 2 ** 20).toFixed(1) + " MB"; return (n / 1024).toFixed(1) + " kB"; }
+  function cost(T, tl) { const pairs = T * T, matBytes = tl ? T * DM * BYTES : pairs * HEADS * BYTES, cache = 2 * LAYERS * T * DM * BYTES; return { pairs, flops: 2 * pairs * DM, matBytes, cache, total: matBytes + cache }; }
   function render() {
-    const T = RECORDS[rec].T, pairs = T * T, flops = 2 * pairs * DM, matBytes = tiled ? T * DM * BYTES : pairs * HEADS * BYTES, cache = 2 * LAYERS * T * DM * BYTES, total = matBytes + cache, cap = 24 * 2 ** 30, cap2 = 80 * 2 ** 30;
-    recs.innerHTML = ""; RECORDS.forEach((r, i) => { const b = document.createElement("button"); b.setAttribute("aria-pressed", i === rec ? "true" : "false"); b.innerHTML = "<span>" + r.name + "</span><span class='t'>T = " + fmt(r.T) + "</span>"; b.addEventListener("click", () => { rec = i; render(); }); recs.appendChild(b); });
+    const T = RECORDS[rec].T, c = cost(T, tiled), cap = 24 * 2 ** 30, cap2 = 80 * 2 ** 30, open = gateAns !== null;
+    recs.innerHTML = ""; RECORDS.forEach((r, i) => { const b = document.createElement("button"); b.setAttribute("aria-pressed", i === rec ? "true" : "false"); b.disabled = !open; b.innerHTML = "<span>" + r.name + "</span><span class='t'>T = " + fmt(r.T) + "</span>"; b.addEventListener("click", () => { rec = i; render(); }); recs.appendChild(b); });
+    const hide = "<span class='t'>-</span>";
     ledger.innerHTML = '<div class="head"><span>one attention layer on ' + RECORDS[rec].name + '</span><span>T = ' + T.toLocaleString() + '</span></div>' +
-      '<div><span>score matrix entries, T x T</span><span>' + fmt(pairs) + '</span></div>' +
-      '<div><span>multiply-adds for the scores, 2 T^2 d (d = ' + DM + ')</span><span>' + fmt(flops) + '</span></div>' +
-      '<div class="kernel" id="coKernel" style="cursor:pointer" title="click to switch the kernel"><span>' + (tiled ? 'memory with a tiled softmax, T x d x 2 bytes (the matrix is never stored); click to store the matrix instead' : 'memory for the matrix, ' + HEADS + ' heads x T^2 x 2 bytes; click to switch to a tiled softmax') + '</span><span class="' + (matBytes > cap ? 'warn' : 'good') + '">' + bytes(matBytes) + '</span></div>' +
-      '<div><span>key-value cache at inference, 2 x ' + LAYERS + ' layers x T x d x 2 bytes</span><span class="' + (cache > cap ? 'warn' : 'good') + '">' + bytes(cache) + '</span></div>' +
-      '<div class="total"><span>memory, this layer plus the cache</span><span class="' + (total > cap2 ? 'warn' : 'good') + '">' + bytes(total) + (total > cap2 ? '  over both cards' : (total > cap ? '  fits the 80 GB card only' : '  fits both cards')) + '</span></div>';
-    document.getElementById("coKernel").addEventListener("click", () => { tiled = !tiled; render(); });
-    const frac = Math.min(1, total / cap); document.getElementById("coBar").style.width = (100 * frac) + "%"; document.getElementById("coBar").className = total > cap ? "over" : ""; document.getElementById("coCap").textContent = "24 GB card    needed: " + bytes(total) + (total > cap ? "    (" + (total / cap).toFixed(total / cap > 100 ? 0 : 1) + " x the card)" : "");
-    const frac2 = Math.min(1, total / cap2); document.getElementById("coBar2").style.width = (100 * frac2) + "%"; document.getElementById("coBar2").className = total > cap2 ? "over" : ""; document.getElementById("coCap2").textContent = "80 GB card    needed: " + bytes(total) + (total > cap2 ? "    (" + (total / cap2).toFixed(total / cap2 > 100 ? 0 : 1) + " x the card)" : "");
-    stepEl.innerHTML = '<span class="k">reading the receipt</span><p>' + (T <= 2048 ? 'A record this short is comfortable: the matrix is small and the cache is what you pay for.' : (tiled ? 'With a tiled softmax the matrix line is linear in T and the cache dominates. The compute line did not move: it is still quadratic.' : 'The matrix line is the problem. At this length the quadratic term is ' + (matBytes / cap).toFixed(0) + ' times the card, and no setting of batch size or precision closes a gap that size.')) + '</p><p>' + (T > 2048 && !tiled ? 'Click the memory line to switch to the tiled softmax, then go to Week 7 for the ways to make the compute line linear too.' : 'Try the longest record.') + '</p>';
+      '<div><span>score matrix entries, T x T</span>' + (open ? '<span>' + fmt(c.pairs) + '</span>' : hide) + '</div>' +
+      '<div><span>multiply-adds for the scores, 2 T^2 d (d = ' + DM + ')</span>' + (open ? '<span>' + fmt(c.flops) + '</span>' : hide) + '</div>' +
+      '<div class="kernel" id="coKernel"' + (open ? ' style="cursor:pointer" title="click to switch the kernel"' : '') + '><span>' + (open ? (tiled ? 'memory with a tiled softmax, T x d x 2 bytes (the matrix is never stored); click to store the matrix instead' : 'memory for the matrix, ' + HEADS + ' heads x T^2 x 2 bytes; click to switch to a tiled softmax') : 'memory for the matrix, ' + HEADS + ' heads x T^2 x 2 bytes') + '</span>' + (open ? '<span class="' + (c.matBytes > cap ? 'warn' : 'good') + '">' + bytes(c.matBytes) + '</span>' : hide) + '</div>' +
+      '<div><span>key-value cache at inference, 2 x ' + LAYERS + ' layers x T x d x 2 bytes</span>' + (open ? '<span class="' + (c.cache > cap ? 'warn' : 'good') + '">' + bytes(c.cache) + '</span>' : hide) + '</div>' +
+      '<div class="total"><span>memory, this layer plus the cache</span>' + (open ? '<span class="' + (c.total > cap2 ? 'warn' : 'good') + '">' + bytes(c.total) + (c.total > cap2 ? '  over both cards' : (c.total > cap ? '  fits the 80 GB card only' : '  fits both cards')) + '</span>' : hide) + '</div>';
+    if (open) document.getElementById("coKernel").addEventListener("click", () => { tiled = !tiled; render(); });
+    const frac = open ? Math.min(1, c.total / cap) : 0; document.getElementById("coBar").style.width = (100 * frac) + "%"; document.getElementById("coBar").className = open && c.total > cap ? "over" : ""; document.getElementById("coCap").textContent = "24 GB card" + (open ? "    needed: " + bytes(c.total) + (c.total > cap ? "    (" + (c.total / cap).toFixed(c.total / cap > 100 ? 0 : 1) + " x the card)" : "") : "");
+    const frac2 = open ? Math.min(1, c.total / cap2) : 0; document.getElementById("coBar2").style.width = (100 * frac2) + "%"; document.getElementById("coBar2").className = open && c.total > cap2 ? "over" : ""; document.getElementById("coCap2").textContent = "80 GB card" + (open ? "    needed: " + bytes(c.total) + (c.total > cap2 ? "    (" + (c.total / cap2).toFixed(c.total / cap2 > 100 ? 0 : 1) + " x the card)" : "") : "");
+    const prompt = '<p class="prompt">A day of 10 Hz readings: will the attention matrix fit on an 80 GB card?</p>';
+    if (!open) stepEl.innerHTML = prompt + '<div class="gate"><button data-g="yes">yes</button><button data-g="no">no</button></div><p>T = 864,000 positions, eight heads, two bytes per score. Commit, and the receipt is itemized.</p>';
+    else {
+      const day = cost(RECORDS[DAY].T, false), dayT = cost(RECORDS[DAY].T, true);
+      stepEl.innerHTML = prompt + '<div class="ask ' + (gateAns === "no" ? 'ok' : 'no') + '">' + (gateAns === "no" ? 'Right. ' : 'No. ') + 'Stored, the eight-head matrix is ' + bytes(day.matBytes) + ', ' + (day.matBytes / cap2).toFixed(0) + ' times the card. A tiled softmax never stores it: this layer plus its cache is then ' + bytes(dayT.total) + ' and fits.</div>' +
+        '<span class="k">reading the receipt</span><p>' + (T <= 2048 ? 'A record this short is comfortable: the matrix is small and the cache is what you pay for.' : (tiled ? 'With a tiled softmax the matrix line is linear in T and the cache dominates. The compute line did not move: it is still quadratic.' : 'The matrix line is the problem. At this length the quadratic term is ' + (c.matBytes / cap).toFixed(0) + ' times the 24 GB card, and no setting of batch size or precision closes a gap that size.')) + '</p><p>' + (T > 2048 && !tiled ? 'Click the memory line to switch to the tiled softmax, then go to Week 7 for the ways to make the compute line linear too.' : 'Pick the other records and find the length where the matrix stops fitting.') + '</p>';
+    }
+    stepEl.querySelectorAll(".gate button").forEach(bt => bt.addEventListener("click", () => { gateAns = bt.dataset.g; tiled = false; render(); }));
   }
+  document.getElementById("coAgain").addEventListener("click", () => { gateAns = null; rec = DAY; tiled = false; render(); });
   quiz(document.getElementById("coQuiz"), { q: "FlashAttention makes attention memory linear in T. What does it do to the compute?", options: ["Also linear", "Unchanged, still quadratic; it avoids storing the matrix and reads memory far less, which is the actual speed-up", "Cubic, because of recomputation"], answer: 1, why: "Every pair of positions is still scored, so the arithmetic is T squared. The gain is in not writing a T by T matrix to slow memory and reading it back; recomputing a block in the backward pass is cheaper than that traffic. Linear-time attention needs a different formula, which is next week." });
   render();
 })();
@@ -612,6 +733,46 @@ show(location.hash.slice(1) || "blend", false);
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
 if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
 new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+
+<script>
+/* Classroom mode (shared patch): larger canvas text through the font setter, prose hidden, redraw via themechange. */
+(function () {
+  var desc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "font");
+  var on = false;
+  function scale(v) {
+    return String(v).replace(/(\d+(?:\.\d+)?)px/, function (m, n) {
+      var s = parseFloat(n); var t = s < 13 ? s + 5 : Math.round(s * 1.35);
+      return t + "px";
+    });
+  }
+  Object.defineProperty(CanvasRenderingContext2D.prototype, "font", {
+    configurable: true,
+    get: function () { return desc.get.call(this); },
+    set: function (v) { desc.set.call(this, on ? scale(v) : v); }
+  });
+  function apply(state) {
+    on = !!state;
+    document.body.classList.toggle("classroom", on);
+    var b = document.getElementById("classroomBtn");
+    if (b) { b.textContent = on ? "Classroom: on" : "Classroom"; b.setAttribute("aria-pressed", on ? "true" : "false"); }
+    try { localStorage.setItem("ce_classroom", on ? "1" : "0"); } catch (e) {}
+    window.dispatchEvent(new Event("themechange"));
+    window.dispatchEvent(new Event("resize"));
+  }
+  window.addEventListener("DOMContentLoaded", function () {
+    var b = document.createElement("button");
+    b.id = "classroomBtn"; b.type = "button"; b.title = "Large text for a projector; hides the explanatory prose (key: c)";
+    b.textContent = "Classroom";
+    b.addEventListener("click", function () { apply(!on); });
+    document.body.appendChild(b);
+    var saved = "0"; try { saved = localStorage.getItem("ce_classroom") || "0"; } catch (e) {}
+    if (saved === "1" || /[?&]classroom\b/.test(location.search)) apply(true);
+    window.addEventListener("keydown", function (ev) {
+      if (ev.key === "c" && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) apply(!on);
+    });
+  });
 })();
 </script>
 </body>
