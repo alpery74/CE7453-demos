@@ -275,18 +275,20 @@ canvas.hit, canvas.grab { touch-action: none; }
 <!-- ============ 3. GUIDANCE: guess the weight ============ -->
 <section class="demo" id="guidance" role="tabpanel">
   <h2>Guess the guidance weight from the samples</h2>
-  <p class="lead">A model has learned three land-cover clusters in a two-band reflectance space. It is asked for one class, roof, and sampled with classifier-free guidance at weight w. First set w yourself and watch the 300 samples land; then flip to identification, where w is hidden and you name it from the cloud.</p>
+  <p class="lead">A model has learned three land-cover clusters in a two-band reflectance space. It is asked for one class, roof, and sampled with classifier-free guidance at weight w. Drag w and watch the 300 samples land; every weight you stop at is plotted on the curve at the top left, so the tradeoff draws itself. Then flip to identification, where w is hidden and you name it from the cloud.</p>
   <div class="stage">
     <div class="plot"><canvas id="ggPlot" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel step" id="ggStep"></div>
       <div class="panel">
         <h3>guidance weight w</h3>
-        <div class="choice" id="ggChoice"><button data-w="0">w = 0</button><button data-w="1">w = 1</button><button data-w="3">w = 3</button><button data-w="10">w = 10</button></div>
+        <div id="ggDial"><input type="range" id="ggW" min="0" max="4" step="0.5" value="0" style="width:100%" aria-label="guidance weight"><div id="ggWLab" class="k" style="margin-top:4px">w = 0</div></div>
+        <div class="choice" id="ggChoice" style="margin-top:8px"><button data-w="0">w = 0</button><button data-w="1">w = 1</button><button data-w="3">w = 3</button><button data-w="10">w = 10</button></div>
         <div class="btns" style="margin-top:10px"><button class="primary" id="ggFlip">Flip to identification</button><button id="ggNext" disabled>Next round</button><button id="ggReplay">Replay the landing</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>samples on the roof cluster</dt><dd id="ggOn">-</dd>
           <dt>spread, relative to the true class</dt><dd id="ggSd">-</dd>
+          <dt>weights you have sampled</dt><dd id="ggSeen">0</dd>
           <dt>score so far</dt><dd id="ggScore">0 / 0</dd>
         </dl>
       </div>
@@ -294,7 +296,7 @@ canvas.hit, canvas.grab { touch-action: none; }
     </div>
   </div>
   <div class="caption">
-    <p>Every sample follows eps_hat = eps_u + w (eps_c - eps_u), the line on slide 9, through 1000 ancestral steps, with exact noise predictions for the two Gaussian mixtures so that nothing is trained. w = 0 ignores the request, w = 1 is plain conditional sampling, and w above one sharpens the class at the price of diversity. Both predictions are needed per step, so guidance doubles the cost of every sample.</p>
+    <p>Every sample follows eps_hat = eps_u + w (eps_c - eps_u), the line on slide 9, through 1000 ancestral steps, with exact noise predictions for the two Gaussian mixtures so that nothing is trained. w = 0 ignores the request, w = 1 is plain conditional sampling, and w above one sharpens the class at the price of diversity. The curve at the top left is built from the weights you stop at: the share landing on roof climbs steeply and is essentially finished by w = 2, while the spread keeps falling for every weight after that, which is the whole tradeoff in one picture. Both predictions are needed per step, so guidance doubles the cost of every sample.</p>
   </div>
 </section>
 
@@ -651,18 +653,27 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   const ROUNDS = [3, 0, 10, 1, 3], NS = 300;
   // two modes: "set" (the student picks w and watches; a gate guards the w = 10 cloud) and "ident" (hidden w, the original rounds)
   let mode = "set", round = 0, pts = null, shown = 0, answered = false, score = 0, played = 0, timer = null;
-  let curW = null, setGate = null; const cache = {};
+  let curW = null, setGate = null, dragging = false; const cache = {};
+  const GATE_CAP = 4, WMAX = 10;
+  const slider = document.getElementById("ggW"), wlab = document.getElementById("ggWLab"), dialBox = document.getElementById("ggDial");
   const SG = ["sharper", "it drifts"], SG_OK = 0;
   const px = v => 80 + (v + 4) / 9 * (board.W - 120), py = v => board.H - 50 - (v + 3.5) / 7 * (board.H - 90);
   const stepEl = document.getElementById("ggStep"), choiceBtns = Array.from(document.querySelectorAll("#ggChoice button")), flipBtn = document.getElementById("ggFlip"), nextBtn = document.getElementById("ggNext");
   function cloud(w) { if (!cache[w]) cache[w] = sample(w, NS, 77 + w); return cache[w]; }
   function text() {
     if (mode === "ident") { stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>The sampler was asked for <b>roof</b> and run at a hidden guidance weight. The 300 samples are landing now.</p><p>Judge two things: did they all reach the roof cluster, and how wide is the cloud compared with the true roof class (the blue ring)? Then click the weight.</p>'; return; }
-    let html = '<p class="prompt">Set w to 10. Does the roof cluster get sharper or does it drift?</p><p>Click w = 0, 1 and 3 first and watch where the 300 samples land. Clicking w = 10 asks for your answer before that cloud is drawn.</p>';
-    if (curW === 10 && setGate === null) html += '<div class="gate">' + SG.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>';
-    else if (setGate !== null) { const st = stats(cloud(10)); html += '<div class="ask ' + (setGate === SG_OK ? 'ok' : 'no') + '">' + (setGate === SG_OK ? 'Right. ' : 'It gets sharper. ') + 'At w = 10 the spread is ' + (st.sd / 0.4).toFixed(2) + ' of the true class and the centre sits ' + st.off.toFixed(2) + ' class widths from the roof mean: the cloud collapses on the densest part of the class with almost no drift.</div><p>Press Flip to identification to play the hidden-w rounds.</p>'; }
+    let html = '<p class="prompt">Past w = 4, does the roof cluster get sharper or does it drift off the class?</p>';
+    if (setGate === null) {
+      html += '<p>The dial stops at 4 until you answer. Sweep it from 0 to 4 first: watch the orange cloud pull onto the roof ring, and watch the two curves at the top left fill in as you stop at each weight.</p><div class="gate">' + SG.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>';
+      if (curW !== null) { const st = stats(cloud(curW)); html += '<p>At w = ' + curW + ': ' + (100 * st.on).toFixed(0) + ' percent of the 300 samples land on roof, at ' + (st.sd / 0.4).toFixed(2) + ' of the true class spread, with the centre ' + st.off.toFixed(2) + ' class widths off the class mean.</p>'; }
+    } else {
+      const st = stats(cloud(10)), s1 = stats(cloud(1));
+      html += '<div class="ask ' + (setGate === SG_OK ? 'ok' : 'no') + '">' + (setGate === SG_OK ? 'Right. ' : 'It gets sharper. ') + 'At w = 10 the spread is ' + (st.sd / 0.4).toFixed(2) + ' of the true class and the centre sits ' + st.off.toFixed(2) + ' class widths from the roof mean: the cloud collapses on the densest part of the class with almost no drift. The dial now runs to 10.</div>';
+      if (curW !== null) { const c = stats(cloud(curW)); html += '<p><b>w = ' + curW + ':</b> ' + (100 * c.on).toFixed(0) + ' percent on roof, spread ' + (c.sd / 0.4).toFixed(2) + ' of the class. Plain conditional sampling, w = 1, gives ' + (100 * s1.on).toFixed(0) + ' percent at spread ' + (s1.sd / 0.4).toFixed(2) + '.</p>'; }
+      html += '<p>Sweep the whole range and read the two curves. The green one is finished early; the orange one keeps falling. Everything above the knee buys obedience you already had and pays for it in diversity. Then press Flip to identification.</p>';
+    }
     stepEl.innerHTML = html;
-    stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { setGate = parseInt(b.dataset.g, 10); pts = cloud(10); readouts(); text(); land(); }));
+    stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { setGate = parseInt(b.dataset.g, 10); slider.max = String(WMAX); setW(10, true); }));
   }
   function ellipse(ctx, c, color, dash, lab) { ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.ellipse(px(c.m[0]), py(c.m[1]), 2 * c.s / 9 * (board.W - 120), 2 * c.s / 7 * (board.H - 90), 0, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]); if (lab) board.label(lab, px(c.m[0]), py(c.m[1] + 2 * c.s) - 8, color, "center", 13); }
   function draw() {
@@ -673,21 +684,42 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
     U.forEach(c => ellipse(ctx, c, css("--grey"), [5, 4], c.name + " (what the model learned)"));
     ellipse(ctx, C[0], css("--blue"), [], "");
     board.label("roof, the class requested", px(C[0].m[0]), py(C[0].m[1] - 2 * C[0].s) + 18, css("--blue"), "center", 13);
-    if (pts) { ctx.fillStyle = css("--orange"); for (let i = 0; i < shown; i++) { ctx.globalAlpha = 0.75; ctx.beginPath(); ctx.arc(px(pts[0][i]), py(pts[1][i]), 4, 0, 2 * Math.PI); ctx.fill(); } ctx.globalAlpha = 1; }
+    if (pts) { ctx.fillStyle = css("--orange"); for (let i = 0; i < shown; i++) { ctx.globalAlpha = dragging && !cache[curW] ? 0.18 : 0.75; ctx.beginPath(); ctx.arc(px(pts[0][i]), py(pts[1][i]), 4, 0, 2 * Math.PI); ctx.fill(); } ctx.globalAlpha = 1; }
+    if (mode === "set") curve(ctx);
     let lab;
-    if (mode === "set") lab = curW === null ? "click a weight to sample 300 roofs" : (pts ? "sampled at w = " + curW : "w = 10: commit to an answer to draw this cloud");
+    if (mode === "set") lab = curW === null ? "drag the weight to sample 300 roofs" : (dragging && !cache[curW] ? "w = " + curW + ": release to sample this weight" : (pts ? "sampled at w = " + curW : "release to sample"));
     else lab = answered ? "sampled at w = " + ROUNDS[round] : "sampled at a hidden w";
     board.label(lab, px(-3.9), py(3.3), css("--orange"), "left", 14);
     document.getElementById("ggScore").textContent = mode === "ident" ? score + " / " + played : "-";
   }
-  function stats(p) { let on = 0, mx = 0, my = 0; for (let i = 0; i < NS; i++) if (p[0][i] > 1.4 && p[1][i] < 0.8) { on++; mx += p[0][i]; my += p[1][i]; } mx /= Math.max(1, on); my /= Math.max(1, on); let v = 0; for (let i = 0; i < NS; i++) if (p[0][i] > 1.4 && p[1][i] < 0.8) v += (p[0][i] - mx) ** 2 + (p[1][i] - my) ** 2; return { on: on / NS, sd: Math.sqrt(v / Math.max(1, on) / 2), off: Math.hypot(mx - C[0].m[0], my - C[0].m[1]) / 0.4 }; }
-  function readouts() { if (pts) { const st = stats(pts); document.getElementById("ggOn").textContent = (100 * st.on).toFixed(0) + " %"; document.getElementById("ggSd").textContent = (st.sd / 0.4).toFixed(2) + " x"; } else { document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; } }
-  function land() { if (timer) clearTimeout(timer); shown = 0; if (!pts) { draw(); return; } (function f() { shown = Math.min(NS, shown + 6); draw(); if (shown < NS) timer = setTimeout(f, 24); })(); }
-  function setW(w) {
-    curW = w; choiceBtns.forEach(b => b.setAttribute("aria-pressed", +b.dataset.w === w ? "true" : "false"));
-    if (w === 10 && setGate === null) { if (timer) clearTimeout(timer); pts = null; readouts(); text(); draw(); return; }
-    pts = cloud(w); readouts(); text(); land();
+  function curve(ctx) {
+    const ws = Object.keys(cache).map(Number).sort((a, b) => a - b);
+    const CX0 = 110, CX1 = 330, CY0 = 120, CY1 = 250;
+    const cx = w => CX0 + w / WMAX * (CX1 - CX0), cy = v => CY1 - v * (CY1 - CY0);
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(CX0, CY0); ctx.lineTo(CX0, CY1); ctx.lineTo(CX1, CY1); ctx.stroke();
+    board.label("what each weight costs and buys", CX0, CY0 - 26, css("--ink"), "left", 12);
+    board.label("drag w; every stop adds a point", CX0, CY0 - 12, css("--muted"), "left", 11);
+    [0, 5, 10].forEach(w => board.label(String(w), cx(w), CY1 + 14, css("--muted"), "center", 10, true));
+    board.label("w", (CX0 + CX1) / 2, CY1 + 28, css("--muted"), "center", 11);
+    board.label("1", CX0 - 6, CY0 + 4, css("--muted"), "right", 10, true); board.label("0", CX0 - 6, CY1 + 4, css("--muted"), "right", 10, true);
+    if (!ws.length) { board.label("no weights sampled yet", CX0 + 10, (CY0 + CY1) / 2, css("--muted"), "left", 11); return; }
+    const S = ws.map(w => ({ w: w, st: stats(cache[w]) }));
+    const line = (sel, color) => { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); S.forEach((p, i) => { const x = cx(p.w), y = cy(Math.min(1.2, sel(p.st))); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); ctx.fillStyle = color; S.forEach(p => { ctx.beginPath(); ctx.arc(cx(p.w), cy(Math.min(1.2, sel(p.st))), 3, 0, 2 * Math.PI); ctx.fill(); }); };
+    line(st => st.on, "#2E7D5B"); line(st => st.sd / 0.4, css("--orange"));
+    board.label("share on roof", CX1 + 8, cy(S[S.length - 1].st.on) + 4, "#2E7D5B", "left", 11);
+    board.label("spread", CX1 + 8, cy(Math.min(1.2, S[S.length - 1].st.sd / 0.4)) + 4, css("--orange"), "left", 11);
+    if (curW !== null) { ctx.strokeStyle = css("--blue"); ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(cx(curW), CY0); ctx.lineTo(cx(curW), CY1); ctx.stroke(); ctx.setLineDash([]); }
   }
+  function stats(p) { let on = 0, mx = 0, my = 0; for (let i = 0; i < NS; i++) if (p[0][i] > 1.4 && p[1][i] < 0.8) { on++; mx += p[0][i]; my += p[1][i]; } mx /= Math.max(1, on); my /= Math.max(1, on); let v = 0; for (let i = 0; i < NS; i++) if (p[0][i] > 1.4 && p[1][i] < 0.8) v += (p[0][i] - mx) ** 2 + (p[1][i] - my) ** 2; return { on: on / NS, sd: Math.sqrt(v / Math.max(1, on) / 2), off: Math.hypot(mx - C[0].m[0], my - C[0].m[1]) / 0.4 }; }
+  function readouts() { document.getElementById("ggSeen").textContent = String(Object.keys(cache).length); if (pts && !(dragging && !cache[curW])) { const st = stats(pts); document.getElementById("ggOn").textContent = (100 * st.on).toFixed(0) + " %"; document.getElementById("ggSd").textContent = (st.sd / 0.4).toFixed(2) + " x"; } else { document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; } }
+  function land() { if (timer) clearTimeout(timer); shown = 0; if (!pts) { draw(); return; } (function f() { shown = Math.min(NS, shown + 6); draw(); if (shown < NS) timer = setTimeout(f, 24); })(); }
+  function setW(w, animate) {
+    curW = w; choiceBtns.forEach(b => b.setAttribute("aria-pressed", +b.dataset.w === w ? "true" : "false"));
+    slider.value = String(w); wlab.textContent = "w = " + w;
+    pts = cloud(w); readouts(); text();
+    if (animate) land(); else { if (timer) clearTimeout(timer); shown = NS; draw(); }
+  }
+  function unlock() { setGate = 0; slider.max = String(WMAX); text(); draw(); }
   function start() { pts = sample(ROUNDS[round], NS, 40 + round + 11 * played); answered = false; choiceBtns.forEach(b => { b.className = ""; b.disabled = false; b.removeAttribute("aria-pressed"); }); nextBtn.disabled = true; document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; text(); land(); }
   function answer(w) {
     if (answered) return; answered = true; played++; const truth = ROUNDS[round], ok = w === truth; if (ok) score++;
@@ -699,15 +731,20 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   }
   function flip() {
     if (timer) clearTimeout(timer);
+    dialBox.hidden = mode === "set";
     if (mode === "set") { mode = "ident"; flipBtn.textContent = "Back to setting w"; flipBtn.classList.remove("primary"); round = 0; score = 0; played = 0; start(); }
-    else { mode = "set"; flipBtn.textContent = "Flip to identification"; flipBtn.classList.add("primary"); curW = null; setGate = null; pts = null; answered = false; choiceBtns.forEach(b => { b.className = ""; b.disabled = false; b.removeAttribute("aria-pressed"); }); nextBtn.disabled = true; readouts(); text(); draw(); }
+    else { mode = "set"; flipBtn.textContent = "Flip to identification"; flipBtn.classList.add("primary"); curW = null; setGate = null; pts = null; answered = false; dragging = false; slider.max = String(GATE_CAP); slider.value = "0"; wlab.textContent = "w = 0"; choiceBtns.forEach(b => { b.className = ""; b.disabled = false; b.removeAttribute("aria-pressed"); }); nextBtn.disabled = true; readouts(); text(); draw(); }
   }
-  choiceBtns.forEach(b => b.addEventListener("click", () => { if (mode === "set") setW(+b.dataset.w); else answer(+b.dataset.w); }));
+  slider.addEventListener("input", () => { if (mode !== "set") return; dragging = true; curW = +slider.value; wlab.textContent = "w = " + curW + (cache[curW] ? "" : " (release to sample)"); draw(); });
+  slider.addEventListener("change", () => { if (mode !== "set") return; dragging = false; setW(+slider.value, true); });
+  choiceBtns.forEach(b => b.addEventListener("click", () => { if (mode !== "set") { answer(+b.dataset.w); return; } const w = +b.dataset.w; if (w > GATE_CAP && setGate === null) { text(); return; } setW(w, true); }));
   flipBtn.addEventListener("click", flip);
   nextBtn.addEventListener("click", () => { if (mode !== "ident") return; round = (round + 1) % ROUNDS.length; if (round === 0) { score = 0; played = 0; } start(); });
   document.getElementById("ggReplay").addEventListener("click", land);
   quiz(document.getElementById("ggQuiz"), { q: "At w = 10 every sample lands on the requested class and the cloud is far tighter than the class itself. What has been lost?", options: ["Nothing, every sample is correct", "Diversity: the sampler covers only the densest part of the class", "Accuracy: the samples drift away from the class"], answer: 1, why: "Guidance above one multiplies the conditional likelihood term, which sharpens the distribution around its mode. Image generators show this as saturated, repetitive outputs at high guidance scales; a map generator would produce one typical roof instead of the range of roofs in the data." });
   window.addEventListener("themechange", draw);
+  // warm the cache for the integers in the background so the first sweep is smooth
+  (function warm(list) { if (!list.length) return; const w = list.shift(); cloud(w); readouts(); if (mode === "set") draw(); setTimeout(() => warm(list), 30); })([0, 1, 10]);
   text(); draw();
 })();
 
