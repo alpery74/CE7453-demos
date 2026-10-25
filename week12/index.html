@@ -97,6 +97,23 @@ section.demo.active { display: block; }
 .caption p { margin: 0 0 6px; }
 footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* classroom mode and touch (shared patch) */
+canvas { touch-action: none; -webkit-user-select: none; user-select: none; }
+#classroomBtn { position: fixed; right: 14px; bottom: 14px; z-index: 50; font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; opacity: 0.85; }
+#classroomBtn:hover { opacity: 1; color: var(--ink); }
+body.classroom #classroomBtn { background: var(--blue); border-color: var(--blue); color: #fff; }
+body.classroom header, body.classroom .lead, body.classroom .caption, body.classroom footer, body.classroom .ask-note { display: none; }
+body.classroom nav { padding-block: 6px 4px; }
+body.classroom nav button { font-size: 17px; padding: 9px 16px; }
+body.classroom main { padding-block: 0 8px; }
+body.classroom .demo h2 { font-size: 26px; margin: 4px 0 8px; }
+body.classroom .step, body.classroom .ask, body.classroom .quiz, body.classroom .quiz button, body.classroom .readout, body.classroom .ctl label, body.classroom .choice button, body.classroom .bet button, body.classroom .btns button, body.classroom .legend, body.classroom .board { font-size: 18px; }
+body.classroom .step .k, body.classroom .ctl .hint, body.classroom .badge { font-size: 15px; }
+body.classroom .panel h3 { font-size: 15px; }
+body.classroom .stage { grid-template-columns: minmax(0, 1fr) 400px; }
+body.classroom .grid { grid-template-columns: minmax(0, 1fr) 360px; }
+@media (max-width: 1100px) { body.classroom .stage, body.classroom .grid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -113,6 +130,9 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 .step { font-size: 15px; line-height: 1.5; }
 .step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
 .step p { margin: 6px 0; }
+.step .prompt { margin: 0 0 8px; font-weight: 500; color: var(--ink); }
+.step .hw { margin: 0 0 8px; font-size: 13.5px; color: var(--muted); }
+.btns button:disabled, .chips button:disabled, .bet button:disabled { opacity: 0.5; cursor: default; }
 .ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
 .ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
 .ask.no { border-color: var(--red); background: #F9E4E2; }
@@ -182,7 +202,7 @@ canvas.grab { cursor: grab; }
 <!-- ============ 1. CONTRASTIVE: be the loss ============ -->
 <section class="demo active" id="contrastive" role="tabpanel">
   <h2>Be the loss: arrange five photos and five captions on the circle</h2>
-  <p class="lead">A two-tower model puts photos and captions on the same unit circle. The contrastive loss wants each photo next to its own caption and away from the other four. You are the optimizer: drag the ten points, read the loss, and try to beat the number gradient descent reaches.</p>
+  <p class="lead">A two-tower model puts photos and captions on the same unit circle. The contrastive loss wants each photo next to its own caption and away from the other four. You are the optimizer: pick the temperature at which a hand layout can reach a loss near zero, then drag the ten points, read the loss, and try to beat the number gradient descent reaches. The similarity matrix appears each time you release a marker.</p>
   <div class="stage">
     <div class="plot two">
       <canvas id="ctCircle" class="grab" width="760" height="560"></canvas>
@@ -191,7 +211,7 @@ canvas.grab { cursor: grab; }
     <div class="side">
       <div class="panel step" id="ctStep"></div>
       <div class="panel">
-        <div class="btns"><button class="primary" id="ctGrad">Let gradient descent take over</button><button id="ctShuffle">Scramble</button></div>
+        <div class="btns"><button class="primary" id="ctGrad" disabled>Let gradient descent take over</button><button id="ctShuffle">Scramble</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>your loss</dt><dd id="ctLoss">-</dd>
           <dt>best possible with five pairs</dt><dd id="ctBest">-</dd>
@@ -210,7 +230,7 @@ canvas.grab { cursor: grab; }
 <!-- ============ 2. RETRIEVAL: write the query ============ -->
 <section class="demo" id="retrieval" role="tabpanel">
   <h2>Write the query: find the right photos with the fewest words</h2>
-  <p class="lead">An archive of twelve site photos sits in a trained joint space. Compose a text query from the word chips; the query embedding is the normalized sum of the word vectors, and the archive is ranked by cosine similarity. Each round names a target; retrieve all three of its photos in the top three with as few words as you can.</p>
+  <p class="lead">An archive of twelve site photos sits in a trained joint space. Compose a text query from the word chips; the query embedding is the normalized sum of the word vectors, and the archive is ranked by cosine similarity. Each round names a target; retrieve all three of its photos in the top three with as few words as you can. In the fourth round the query is given and plausible, and the task is to name the chip that pulled it away.</p>
   <div class="stage">
     <div>
       <div class="search">
@@ -261,22 +281,22 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Scores are Gaussian, defects shifted up by d' = 0.7, 1.2 or 2.0 for the weak, typical and strong model. Recall at a budget is the fraction of the twenty defects that land above the cut; it is the number that matters when a person reviews a fixed share of the list, which is slide 10's argument against reporting accuracy for a triage system. Precision in the reviewed set falls as the budget grows while recall rises; the inspector's time sets the trade.</p>
+    <p>Scores are Gaussian, defects shifted up by d' = 0.7, 1.2 or 2.0 for the weak, middle and strong model. Recall at a budget is the fraction of the twenty defects that land above the cut; it is the number that matters when a person reviews a fixed share of the list, which is slide 10's argument against reporting accuracy for a triage system. Precision in the reviewed set falls as the budget grows while recall rises; the inspector's time sets the trade.</p>
   </div>
 </section>
 
 <!-- ============ 4. WORLD MODEL: pilot it yourself ============ -->
 <section class="demo" id="worldmodel" role="tabpanel">
   <h2>Pilot it yourself, with only the learned model to guide you</h2>
-  <p class="lead">A system drifts in the plane under dynamics you cannot see. You have a learned model of it that is slightly wrong; the inset at the top right shows how wrong, and you can drag the ghost there to make the model better or worse. Each turn, click where you want to push; the grey ghost shows where the model says you will land, then the real system moves. Reach the target in twenty steps, then let the planner try.</p>
+  <p class="lead">A system drifts in the plane under dynamics you cannot see. You have a learned model of it that is slightly wrong; the inset at the top right shows how wrong, and the handle under it sets the model error. Each turn, click where you want to push; the grey ghost shows where the model says you will land, then the real system moves. Reach the target in twenty steps, and commit to a planner before the two planners run.</p>
   <div class="stage">
     <div class="plot"><canvas id="wmPlane" class="hit" width="1200" height="600"></canvas></div>
     <div class="side">
       <div class="panel step" id="wmStep"></div>
       <div class="panel">
-        <div class="btns"><button id="wmRestart">Restart my run</button><button class="primary" id="wmPlanK1">Planner, replans every step</button><button id="wmPlanOnce">Planner, plans once</button></div>
+        <div class="btns"><button id="wmRestart">Restart my run</button><button class="primary" id="wmPlanK1" disabled>Planner, replans every step</button><button id="wmPlanOnce" disabled>Planner, plans once</button></div>
         <dl class="readout" style="margin-top:10px">
-          <dt>model error (drag the ghost in the inset)</dt><dd id="wmErr">-</dd>
+          <dt>model error (drag the handle on the plane)</dt><dd id="wmErr">-</dd>
           <dt>step</dt><dd id="wmT">0 / 20</dd>
           <dt>distance to target</dt><dd id="wmD">-</dd>
           <dt>ghost against reality, last step</dt><dd id="wmGap">-</dd>
@@ -293,8 +313,8 @@ canvas.grab { cursor: grab; }
 
 <!-- ============ 5. DRIFT: decide when to retrain ============ -->
 <section class="demo" id="drift" role="tabpanel">
-  <h2>Decide when to retrain: three years on call, one button</h2>
-  <p class="lead">A deployed model, monitored month by month. The top half of each tile is the input drift index, available at once. The bottom half is the held-out error, which needs labels and arrives three months late. The site starts changing at a month you do not know. Retraining costs 3; every month the true error is out of band costs 2. Press Retrain when you judge it right.</p>
+  <h2>Decide when to retrain: three years on call, one button <span class="badge">assignment</span></h2>
+  <p class="lead">A deployed model, monitored month by month. The top half of each tile is the input drift index, available at once. The bottom half is the held-out error, which needs labels and arrives three months late. The site starts changing at a month you do not know. Retraining costs 3; every month the true error is out of band costs 2. The clock pauses after four months for one decision; after that, press Retrain when you judge it right.</p>
   <div class="stage">
     <div class="panel">
       <div class="cal" id="drCal"></div>
@@ -362,6 +382,8 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   const circle = new Board(document.getElementById("ctCircle")), mat = new Board(document.getElementById("ctMat"));
   const cx = circle.W / 2, cy = circle.H / 2 + 10, R = 210;
   let ang = { p: [], c: [] }, tau = 0.1, drag = null, record = null, anim = null, seed = 3;
+  // prediction gate: the student commits to a temperature before the markers unlock; the matrix is blank while a marker is being dragged
+  let pick = null, matHidden = false, matTimer = null;
   function scramble() { const rng = mulberry32(seed); ang.p = []; ang.c = []; for (let i = 0; i < N; i++) { ang.p.push(rng() * 2 * Math.PI); ang.c.push(rng() * 2 * Math.PI); } }
   function sims(a) { const S = []; for (let i = 0; i < N; i++) { S.push([]); for (let j = 0; j < N; j++) S[i].push(Math.cos(a.p[i] - a.c[j])); } return S; }
   function loss(a, t) { const S = sims(a); let L = 0; for (let i = 0; i < N; i++) { let z = 0; for (let j = 0; j < N; j++) z += Math.exp(S[i][j] / t); L += -S[i][i] / t + Math.log(z); } for (let j = 0; j < N; j++) { let z = 0; for (let i = 0; i < N; i++) z += Math.exp(S[i][j] / t); L += -S[j][j] / t + Math.log(z); } return L / (2 * N); }
@@ -371,8 +393,9 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   function draw() {
     const L = loss(ang, tau), B = best(tau), A = acc(ang);
     if (record === null || L < record) record = L;
-    document.getElementById("ctLoss").textContent = L.toFixed(3); document.getElementById("ctBest").textContent = B.toFixed(3); document.getElementById("ctAcc").textContent = A + " / " + N; document.getElementById("ctRecord").textContent = record.toFixed(3);
-    circle.clear("the shared space: round markers are photos, square markers are captions (drag any of them)"); const ctx = circle.ctx;
+    document.getElementById("ctLoss").textContent = L.toFixed(3); document.getElementById("ctBest").textContent = pick === null ? "-" : B.toFixed(3); document.getElementById("ctAcc").textContent = A + " / " + N; document.getElementById("ctRecord").textContent = record.toFixed(3);
+    document.getElementById("ctGrad").disabled = pick === null;
+    circle.clear(pick === null ? "the shared space: round markers are photos, square markers are captions (locked until you answer)" : "the shared space: round markers are photos, square markers are captions (drag any of them)"); const ctx = circle.ctx;
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI); ctx.stroke();
     for (let i = 0; i < N; i++) { ctx.strokeStyle = mix(css("--panel"), PAL[i], 0.45); ctx.lineWidth = 2; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(cx + R * Math.cos(ang.p[i]), cy + R * Math.sin(ang.p[i])); ctx.lineTo(cx + R * Math.cos(ang.c[i]), cy + R * Math.sin(ang.c[i])); ctx.stroke(); ctx.setLineDash([]); }
     for (let i = 0; i < N; i++) {
@@ -385,22 +408,32 @@ function glyph(ctx, kind, x, y, w, h, tone) {
     const ty = TY1 - (tau - 0.05) / 0.95 * (TY1 - TY0); ctx.fillStyle = css("--red"); ctx.fillRect(TX - 6, ty, 12, TY1 - ty + 4); ctx.beginPath(); ctx.arc(TX, TY1 + 14, 16, 0, 2 * Math.PI); ctx.fill();
     ctx.fillStyle = css("--panel"); ctx.strokeStyle = css("--red"); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(TX, ty, 8, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); ctx.lineWidth = 1;
     [0.1, 0.25, 0.5, 1.0].forEach(v => { const y = TY1 - (v - 0.05) / 0.95 * (TY1 - TY0); circle.label(v.toFixed(2), TX + 16, y + 4, css("--muted"), "left", 10, true); });
-    circle.label("temperature", TX, TY0 - 28, css("--ink"), "center", 12); circle.label("tau = " + tau.toFixed(2), TX, TY0 - 14, css("--red"), "center", 12, true); circle.label("drag", TX, TY1 + 44, css("--muted"), "center", 10);
+    circle.label("temperature", TX, TY0 - 28, css("--ink"), "center", 12); circle.label("tau = " + tau.toFixed(2), TX, TY0 - 14, css("--red"), "center", 12, true); circle.label(pick === null ? "locked" : "drag", TX, TY1 + 44, css("--muted"), "center", 11);
     mat.clear("similarity matrix, photos down, captions across"); const m = mat.ctx, S = sims(ang), s = 60, ox = 80, oy = 70;
-    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { const v = S[i][j]; m.fillStyle = v >= 0 ? mix(css("--panel"), css("--blue"), v) : mix(css("--panel"), css("--red"), -v); m.fillRect(ox + j * s, oy + i * s, s, s); m.strokeStyle = i === j ? css("--ink") : css("--line"); m.lineWidth = i === j ? 2.5 : 1; m.strokeRect(ox + j * s + (i === j ? 1 : 0), oy + i * s + (i === j ? 1 : 0), s - (i === j ? 2 : 0), s - (i === j ? 2 : 0)); m.fillStyle = Math.abs(v) > 0.6 ? "#fff" : css("--ink"); m.font = "12px " + css("--mono"); m.textAlign = "center"; m.textBaseline = "middle"; m.fillText(v.toFixed(2), ox + j * s + s / 2, oy + i * s + s / 2); }
+    if (matHidden) {
+      m.strokeStyle = css("--line"); m.lineWidth = 1; m.setLineDash([4, 4]); m.strokeRect(ox, oy, N * s, N * s); m.setLineDash([]);
+      mat.label("release the marker", ox + N * s / 2, oy + N * s / 2 - 6, css("--muted"), "center", 13); mat.label("the matrix appears when the drag ends", ox + N * s / 2, oy + N * s / 2 + 14, css("--muted"), "center", 12);
+    } else for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { const v = S[i][j]; m.fillStyle = v >= 0 ? mix(css("--panel"), css("--blue"), v) : mix(css("--panel"), css("--red"), -v); m.fillRect(ox + j * s, oy + i * s, s, s); m.strokeStyle = i === j ? css("--ink") : css("--line"); m.lineWidth = i === j ? 2.5 : 1; m.strokeRect(ox + j * s + (i === j ? 1 : 0), oy + i * s + (i === j ? 1 : 0), s - (i === j ? 2 : 0), s - (i === j ? 2 : 0)); m.fillStyle = Math.abs(v) > 0.6 ? "#fff" : css("--ink"); m.font = "12px " + css("--mono"); m.textAlign = "center"; m.textBaseline = "middle"; m.fillText(v.toFixed(2), ox + j * s + s / 2, oy + i * s + s / 2); }
     for (let i = 0; i < N; i++) { mat.label("P" + (i + 1), ox - 10, oy + i * s + s / 2 + 4, PAL[i], "right", 12, true); mat.label("C" + (i + 1), ox + i * s + s / 2, oy - 8, PAL[i], "center", 12, true); }
     mat.label("the loss wants the outlined diagonal high and everything else low", 16, oy + N * s + 30, css("--muted"), "left", 12);
     mat.label("blue positive, red negative cosine", 16, oy + N * s + 50, css("--muted"), "left", 12);
     const ratio = (L - B);
-    stepEl.innerHTML = '<span class="k">' + (ratio < 0.05 ? 'at the optimum' : (A === N ? 'all retrieved, not yet optimal' : 'keep going')) + '</span>' + (A < N ? '<p>' + (N - A) + ' of the photos still pick the wrong caption. Bring each P next to its own C first.</p>' : (ratio < 0.05 ? '<div class="ask ok">Your loss ' + L.toFixed(3) + ' is within 0.05 of the best possible, ' + B.toFixed(3) + '. The ten points sit as five coincident pairs spread evenly around the circle.</div>' : '<div class="ask">Every photo retrieves its caption, but the loss is ' + L.toFixed(3) + ' against a possible ' + B.toFixed(3) + '. Matched pairs that sit close to <i>other</i> pairs are still penalized: spread the five pairs apart.</div>')) + '<p>Switch the temperature and watch the same layout score differently. At tau = 0.5 the gap between a good and a perfect layout almost vanishes.</p>';
+    let html = '<p class="prompt">Tau 0.1 against 0.5: at which setting can you get the loss near zero by hand?</p>';
+    if (pick === null) html += '<div class="bet"><button id="ctPick01">tau = 0.1</button><button id="ctPick05">tau = 0.5</button></div><p>Choose first. The markers, the thermometer and the gradient button unlock after the choice, and the temperature is set to your pick so you can test it.</p>';
+    else html += '<div class="ask ' + (pick === 0.1 ? 'ok' : 'no') + '">' + (pick === 0.1 ? 'Right. At tau 0.1 five coincident pairs spread evenly score ' + best(0.1).toFixed(3) + '. At tau 0.5 the same layout scores ' + best(0.5).toFixed(3) + ', because the soft softmax keeps weight on the four negatives however far apart the pairs sit.' : 'No. At tau 0.5 the best possible layout still scores ' + best(0.5).toFixed(3) + '; the soft softmax keeps weight on the four negatives however far apart the pairs sit. At tau 0.1 the same layout scores ' + best(0.1).toFixed(3) + '.') + '</div>' +
+      '<span class="k">' + (ratio < 0.05 ? 'at the optimum' : (A === N ? 'all retrieved, not yet optimal' : 'keep going')) + '</span>' + (A < N ? '<p>' + (N - A) + ' of the photos still pick the wrong caption. Bring each P next to its own C first.</p>' : (ratio < 0.05 ? '<div class="ask ok">Your loss ' + L.toFixed(3) + ' is within 0.05 of the best possible, ' + B.toFixed(3) + '. The ten points sit as five coincident pairs spread evenly around the circle.</div>' : '<div class="ask">Every photo retrieves its caption, and the loss is ' + L.toFixed(3) + ' against a possible ' + B.toFixed(3) + '. Matched pairs that sit close to <i>other</i> pairs are still penalized: spread the five pairs apart.</div>')) + '<p>Drag the thermometer and watch the same layout score differently. At tau = 0.5 the gap between a good and a perfect layout almost vanishes.</p>';
+    stepEl.innerHTML = html;
+    const b1 = document.getElementById("ctPick01"), b5 = document.getElementById("ctPick05");
+    if (b1) { b1.addEventListener("click", () => commit(0.1)); b5.addEventListener("click", () => commit(0.5)); }
   }
+  function commit(v) { pick = v; tau = v; record = null; draw(); }
   function nearest(mx, my) { let best = null, bd = 1e9; for (let i = 0; i < N; i++) { for (const k of ["p", "c"]) { const x = cx + R * Math.cos(ang[k][i]), y = cy + R * Math.sin(ang[k][i]), d = Math.hypot(mx - x, my - y); if (d < bd) { bd = d; best = { k, i }; } } } return bd < 22 ? best : null; }
-  circle.c.addEventListener("mousedown", ev => { const [mx, my] = circle.pos(ev); if (Math.abs(mx - 700) < 22 && my >= 90 && my <= 500) { drag = { k: "tau" }; record = null; } else drag = nearest(mx, my); if (anim) { cancelAnimationFrame(anim); anim = null; } });
-  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = circle.pos(ev); if (drag.k === "tau") { tau = Math.max(0.05, Math.min(1.0, 0.05 + (470 - my) / 360 * 0.95)); draw(); return; } ang[drag.k][drag.i] = Math.atan2(my - cy, mx - cx); draw(); });
-  window.addEventListener("mouseup", () => { drag = null; });
+  circle.c.addEventListener("pointerdown", ev => { if (pick === null) return; const [mx, my] = circle.pos(ev); if (Math.abs(mx - 700) < 22 && my >= 90 && my <= 500) { drag = { k: "tau" }; record = null; } else { drag = nearest(mx, my); if (drag) { if (matTimer) { clearTimeout(matTimer); matTimer = null; } matHidden = true; draw(); } } if (anim) { cancelAnimationFrame(anim); anim = null; } });
+  window.addEventListener("pointermove", ev => { if (!drag) return; const [mx, my] = circle.pos(ev); if (drag.k === "tau") { tau = Math.max(0.05, Math.min(1.0, 0.05 + (470 - my) / 360 * 0.95)); draw(); return; } ang[drag.k][drag.i] = Math.atan2(my - cy, mx - cx); draw(); });
+  window.addEventListener("pointerup", () => { if (drag && drag.k !== "tau") { if (matTimer) clearTimeout(matTimer); matTimer = setTimeout(() => { matTimer = null; matHidden = false; draw(); }, 300); } drag = null; });
   function gradStep() { const eps = 1e-4, lr = 0.15, base = loss(ang, tau), g = { p: [], c: [] }; for (const k of ["p", "c"]) for (let i = 0; i < N; i++) { ang[k][i] += eps; g[k].push((loss(ang, tau) - base) / eps); ang[k][i] -= eps; } let gn = 0; for (const k of ["p", "c"]) for (let i = 0; i < N; i++) gn += g[k][i] ** 2; gn = Math.sqrt(gn) + 1e-9; const scale = Math.min(1, 0.5 / gn); for (const k of ["p", "c"]) for (let i = 0; i < N; i++) ang[k][i] -= lr * g[k][i] * scale * 4; return gn; }
-  document.getElementById("ctGrad").addEventListener("click", () => { if (anim) cancelAnimationFrame(anim); let n = 0; (function f() { const gn = gradStep(); draw(); n++; if (n < 400 && gn > 1e-3) anim = requestAnimationFrame(f); })(); });
-  document.getElementById("ctShuffle").addEventListener("click", () => { seed += 1; scramble(); record = null; draw(); });
+  document.getElementById("ctGrad").addEventListener("click", () => { if (pick === null) return; if (anim) cancelAnimationFrame(anim); let n = 0; (function f() { const gn = gradStep(); draw(); n++; if (n < 400 && gn > 1e-3) anim = requestAnimationFrame(f); })(); });
+  document.getElementById("ctShuffle").addEventListener("click", () => { if (anim) { cancelAnimationFrame(anim); anim = null; } seed += 1; scramble(); record = null; pick = null; tau = 0.1; matHidden = false; draw(); });
   quiz(document.getElementById("ctQuiz"), { q: "A batch of 5 pairs gives each photo 4 negatives; a batch of 32 000 gives it 31 999. Why do contrastive models train with huge batches?", options: ["Larger batches make each gradient step cheaper", "More negatives make the task harder and the learned space finer, since near misses must be separated too", "Small batches cannot fit the loss in memory"], answer: 1, why: "With five pairs the model only has to tell five concepts apart. With tens of thousands it must separate photos that differ in small ways, so the embedding has to carry fine detail. The cost is memory, which is why CLIP needed hundreds of GPUs." });
   window.addEventListener("themechange", draw);
   scramble(); draw();
@@ -411,27 +444,43 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   const concepts = ["spalling concrete", "corroded rebar", "cracked asphalt", "clogged culvert"], centers = [0.3, 1.9, 3.4, 5.0];
   const WORDS = [["spalling", 0.3], ["concrete", 0.55], ["flaking", 0.2], ["surface", 1.0], ["rebar", 1.9], ["corroded", 1.8], ["rusty", 1.15], ["steel", 2.75], ["asphalt", 3.4], ["pavement", 3.6], ["pothole", 3.2], ["cracked", 2.6], ["culvert", 5.0], ["clogged", 4.85], ["drain", 5.2], ["debris", 4.5], ["damage", 1.3], ["photo", 2.9]];
   const rng = mulberry32(21), photos = []; for (let c = 0; c < 4; c++) for (let k = 0; k < 3; k++) { const a = centers[c] + (rng() - 0.5) * 0.7; photos.push({ c, a, name: concepts[c].split(" ")[1] + " " + (k + 1) }); }
-  const ROUNDS = [1, 2, 0, 3];
-  let round = 0, used = [], solved = 0, played = 0, done = false;
+  const widx = w => WORDS.findIndex(x => x[0] === w);
+  // round 4 is the wrong-chip round: a three-chip query is given, its top three are plausible and wrong, and the student names the chip that hurt before editing
+  const ROUNDS = [{ t: 1 }, { t: 2 }, { t: 0 }, { t: 3, preset: ["clogged", "debris", "cracked"], culprit: "cracked" }, { t: 3 }];
+  let round = 0, used = [], solved = 0, played = 0, done = false, blame = null;
   const box = document.getElementById("rtBox"), res = document.getElementById("rtResults"), chips = document.getElementById("rtChips"), stepEl = document.getElementById("rtStep");
   function query() { if (!used.length) return null; let x = 0, y = 0; for (const i of used) { x += Math.cos(WORDS[i][1]); y += Math.sin(WORDS[i][1]); } const n = Math.hypot(x, y) || 1e-9; return [x / n, y / n]; }
   function ranked() { const q = query(); if (!q) return photos.map((p, i) => ({ i, s: 0 })); return photos.map((p, i) => ({ i, s: Math.cos(p.a) * q[0] + Math.sin(p.a) * q[1] })).sort((u, v) => v.s - u.s); }
+  function gating() { return !!ROUNDS[round].preset && blame === null; }
   function render() {
-    const target = ROUNDS[round], r = ranked(), q = query();
+    const R = ROUNDS[round], target = R.t, r = ranked(), q = query(), gate = gating();
     box.innerHTML = used.length ? used.map(i => '<span class="w">' + WORDS[i][0] + '</span>').join("") : '<span class="ph">click words to build the query</span>';
     res.innerHTML = "";
     r.forEach((o, k) => { const p = photos[o.i], d = document.createElement("div"); d.className = "result" + (q && k < 3 ? " top" : ""); d.innerHTML = '<span class="rk">#' + (k + 1) + (q ? '  cos ' + o.s.toFixed(2) : '') + '</span><canvas width="160" height="90"></canvas><span>' + p.name + (q && k < 3 && p.c === target ? ' <span class="badge done">target</span>' : (q && k < 3 ? ' <span class="badge">off target</span>' : '')) + '</span><div class="bar"><i style="width:' + (q ? 50 + 50 * o.s : 0) + '%"></i></div>'; res.appendChild(d); const cv = d.querySelector("canvas"); glyph(cv.getContext("2d"), p.c, 0, 0, 160, 90); });
-    chips.innerHTML = ""; WORDS.forEach((w, i) => { const b = document.createElement("button"); b.textContent = w[0]; b.setAttribute("aria-pressed", used.includes(i) ? "true" : "false"); b.addEventListener("click", () => { if (done) return; if (used.includes(i)) used = used.filter(j => j !== i); else used.push(i); render(); }); chips.appendChild(b); });
+    chips.innerHTML = ""; WORDS.forEach((w, i) => { const b = document.createElement("button"); b.textContent = w[0]; b.setAttribute("aria-pressed", used.includes(i) ? "true" : "false"); if (gate && !used.includes(i)) b.disabled = true; b.addEventListener("click", () => { if (done) return; if (gating()) { if (used.includes(i)) { blame = w[0]; render(); } return; } if (used.includes(i)) used = used.filter(j => j !== i); else used.push(i); render(); }); chips.appendChild(b); });
+    document.getElementById("rtClear").disabled = gate;
     const hits = q ? r.slice(0, 3).filter(o => photos[o.i].c === target).length : 0;
+    if (!done && hits === 3 && !gate) { done = true; solved++; played++; document.getElementById("rtNext").disabled = false; }
     document.getElementById("rtK").textContent = used.length; document.getElementById("rtRec").textContent = q ? hits + " / 3" : "-"; document.getElementById("rtScore").textContent = solved + " / " + played;
-    if (!done && hits === 3) { done = true; solved++; played++; document.getElementById("rtNext").disabled = false; }
     const costly = used.some(i => ["damage", "photo", "surface"].includes(WORDS[i][0]));
-    stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>Target: <b>' + concepts[target] + '</b>. Get all three of its photos into the top three.</p>' + (done ? '<div class="ask ok">Solved with ' + used.length + (used.length === 1 ? ' word.' : ' words.') + (used.length > 1 ? ' Try Clear and solve it with one: the most specific word usually does it alone.' : ' One specific word beats any phrase built from vague ones.') + '</div>' : (q ? '<div class="ask">' + hits + ' of 3 in the top three. ' + (costly ? 'Generic words like damage, photo or surface pull the query toward the middle of the space and help no concept.' : (hits === 2 ? 'Close: one word is nudging the query toward a neighbouring concept. Remove it or add the exact term.' : 'Add the word that names the thing itself.')) + '</div>' : '<p>Each word is a direction; the query is their mean. Start with one chip and read the ranking.</p>'));
+    const tag = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span>';
+    let html = '';
+    if (R.preset) {
+      const top = photos[r[0].i];
+      html += '<p class="prompt">Find the culvert with three chips.</p>' + tag;
+      if (gate) html += '<p>The query holds three chips already. The top result is ' + top.name + ' and only ' + hits + ' of the three culverts made the top three. Which chip hurt? Click it in the word list.</p>';
+      else html += '<div class="ask ' + (blame === R.culprit ? 'ok' : 'no') + '">' + (blame === R.culprit ? 'Right. Cracked sits between rebar and asphalt, far from the culvert cluster, and one far chip moves the mean of three by a third of its distance. ' : 'No. ' + blame.charAt(0).toUpperCase() + blame.slice(1) + ' sits near the culvert cluster. Cracked sits between rebar and asphalt, and one far chip moves the mean of three by a third of its distance. ') + 'Remove cracked and the culverts return.</div>' + (done ? '<div class="ask ok">Solved with ' + used.length + (used.length === 1 ? ' word.' : ' words.') + ' Next target: the same culverts with as few words as you can.</div>' : '<p>The chips are editable again. Fix the query: ' + hits + ' of 3 culverts in the top three.</p>');
+    } else {
+      html += '<p class="prompt">Target: <b>' + concepts[target] + '</b>. Get all three of its photos into the top three.</p>' + tag + (done ? '<div class="ask ok">Solved with ' + used.length + (used.length === 1 ? ' word.' : ' words.') + (used.length > 1 ? ' Try Clear and solve it with one: the most specific word usually does it alone.' : ' One specific word beats any phrase built from vague ones.') + '</div>' : (q ? '<div class="ask">' + hits + ' of 3 in the top three. ' + (costly ? 'Generic words like damage, photo or surface pull the query toward the middle of the space and help no concept.' : (hits === 2 ? 'Close: one word is nudging the query toward a neighbouring concept. Remove it or add the exact term.' : 'Add the word that names the thing itself.')) + '</div>' : '<p>Each word is a direction; the query is their mean. Start with one chip and read the ranking.</p>'));
+    }
+    stepEl.innerHTML = html;
   }
-  document.getElementById("rtClear").addEventListener("click", () => { used = []; if (done) { done = false; } render(); });
-  document.getElementById("rtNext").addEventListener("click", () => { round = (round + 1) % ROUNDS.length; if (round === 0) { solved = 0; played = 0; } used = []; done = false; document.getElementById("rtNext").disabled = true; render(); });
+  function startRound() { const R = ROUNDS[round]; used = R.preset ? R.preset.map(widx) : []; blame = null; done = false; document.getElementById("rtNext").disabled = true; render(); }
+  document.getElementById("rtClear").addEventListener("click", () => { if (gating()) return; used = []; if (done) { done = false; } render(); });
+  document.getElementById("rtNext").addEventListener("click", () => { round = (round + 1) % ROUNDS.length; if (round === 0) { solved = 0; played = 0; } startRound(); });
   quiz(document.getElementById("rtQuiz"), { q: "Two queries differ by one word and return different top-three sets. In a joint embedding space this happens because", options: ["The archive index was rebuilt between the two searches", "The text tower maps the two phrases to different points, and ranking is by nearest neighbours of that point", "The photos changed"], answer: 1, why: "Retrieval is nearest-neighbour search around the text embedding. Any change in wording moves the query point, and photos near the boundary between concepts change rank. Robust retrieval needs either query expansion or a text tower trained on the vocabulary the users actually type." });
-  render();
+  window.addEventListener("themechange", render);
+  startRound();
 })();
 
 /* ================= 3. THE INSPECTOR'S QUEUE ================= */
@@ -439,11 +488,12 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   const n = 200, K = 20, DP = { weak: 0.7, mid: 1.2, strong: 2.0 };
   const board = new Board(document.getElementById("trGrid"));
   let seed = 2, dp = "mid", budget = 40, pred = null, flipped = false, showAll = false, items = null, dragLine = false;
-  const CARDS = [["weak", "weak detector"], ["mid", "typical detector"], ["strong", "strong detector"]];
+  const CARDS = [["weak", "weak detector"], ["mid", "middle detector"], ["strong", "strong detector"]];
   function make() { const rng = mulberry32(seed); items = []; for (let i = 0; i < n; i++) items.push({ rel: i < K, z: randn(rng, 2)[0] }); }
   function sorted() { return items.map(it => ({ rel: it.rel, s: it.z + (it.rel ? DP[dp] : 0) })).sort((a, b) => b.s - a.s); }
   const stepEl = document.getElementById("trStep");
-  function text() { stepEl.innerHTML = '<span class="k">before you flip</span><p>The cards are the queue, highest score at the top left. The first ' + budget + ' are inside the review line; drag the line to change the budget.</p><p>Twenty of the 200 are defects. Type how many the inspector finds in the top ' + budget + ', then flip. The three cards under the queue are three detectors: click one.</p>'; }
+  const DNAME = { weak: "weak", mid: "middle", strong: "strong" };
+  function text() { stepEl.innerHTML = '<p class="prompt">At a budget of ' + budget + ' with the ' + DNAME[dp] + ' detector, how many of the 20 defects are caught? Type a number.</p><span class="k">before you flip</span><p>The cards are the queue, highest score at the top left. The first ' + budget + ' are inside the review line; drag the line to change the budget.</p><p>Twenty of the 200 are defects. Type the number in the box below, then flip. The three cards under the queue are three detectors: click one.</p>'; }
   function draw() {
     const q = sorted(), cols = 20, rows = 10, cw = 54, ch = 44, ox = 60, oy = 40;
     board.clear(""); const ctx = board.ctx;
@@ -481,9 +531,9 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   }
   function reset() { flipped = false; showAll = false; pred = null; document.getElementById("trPredN").value = ""; document.getElementById("trPredNote").textContent = "then flip"; document.getElementById("trFlip").disabled = true; text(); draw(); }
   document.getElementById("trPredN").addEventListener("input", ev => { if (flipped) return; const v = parseInt(ev.target.value, 10); if (isNaN(v) || v < 0 || v > 20) { pred = null; document.getElementById("trFlip").disabled = true; return; } pred = v; document.getElementById("trFlip").disabled = false; });
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const cols = 20, cw = 54, ch = 44, ox = 60, oy = 40; const bx = ox + (budget % cols) * cw, by = oy + Math.floor(budget / cols) * ch; const onLine = (my >= by - 10 && my <= by + ch + 10 && mx >= ox - 10 && mx <= ox + cols * cw + 10); if (onLine) { dragLine = true; return; } const cy0 = oy + 10 * ch + 62; if (my >= cy0 && my <= cy0 + 92) { const i = Math.floor((mx - ox) / 370); if (i >= 0 && i < 3 && mx - ox - i * 370 <= 350) { dp = CARDS[i][0]; reset(); } } });
-  window.addEventListener("mousemove", ev => { if (!dragLine) return; const [mx, my] = board.pos(ev); const cols = 20, cw = 54, ch = 44, ox = 60, oy = 40; const col = Math.max(0, Math.min(cols, Math.round((mx - ox) / cw))), row = Math.max(0, Math.min(9, Math.floor((my - oy) / ch))); const b = Math.max(5, Math.min(195, row * cols + col)); if (b !== budget) { budget = b; if (flipped || pred !== null) reset(); else draw(); } });
-  window.addEventListener("mouseup", () => { dragLine = false; });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); const cols = 20, cw = 54, ch = 44, ox = 60, oy = 40; const bx = ox + (budget % cols) * cw, by = oy + Math.floor(budget / cols) * ch; const onLine = (my >= by - 10 && my <= by + ch + 10 && mx >= ox - 10 && mx <= ox + cols * cw + 10); if (onLine) { dragLine = true; return; } const cy0 = oy + 10 * ch + 62; if (my >= cy0 && my <= cy0 + 92) { const i = Math.floor((mx - ox) / 370); if (i >= 0 && i < 3 && mx - ox - i * 370 <= 350) { dp = CARDS[i][0]; reset(); } } });
+  window.addEventListener("pointermove", ev => { if (!dragLine) return; const [mx, my] = board.pos(ev); const cols = 20, cw = 54, ch = 44, ox = 60, oy = 40; const col = Math.max(0, Math.min(cols, Math.round((mx - ox) / cw))), row = Math.max(0, Math.min(9, Math.floor((my - oy) / ch))); const b = Math.max(5, Math.min(195, row * cols + col)); if (b !== budget) { budget = b; if (flipped || pred !== null) reset(); else { text(); draw(); } } });
+  window.addEventListener("pointerup", () => { dragLine = false; });
   document.getElementById("trFlip").addEventListener("click", flip);
   document.getElementById("trAll").addEventListener("click", () => { showAll = true; flipped = true; draw(); });
   document.getElementById("trNew").addEventListener("click", () => { seed += 1; make(); reset(); });
@@ -498,7 +548,10 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   const board = new Board(document.getElementById("wmPlane"));
   const px = v => board.W / 2 + v * 95, py = v => board.H / 2 - v * 95;
   const INS = { x: 940, y: 24, w: 244, h: 170, cx: 1040, cy: 120 }, EDIR = [0.6, 0.8];
-  let dragGhost = false, seed = 5, Enoise = null, err = 0.2, x = null, t = 0, path = [], ghosts = [], lastGap = null, finals = { you: null, k1: null, once: null }, finished = false, planPaths = { k1: null, once: null };
+  let dragErr = false, seed = 5, Enoise = null, err = 0.2, x = null, t = 0, path = [], ghosts = [], lastGap = null, finals = { you: null, k1: null, once: null }, finished = false, planPaths = { k1: null, once: null };
+  // the model-error handle is a slider row drawn on the plane under the inset; the planners stay locked until the student commits to one
+  const SL = { x0: 960, x1: 1160, y: 246, lo: 0.02, hi: 0.6 }, slx = v => SL.x0 + (v - SL.lo) / (SL.hi - SL.lo) * (SL.x1 - SL.x0);
+  let pick = null, gateRes = null;
   function newFit() { const g = randn(mulberry32(seed), 4); Enoise = [[g[0], g[1]], [g[2], g[3]]].map(r => r.map(v => v / 2)); }
   const mul = (M, v) => [M[0][0] * v[0] + M[0][1] * v[1], M[1][0] * v[0] + M[1][1] * v[1]];
   const mm = (M, N) => [[M[0][0] * N[0][0] + M[0][1] * N[1][0], M[0][0] * N[0][1] + M[0][1] * N[1][1]], [M[1][0] * N[0][0] + M[1][1] * N[1][0], M[1][0] * N[0][1] + M[1][1] * N[1][1]]];
@@ -508,14 +561,24 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   function realStep(xs, u, rng) { const nx = mul(A, xs); nx[0] += B * u[0] + 0.01 * (rng() - 0.5); nx[1] += B * u[1] + 0.01 * (rng() - 0.5); return nx; }
   function runPlanner(k) { const Ah = model(), rng = mulberry32(seed + 100); let xs = x0.slice(), u = [], out = [xs.slice()]; for (let i = 0; i < TOT; i++) { if (i % k === 0 || !u.length) u = plan(Ah, xs); const ut = u.shift(); xs = realStep(xs, ut, rng); out.push(xs.slice()); } return out; }
   const stepEl = document.getElementById("wmStep");
-  function restart() { x = x0.slice(); t = 0; path = [x.slice()]; ghosts = []; lastGap = null; finished = false; finals.you = null; planPaths = { k1: null, once: null }; finals.k1 = null; finals.once = null; text(); draw(); }
-  function text() { stepEl.innerHTML = '<span class="k">your turn, step ' + (t + 1) + ' of ' + TOT + '</span><p>Click anywhere on the plane. The push goes toward your click, capped at a fixed strength. The grey ghost marks where the learned model says you will land; the blue dot is where you really land.</p>' + (t > 2 ? '<p>Notice the ghost and the real dot disagree by a different amount each step. You are correcting for that with every click, which is exactly what the replanning planner does.</p>' : ''); }
+  function restart(full) { x = x0.slice(); t = 0; path = [x.slice()]; ghosts = []; lastGap = null; finished = false; finals.you = null; planPaths = { k1: null, once: null }; finals.k1 = null; finals.once = null; if (full) { pick = null; gateRes = null; } text(); draw(); }
+  function head() {
+    let h = '<p class="prompt">Plan once or replan each step, with model error 0.5? Which ends closer?</p>';
+    if (pick === null) h += '<div class="bet"><button id="wmPickOnce">plan once</button><button id="wmPickReplan">replan each step</button></div><p>Choose first; both planners then run at model error 0.5 and the trajectories appear. You can pilot by hand before or after.</p>';
+    else if (gateRes) h += '<div class="ask ' + (pick === 'replan' ? 'ok' : 'no') + '">' + (pick === 'replan' ? 'Right. ' : 'No. ') + 'With model error 0.5 the plan-once run ends ' + gateRes.once.toFixed(2) + ' from the target and the replanning run ' + gateRes.k1.toFixed(2) + '. ' + (pick === 'replan' ? 'Each observation resets the rollout to the true state before the model error compounds.' : 'The first plan was made for the imagined trajectory, and the model error compounds over twenty steps; replanning resets the rollout to the true state each step.') + '</div>';
+    return h;
+  }
+  function wire() { const b1 = document.getElementById("wmPickOnce"), b2 = document.getElementById("wmPickReplan"); if (b1) { b1.addEventListener("click", () => commit("once")); b2.addEventListener("click", () => commit("replan")); } }
+  function setStep(html) { stepEl.innerHTML = head() + html; wire(); }
+  function text() { setStep('<span class="k">your turn, step ' + (t + 1) + ' of ' + TOT + '</span><p>Click anywhere on the plane. The push goes toward your click, capped at a fixed strength. The grey ghost marks where the learned model says you will land; the blue dot is where you really land.</p>' + (t > 2 ? '<p>Notice the ghost and the real dot disagree by a different amount each step. You are correcting for that with every click, which is exactly what the replanning planner does.</p>' : '')); }
+  function runBoth() { planPaths.k1 = runPlanner(1); let e = planPaths.k1[TOT]; finals.k1 = Math.hypot(e[0] - target[0], e[1] - target[1]); planPaths.once = runPlanner(TOT); e = planPaths.once[TOT]; finals.once = Math.hypot(e[0] - target[0], e[1] - target[1]); }
+  function commit(v) { pick = v; err = 0.5; runBoth(); gateRes = { once: finals.once, k1: finals.k1 }; setStep('<span class="k">the comparison</span><p>Both planners optimize a twelve-step plan inside the learned model. The green path throws its plan away after each real step and plans again from where it actually is; the dashed grey path trusts its first plan to the end. Drag the handle to another error and run them again with the buttons' + (finished ? '.' : ', or keep piloting by hand.') + '</p>'); draw(); }
   function draw() {
     board.clear("the plane: click to push toward that point"); const ctx = board.ctx;
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; for (let v = -3; v <= 3; v++) { ctx.beginPath(); ctx.moveTo(px(v), py(-3)); ctx.lineTo(px(v), py(3)); ctx.moveTo(px(-3), py(v)); ctx.lineTo(px(3), py(v)); ctx.stroke(); }
     const trace = (pts, color, width, dash) => { ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []); ctx.beginPath(); pts.forEach((p, i) => { if (i === 0) ctx.moveTo(px(p[0]), py(p[1])); else ctx.lineTo(px(p[0]), py(p[1])); }); ctx.stroke(); ctx.setLineDash([]); };
-    if (planPaths.once) { trace(planPaths.once, css("--grey"), 2, [6, 5]); board.label("planner, plans once", px(planPaths.once[TOT][0]) + 10, py(planPaths.once[TOT][1]), css("--grey"), "left", 12); }
-    if (planPaths.k1) { trace(planPaths.k1, "#2E7D5B", 2); board.label("planner, replans every step", px(planPaths.k1[TOT][0]) + 10, py(planPaths.k1[TOT][1]) + 14, "#2E7D5B", "left", 12); }
+    if (planPaths.once) { trace(planPaths.once, css("--grey"), 2, [6, 5]); ctx.strokeStyle = css("--grey"); ctx.lineWidth = 2; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.moveTo(20, 66); ctx.lineTo(50, 66); ctx.stroke(); ctx.setLineDash([]); board.label("planner, plans once, ends " + finals.once.toFixed(2) + " away", 58, 70, css("--grey"), "left", 12); }
+    if (planPaths.k1) { trace(planPaths.k1, "#2E7D5B", 2); ctx.strokeStyle = "#2E7D5B"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(20, 46); ctx.lineTo(50, 46); ctx.stroke(); board.label("planner, replans every step, ends " + finals.k1.toFixed(2) + " away", 58, 50, "#2E7D5B", "left", 12); }
     trace(path, css("--blue"), 2.6);
     ghosts.forEach(g => { ctx.fillStyle = mix(css("--panel"), css("--grey"), 0.6); ctx.beginPath(); ctx.arc(px(g[0]), py(g[1]), 6, 0, 2 * Math.PI); ctx.fill(); });
     path.forEach(p => { ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(px(p[0]), py(p[1]), 4, 0, 2 * Math.PI); ctx.fill(); });
@@ -530,36 +593,50 @@ function glyph(ctx, kind, x, y, w, h, tone) {
     ctx.strokeStyle = css("--blue"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(INS.cx - 40, INS.cy + 10); ctx.lineTo(rt[0], rt[1]); ctx.stroke(); ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(rt[0], rt[1], 7, 0, 2 * Math.PI); ctx.fill();
     ctx.strokeStyle = css("--grey"); ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(INS.cx - 40, INS.cy + 10); ctx.lineTo(gt[0], gt[1]); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; ctx.fillStyle = mix(css("--panel"), css("--grey"), 0.7); ctx.beginPath(); ctx.arc(gt[0], gt[1], 10, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--ink"); ctx.stroke();
     ctx.fillStyle = css("--ink"); ctx.beginPath(); ctx.arc(INS.cx - 40, INS.cy + 10, 5, 0, 2 * Math.PI); ctx.fill();
-    board.label("drag the ghost to make the model worse", INS.x + 10, INS.y + INS.h - 10, css("--muted"), "left", 10); board.label("error " + err.toFixed(2), INS.x + INS.w - 10, INS.y + INS.h - 10, css("--ink"), "right", 12, true);
+    board.label("set by the handle below", INS.x + 10, INS.y + INS.h - 10, css("--muted"), "left", 11); board.label("error " + err.toFixed(2), INS.x + INS.w - 10, INS.y + INS.h - 10, css("--ink"), "right", 12, true);
+    // the slider row: a labelled track with a draggable handle
+    board.label("model error (drag the handle)", SL.x0 - 20, SL.y - 20, css("--ink"), "left", 12); board.label(err.toFixed(2), SL.x1 + 24, SL.y - 20, css("--red"), "right", 12, true);
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(SL.x0, SL.y); ctx.lineTo(SL.x1, SL.y); ctx.stroke(); ctx.strokeStyle = css("--red"); ctx.beginPath(); ctx.moveTo(SL.x0, SL.y); ctx.lineTo(slx(err), SL.y); ctx.stroke(); ctx.lineCap = "butt"; ctx.lineWidth = 1;
+    [0.1, 0.3, 0.5].forEach(v => { ctx.strokeStyle = css("--grey"); ctx.beginPath(); ctx.moveTo(slx(v), SL.y + 6); ctx.lineTo(slx(v), SL.y + 12); ctx.stroke(); board.label(v.toFixed(1), slx(v), SL.y + 26, css("--muted"), "center", 11, true); });
+    board.label("exact", SL.x0 - 8, SL.y + 4, css("--muted"), "right", 11); board.label("wrong", SL.x1 + 8, SL.y + 4, css("--muted"), "left", 11);
+    ctx.fillStyle = css("--panel"); ctx.strokeStyle = css("--red"); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(slx(err), SL.y, 11, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); ctx.lineWidth = 1;
+    document.getElementById("wmPlanK1").disabled = pick === null; document.getElementById("wmPlanOnce").disabled = pick === null;
     document.getElementById("wmErr").textContent = err.toFixed(2) + (err < 0.1 ? " (small)" : (err < 0.35 ? " (moderate)" : " (large)"));
     document.getElementById("wmT").textContent = t + " / " + TOT; document.getElementById("wmD").textContent = Math.hypot(x[0] - target[0], x[1] - target[1]).toFixed(2); document.getElementById("wmGap").textContent = lastGap === null ? "-" : lastGap.toFixed(3);
     document.getElementById("wmBoard").textContent = (finals.you === null ? "-" : finals.you.toFixed(2)) + " / " + (finals.k1 === null ? "-" : finals.k1.toFixed(2)) + " / " + (finals.once === null ? "-" : finals.once.toFixed(2));
   }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); const rt = [INS.cx + 70, INS.cy - 20], gt = [rt[0] + err * 150 * EDIR[0], rt[1] + err * 150 * EDIR[1]]; if (Math.hypot(mx - gt[0], my - gt[1]) < 16) dragGhost = true; });
-  window.addEventListener("mousemove", ev => { if (!dragGhost) return; const [mx, my] = board.pos(ev); const rt = [INS.cx + 70, INS.cy - 20]; const proj = ((mx - rt[0]) * EDIR[0] + (my - rt[1]) * EDIR[1]) / 150; err = Math.max(0.02, Math.min(0.6, proj)); draw(); });
-  window.addEventListener("mouseup", () => { if (dragGhost) { dragGhost = false; restart(); } });
+  const inSlider = (mx, my) => mx >= SL.x0 - 24 && mx <= SL.x1 + 24 && my >= SL.y - 18 && my <= SL.y + 18;
+  const setErr = mx => { err = Math.max(SL.lo, Math.min(SL.hi, SL.lo + (mx - SL.x0) / (SL.x1 - SL.x0) * (SL.hi - SL.lo))); };
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (inSlider(mx, my)) { dragErr = true; setErr(mx); draw(); } });
+  window.addEventListener("pointermove", ev => { if (!dragErr) return; const [mx] = board.pos(ev); setErr(mx); draw(); });
+  window.addEventListener("pointerup", () => { if (dragErr) { dragErr = false; restart(false); } });
   board.c.addEventListener("click", ev => {
-    if (finished) return; const [mx, my] = board.pos(ev); if (mx >= INS.x && mx <= INS.x + INS.w && my >= INS.y && my <= INS.y + INS.h) return; const wx = (mx - board.W / 2) / 95, wy = -(my - board.H / 2) / 95;
+    if (finished) return; const [mx, my] = board.pos(ev); if (mx >= INS.x && mx <= INS.x + INS.w && my >= INS.y && my <= INS.y + INS.h) return; if (inSlider(mx, my)) return; const wx = (mx - board.W / 2) / 95, wy = -(my - board.H / 2) / 95;
     let u = [(wx - x[0]) / B * 0.3, (wy - x[1]) / B * 0.3]; const un = Math.hypot(u[0], u[1]); if (un > UMAX) u = [u[0] / un * UMAX, u[1] / un * UMAX];
     const Ah = model(), ghost = mul(Ah, x); ghost[0] += B * u[0]; ghost[1] += B * u[1]; ghosts.push(ghost);
     const rng = mulberry32(seed + 200 + t); x = realStep(x, u, rng); path.push(x.slice()); t++; lastGap = Math.hypot(ghost[0] - x[0], ghost[1] - x[1]);
-    if (t >= TOT) { finished = true; finals.you = Math.hypot(x[0] - target[0], x[1] - target[1]); stepEl.innerHTML = '<span class="k">your run is over</span><div class="ask">You ended ' + finals.you.toFixed(2) + ' from the target. Now run the two planners on the same system and model.</div><p>Both planners optimize a twelve-step plan inside the learned model. One throws the plan away after each real step and plans again from where it actually is; the other trusts its first plan to the end.</p>'; } else text();
+    if (t >= TOT) { finished = true; finals.you = Math.hypot(x[0] - target[0], x[1] - target[1]); setStep('<span class="k">your run is over</span><div class="ask">You ended ' + finals.you.toFixed(2) + ' from the target. ' + (pick === null ? 'Now commit to a planner above; both then run on the same system and model.' : 'Run the two planners again on the same system and model.') + '</div><p>Both planners optimize a twelve-step plan inside the learned model. One throws the plan away after each real step and plans again from where it actually is; the other trusts its first plan to the end.</p>'); } else text();
     draw();
   });
-  document.getElementById("wmRestart").addEventListener("click", restart);
-  document.getElementById("wmPlanK1").addEventListener("click", () => { planPaths.k1 = runPlanner(1); const e = planPaths.k1[TOT]; finals.k1 = Math.hypot(e[0] - target[0], e[1] - target[1]); draw(); });
-  document.getElementById("wmPlanOnce").addEventListener("click", () => { planPaths.once = runPlanner(TOT); const e = planPaths.once[TOT]; finals.once = Math.hypot(e[0] - target[0], e[1] - target[1]); draw(); if (finals.k1 !== null) stepEl.innerHTML = '<span class="k">the comparison</span><div class="ask">Final distances: you ' + (finals.you === null ? '(unfinished)' : finals.you.toFixed(2)) + ', replanning planner ' + finals.k1.toFixed(2) + ', plan-once planner ' + finals.once.toFixed(2) + '.</div><p>The plan-once run is what a world model does without feedback: its errors compound for twenty steps. Replanning is cheap insurance against a wrong model, and your own clicking was a form of it. Switch the model error to large and run both again.</p>'; });
+  document.getElementById("wmRestart").addEventListener("click", () => restart(true));
+  function compare() { if (finals.k1 === null || finals.once === null) return; setStep('<span class="k">the comparison at error ' + err.toFixed(2) + '</span><div class="ask">Final distances: you ' + (finals.you === null ? '(unfinished)' : finals.you.toFixed(2)) + ', replanning planner ' + finals.k1.toFixed(2) + ', plan-once planner ' + finals.once.toFixed(2) + '.</div><p>The plan-once run is what a world model does without feedback: its errors compound for twenty steps. Replanning is cheap insurance against a wrong model, and your own clicking was a form of it. Drag the handle to a different error and run both again.</p>'); }
+  document.getElementById("wmPlanK1").addEventListener("click", () => { if (pick === null) return; planPaths.k1 = runPlanner(1); const e = planPaths.k1[TOT]; finals.k1 = Math.hypot(e[0] - target[0], e[1] - target[1]); draw(); compare(); });
+  document.getElementById("wmPlanOnce").addEventListener("click", () => { if (pick === null) return; planPaths.once = runPlanner(TOT); const e = planPaths.once[TOT]; finals.once = Math.hypot(e[0] - target[0], e[1] - target[1]); draw(); compare(); });
   quiz(document.getElementById("wmQuiz"), { q: "A learned world model is 5 % wrong per step. Planning twenty steps ahead inside it and executing the plan blind is risky because", options: ["The planner is too slow", "Errors compound: after twenty steps the imagined state can be far from the real one, and the plan was made for the imagined one", "Twenty steps is too short a horizon"], answer: 1, why: "Model error accumulates multiplicatively through the rollout. Replanning after each observation resets the rollout to the true state, which is why model-based control is almost always receding-horizon in practice." });
   window.addEventListener("themechange", draw);
-  newFit(); restart();
+  newFit(); restart(true);
 })();
 
 /* ================= 5. DECIDE WHEN TO RETRAIN ================= */
 (function drift() {
   const M = 36, base = 0.20, band = 1.3, alarm = 0.5, LAG = 3, CR = 3, CO = 2, CAP = 2.0;
   let seed = 7, m0, rate, g, month = 0, timer = null, running = false, retrains = [], speed = 350, finishedRun = false;
+  // the class runs four months and answers the prompt once; the clock pauses at month 4 until the student commits
+  let pick = null, paused = false;
+  const HW = '<p class="hw">In class: start the clock, watch the first four months and answer the prompt; the remaining months and the other deployments are this week\'s assignment.</p>', PROMPT = '<p class="prompt">Retrain now or wait a month? Costs are 3 and 2.</p>';
+  function head() { return HW + PROMPT + (pick === null ? '' : '<div class="ask ' + (pick === 'wait' ? 'ok' : 'no') + '">' + (pick === 'wait' ? 'Right. In four months the drift index has stayed under 0.5 and the first label is in band, so the site has shown no change. A retraining now would pay 3 for a model fitted to the same inputs.' : 'No. In four months the drift index has stayed under 0.5 and the first label is in band, so the site has shown no change. The 3 bought a model fitted to the same inputs. Waiting costs 2 only for months the model is out of band, and none has occurred.') + ' The alarm says when a change begins; the right moment to retrain comes after it has run its course.</div>'); }
   const cal = document.getElementById("drCal"), stepEl = document.getElementById("drStep");
-  function setup() { const rng = mulberry32(seed); m0 = 4 + Math.floor(rng() * 11); rate = 0.35 + rng() * 0.2; g = randn(rng, 2 * (M + 2)); month = 0; retrains = []; running = false; finishedRun = false; if (timer) clearTimeout(timer); document.getElementById("drVerdict").hidden = true; document.getElementById("drRetrain").disabled = true; document.getElementById("drStart").disabled = false; render(); }
+  function setup() { const rng = mulberry32(seed); m0 = 4 + Math.floor(rng() * 11); rate = 0.35 + rng() * 0.2; g = randn(rng, 2 * (M + 2)); month = 0; retrains = []; running = false; finishedRun = false; if (timer) clearTimeout(timer); pick = null; paused = false; document.getElementById("drVerdict").hidden = true; document.getElementById("drRetrain").disabled = true; document.getElementById("drStart").disabled = false; stepEl.innerHTML = head() + '<span class="k">month 0</span><p>Press Start the clock. The months fill in one by one and the clock pauses after the fourth for your answer.</p>'; render(); }
   // the site changes by S(t), linear after the change point and then complete; a model retrained at r is fit to S(r), so the shift it sees is S(t) - S(r)
   function S(t) { return Math.min(CAP, Math.max(0, t - m0) * rate); }
   function shiftAt(t, rs) { let ref = null; for (const r of rs) if (r <= t && (ref === null || r > ref)) ref = r; return S(t) - (ref === null ? 0 : S(ref)); }
@@ -585,21 +662,25 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   function tick() {
     month++; render();
     if (month >= M) { running = false; finish(); return; }
+    if (month === 4 && pick === null) { paused = true; document.getElementById("drRetrain").disabled = true; stepEl.innerHTML = head() + '<div class="bet"><button id="drPickNow">retrain now</button><button id="drPickWait">wait a month</button></div><span class="k">month 4, clock paused</span><p>Four months are in. Read the tiles: the top halves show the drift index, the one labelled bottom half shows the error. Choose, and the clock resumes.</p>'; document.getElementById("drPickNow").addEventListener("click", () => commit("now")); document.getElementById("drPickWait").addEventListener("click", () => commit("wait")); return; }
     timer = setTimeout(tick, speed);
   }
+  function commit(v) { if (!paused) return; pick = v; paused = false; if (v === "now") retrains.push(month - 1); render(); document.getElementById("drRetrain").disabled = false; stepEl.innerHTML = head() + onCall(); timer = setTimeout(tick, speed); }
+  function onCall() { return '<span class="k">on call</span><p>Months are filling in. The top half of a tile turns orange when the input drift index passes 0.5. The bottom half stays grey until the labels for that month arrive, three months later.</p><p>Retrain too early and you pay 3 for nothing, and a change still under way will set the alarm off again; too late and you pay 2 for every month the model is out of band.</p>'; }
   function finish() {
     finishedRun = true; document.getElementById("drRetrain").disabled = true;
     const mine = cost(retrains, M - 1), inp = simulate("input"), errp = simulate("error"), ci = cost(inp, M - 1), ce = cost(errp, M - 1), none = cost([], M - 1);
     const v = document.getElementById("drVerdict"); v.hidden = false; const bestC = Math.min(mine.c, ci.c, ce.c); v.className = "ask " + (mine.c <= bestC ? "ok" : (mine.c <= ce.c ? "" : "no"));
     v.innerHTML = "Your three years cost <b>" + mine.c + "</b> (" + retrains.length + " retrainings, " + mine.out + " months out of band). Acting on the input monitor would have cost " + ci.c + " (retrained at month" + (inp.length === 1 ? " " : "s ") + inp.map(r => r + 1).join(", ") + "); waiting for the error monitor would have cost " + ce.c + "; never retraining, " + none.c + ". The site started changing in month " + (m0 + 1) + ".";
-    stepEl.innerHTML = '<span class="k">debrief</span><p>The error monitor is the ground truth, and it is always three months late, so its policy pays for the months it could not see. The input monitor sees the change the month it starts, and its policy pays instead for retraining while the change is still under way. On this deployment the input policy ' + (ci.c < ce.c ? 'won by ' + (ce.c - ci.c) : (ci.c === ce.c ? 'tied the error policy' : 'lost by ' + (ci.c - ce.c))) + '. A single well-timed retraining, a few months after the first alarm, beats both; the alarm tells you the change has begun, not that it has finished. Press New deployment: the change point and the rate move.</p>';
+    stepEl.innerHTML = head() + '<span class="k">debrief</span><p>The error monitor is the ground truth, and it is always three months late, so its policy pays for the months it could not see. The input monitor sees the change the month it starts, and its policy pays instead for retraining while the change is still under way. On this deployment the input policy ' + (ci.c < ce.c ? 'won by ' + (ce.c - ci.c) : (ci.c === ce.c ? 'tied the error policy' : 'lost by ' + (ci.c - ce.c))) + '. A single well-timed retraining, a few months after the first alarm, beats both; the alarm tells you the change has begun and says nothing about when it ends. Press New deployment: the change point and the rate move.</p>';
   }
-  document.getElementById("drStart").addEventListener("click", () => { if (running || finishedRun) return; running = true; document.getElementById("drStart").disabled = true; document.getElementById("drRetrain").disabled = false; stepEl.innerHTML = '<span class="k">on call</span><p>Months are filling in. The top half of a tile turns orange when the input drift index passes 0.5. The bottom half stays grey until the labels for that month arrive, three months later.</p><p>Retrain too early and you pay 3 for nothing, and a change still under way will set the alarm off again; too late and you pay 2 for every month the model is out of band.</p>'; tick(); });
-  document.getElementById("drRetrain").addEventListener("click", () => { if (!running) return; const t = month - 1; if (!retrains.includes(t)) retrains.push(t); render(); });
+  document.getElementById("drStart").addEventListener("click", () => { if (running || finishedRun) return; running = true; document.getElementById("drStart").disabled = true; document.getElementById("drRetrain").disabled = false; stepEl.innerHTML = head() + onCall(); tick(); });
+  document.getElementById("drRetrain").addEventListener("click", () => { if (!running || paused) return; const t = month - 1; if (!retrains.includes(t)) retrains.push(t); render(); });
   document.getElementById("drNew").addEventListener("click", () => { seed += 1; setup(); });
   document.getElementById("drSlow").addEventListener("click", () => { speed = 900; document.getElementById("drSlow").className = "badge done"; document.getElementById("drFast").className = "badge"; });
   document.getElementById("drFast").addEventListener("click", () => { speed = 350; document.getElementById("drSlow").className = "badge"; document.getElementById("drFast").className = "badge done"; });
   quiz(document.getElementById("drQuiz"), { q: "Why monitor the inputs at all, when the error is what you actually care about?", options: ["Inputs are cheaper to store", "Error needs labels, which arrive late or never; the input distribution is observable the moment data comes in", "Input drift always causes error drift"], answer: 1, why: "The error monitor is the right target and the wrong instrument: in most deployments labels lag by weeks or months. Input drift is a leading indicator; it can raise false alarms, since not every shift hurts the model, which is why the two monitors are run together." });
+  window.addEventListener("themechange", render);
   setup();
 })();
 
@@ -618,6 +699,46 @@ show(location.hash.slice(1) || "contrastive", false);
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
 if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
 new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+
+<script>
+/* Classroom mode (shared patch): larger canvas text through the font setter, prose hidden, redraw via themechange. */
+(function () {
+  var desc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "font");
+  var on = false;
+  function scale(v) {
+    return String(v).replace(/(\d+(?:\.\d+)?)px/, function (m, n) {
+      var s = parseFloat(n); var t = s < 13 ? s + 5 : Math.round(s * 1.35);
+      return t + "px";
+    });
+  }
+  Object.defineProperty(CanvasRenderingContext2D.prototype, "font", {
+    configurable: true,
+    get: function () { return desc.get.call(this); },
+    set: function (v) { desc.set.call(this, on ? scale(v) : v); }
+  });
+  function apply(state) {
+    on = !!state;
+    document.body.classList.toggle("classroom", on);
+    var b = document.getElementById("classroomBtn");
+    if (b) { b.textContent = on ? "Classroom: on" : "Classroom"; b.setAttribute("aria-pressed", on ? "true" : "false"); }
+    try { localStorage.setItem("ce_classroom", on ? "1" : "0"); } catch (e) {}
+    window.dispatchEvent(new Event("themechange"));
+    window.dispatchEvent(new Event("resize"));
+  }
+  window.addEventListener("DOMContentLoaded", function () {
+    var b = document.createElement("button");
+    b.id = "classroomBtn"; b.type = "button"; b.title = "Large text for a projector; hides the explanatory prose (key: c)";
+    b.textContent = "Classroom";
+    b.addEventListener("click", function () { apply(!on); });
+    document.body.appendChild(b);
+    var saved = "0"; try { saved = localStorage.getItem("ce_classroom") || "0"; } catch (e) {}
+    if (saved === "1" || /[?&]classroom\b/.test(location.search)) apply(true);
+    window.addEventListener("keydown", function (ev) {
+      if (ev.key === "c" && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) apply(!on);
+    });
+  });
 })();
 </script>
 </body>
