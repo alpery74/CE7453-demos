@@ -178,7 +178,7 @@ canvas.pen { cursor: crosshair; }
 <!-- ============ 1. DRILL THE SITE ============ -->
 <section class="demo active" id="drill" role="tabpanel">
   <h2>Drill the site: spend eight boreholes on two kinds of not knowing</h2>
-  <p class="lead">A pier goes in at 70 m along the transect and the design needs the undrained strength there to within 5 kPa. You have eight boreholes. Type a guess at how many holes the pier needs, then click the ground to drill. Two tanks on the right hold the two uncertainties; watch which one your boreholes drain.</p>
+  <p class="lead">A pier goes in at 70 m along the transect and the design needs the undrained strength there to within 5 kPa. You have eight boreholes. Type a guess at how many holes the pier needs, then click the ground to drill. Two tanks on the right hold the two uncertainties; watch which one your boreholes drain. The kernel lengthscale, how far one hole speaks for the ground around it, is a handle under the transect: drag it and the whole band breathes.</p>
   <div class="stage">
     <div class="plot"><canvas id="drPlot" class="hit" width="1200" height="560"></canvas></div>
     <div class="side">
@@ -190,10 +190,13 @@ canvas.pen { cursor: crosshair; }
           <dt>band on the true strength at 70 m</dt><dd id="drBandF">-</dd>
           <dt>band on the next reading at 70 m</dt><dd id="drBandY">-</dd>
           <dt>mean band over the transect</dt><dd id="drMean">-</dd>
+          <dt>kernel lengthscale (drag it)</dt><dd id="drEll">15 m</dd>
+          <dt>true field outside the band</dt><dd id="drOut">-</dd>
         </dl>
         <div id="drBadges" style="margin-top:8px"></div>
       </div>
       <div class="panel quiz" id="drQuiz"></div>
+      <div class="panel quiz" id="drQuiz2"></div>
     </div>
   </div>
   <div class="caption">
@@ -437,13 +440,20 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
 
 /* ================= 1. DRILL THE SITE ================= */
 (function drill() {
-  const ELL = 15, SF = 15, SN = 5, MEAN = 60, Z90 = 1.645, PIER = 70, BUDGET = 8;
+  const SF = 15, SN = 5, MEAN = 60, Z90 = 1.645, PIER = 70, BUDGET = 8;
+  const ELL0 = 15, ELL_LO = 3, ELL_HI = 40;
+  let ELL = ELL0;
   const truth = x => MEAN + 12 * Math.sin(x / 9) + 8 * Math.sin(x / 23 + 1) + 5 * Math.cos(x / 5.5);
   const board = new Board(document.getElementById("drPlot")), stepEl = document.getElementById("drStep");
   const X0 = 70, X1 = 980, Y0 = 70, Y1 = 470, SMIN = 10, SMAX = 110;
   const px = x => X0 + (X1 - X0) * x / 100, py = s => Y1 - (Y1 - Y0) * (s - SMIN) / (SMAX - SMIN);
   const GRID = []; for (let i = 0; i <= 100; i++) GRID.push(i);
   let obs = [], rng = mulberry32(11), twice = false, revealed = false, guess = null, verdict = null;
+  let dragEll = false, movedEll = false;
+  const SL = { x0: 210, x1: 700, y: 528 };
+  const slx = v => SL.x0 + (v - ELL_LO) / (ELL_HI - ELL_LO) * (SL.x1 - SL.x0);
+  const slv = x => Math.max(ELL_LO, Math.min(ELL_HI, ELL_LO + (x - SL.x0) / (SL.x1 - SL.x0) * (ELL_HI - ELL_LO)));
+  const onSlider = (mx, my) => mx >= SL.x0 - 26 && mx <= SL.x1 + 26 && my >= SL.y - 20 && my <= SL.y + 20;
   function posterior() {
     const n = obs.length, mean = GRID.map(() => MEAN), sd = GRID.map(() => SF);
     if (n === 0) return { mean, sd };
@@ -470,6 +480,19 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
     board.line([[px(PIER), Y0 - 10], [px(PIER), Y1]], css("--orange"), 1, [2, 4]); board.label("pier at 70 m", px(PIER) + 4, Y0 + 6, css("--orange"), "left", 12);
     // boreholes
     obs.forEach(o => { board.line([[px(o.x), Y0 - 10], [px(o.x), py(o.y)]], css("--ink"), 1, [3, 3]); ctx.fillStyle = css("--ink"); ctx.fillRect(px(o.x) - 4, py(o.y) - 4, 8, 8); });
+    // one lengthscale, drawn as a distance on the transect itself
+    const ry = Y0 - 34, rx = px(0), rw = px(ELL) - px(0);
+    board.line([[rx, ry], [rx + rw, ry]], css("--orange"), 2);
+    board.line([[rx, ry - 4], [rx, ry + 4]], css("--orange"), 2); board.line([[rx + rw, ry - 4], [rx + rw, ry + 4]], css("--orange"), 2);
+    board.label("one lengthscale, " + ELL.toFixed(0) + " m: how far one hole speaks for the ground", rx + rw + 8, ry + 4, css("--muted"), "left", 11);
+    // the lengthscale handle
+    board.label("kernel lengthscale", SL.x0 - 20, SL.y + 4, css("--ink"), "right", 12);
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(SL.x0, SL.y); ctx.lineTo(SL.x1, SL.y); ctx.stroke();
+    ctx.strokeStyle = css("--orange"); ctx.beginPath(); ctx.moveTo(SL.x0, SL.y); ctx.lineTo(slx(ELL), SL.y); ctx.stroke(); ctx.lineCap = "butt"; ctx.lineWidth = 1;
+    [5, 15, 30].forEach(v => { ctx.strokeStyle = css("--grey"); ctx.beginPath(); ctx.moveTo(slx(v), SL.y + 7); ctx.lineTo(slx(v), SL.y + 13); ctx.stroke(); board.label(v + " m", slx(v), SL.y + 27, css("--muted"), "center", 11, true); });
+    board.label("rough", SL.x0, SL.y - 14, css("--muted"), "center", 11); board.label("smooth", SL.x1, SL.y - 14, css("--muted"), "center", 11);
+    ctx.fillStyle = css("--panel"); ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(slx(ELL), SL.y, 11, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); ctx.lineWidth = 1;
+    board.label(ELL.toFixed(0) + " m", SL.x1 + 30, SL.y + 4, css("--orange"), "left", 13, true);
     // tanks
     const meanSd = P.sd.reduce((s, v) => s + v, 0) / P.sd.length;
     const tank = (x, label, level, color, note) => { const tw = 70, th = 300, ty = 120; ctx.strokeStyle = css("--line"); ctx.strokeRect(x, ty, tw, th); ctx.fillStyle = alpha(color, 0.75); const h = th * Math.min(1, level / 15); ctx.fillRect(x + 1, ty + th - h, tw - 2, h - 1); board.label(label, x + tw / 2, ty - 10, css("--ink"), "center", 12); board.label(level.toFixed(1) + " kPa", x + tw / 2, ty + th + 18, css("--ink"), "center", 12, true); board.label(note, x + tw / 2, ty + th + 34, css("--muted"), "center", 11); };
@@ -481,27 +504,45 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
     document.getElementById("drBandF").textContent = "+/- " + (Z90 * sdF).toFixed(1) + " kPa";
     document.getElementById("drBandY").textContent = "+/- " + (Z90 * sdY).toFixed(1) + " kPa";
     document.getElementById("drMean").textContent = "+/- " + (Z90 * meanSd).toFixed(1) + " kPa";
+    document.getElementById("drEll").textContent = ELL.toFixed(0) + " m";
+    let outside = 0; GRID.forEach((x, g) => { if (Math.abs(truth(x) - P.mean[g]) > Z90 * P.sd[g]) outside++; });
+    const outPct = 100 * outside / GRID.length;
+    document.getElementById("drOut").textContent = obs.length ? outPct.toFixed(0) + " % of the transect" : "-";
     const met = Z90 * sdF <= 5;
     badges(document.getElementById("drBadges"), [{ text: "pier strength within 5 kPa", done: met }, { text: "a spot drilled twice", done: twice }, { text: "budget spent", done: obs.length >= BUDGET }]);
     if (met && verdict === null) { const near = obs.filter(o => Math.abs(o.x - PIER) <= 5).length; const ok = guess === 3 || guess === near; verdict = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + 'You guessed ' + guess + '; the band fell under 5 kPa with ' + near + ' hole' + (near === 1 ? '' : 's') + ' within 5 m of the pier and ' + obs.length + ' in all. At the pier itself one reading gives +/- 7.8, two give 5.7 and three give 4.7 kPa: each repeat divides the noise variance by the count, so three holes are enough.</div>'; }
     let txt = '<p><b>How many holes at the pier bring the 90 percent band under 5 kPa? Guess first.</b></p>';
     if (guess === null) txt += '<p><input type="number" id="drGuess" min="1" max="8" step="1" style="width:70px;font:inherit;padding:4px 6px" aria-label="your guess"> <button id="drLock" style="font:inherit;font-size:14px;padding:5px 10px;border-radius:6px;border:1px solid var(--line);background:var(--blue);color:#fff;cursor:pointer">Lock in</button></p><p>Drilling opens once the guess is locked in. The blue band is the prior: 15 kPa either way, everywhere. Both tanks are full.</p>';
     else if (obs.length === 0) txt += '<span class="k">guess ' + guess + ', before the first hole</span><p>The blue band is the prior: 15 kPa either way, everywhere. Both tanks are full. Drill near the pier first and watch what each hole does to each tank.</p>';
-    else if (!met && obs.length < BUDGET) txt += '<span class="k">' + obs.length + ' drilled</span><p>The blue band at the pier is +/- ' + (Z90 * sdF).toFixed(1) + ' kPa; the design wants 5. The grey band is +/- ' + (Z90 * sdY).toFixed(1) + ' and no number of holes brings it under +/- ' + (Z90 * SN).toFixed(1) + '. ' + (twice ? 'Your repeated hole read a different number: that difference is the aleatoric tank, and it did not move.' : 'Drill the same spot a second time to see the two bands part company.') + '</p>';
-    else if (met) txt += '<span class="k">target met</span><p>The true strength at the pier is pinned to +/- ' + (Z90 * sdF).toFixed(1) + ' kPa with ' + obs.length + ' holes. That was an epistemic target, so boreholes could reach it. A target of +/- 5 on a single reading would have been aleatoric and out of reach at any budget.</p>';
+    else if (!met && obs.length < BUDGET) txt += '<span class="k">' + obs.length + ' drilled</span><p>The blue band at the pier is +/- ' + (Z90 * sdF).toFixed(1) + ' kPa; the design wants 5. The grey band is +/- ' + (Z90 * sdY).toFixed(1) + ' and no number of holes brings it under +/- ' + (Z90 * SN).toFixed(1) + '. ' + (twice ? 'Your repeated hole read a different number: that difference is the aleatoric tank, and it did not move.' : 'Drill the same spot a second time to see the two bands part company.') + '</p>' + ellNote(outPct);
+    else if (met) txt += ellNote(outPct) + '<span class="k">target met</span><p>The true strength at the pier is pinned to +/- ' + (Z90 * sdF).toFixed(1) + ' kPa with ' + obs.length + ' holes. That was an epistemic target, so boreholes could reach it. A target of +/- 5 on a single reading would have been aleatoric and out of reach at any budget.</p>';
     else txt += '<span class="k">budget spent</span><p>The pier band is +/- ' + (Z90 * sdF).toFixed(1) + ' kPa. The holes went elsewhere; the epistemic tank drained where you drilled, not where the design needed it. Start over and put three or four holes at the pier.</p>';
     if (verdict) txt += verdict;
     if (obs.length > 0) txt += '<p class="k">the dashed orange line is the true field, shown once you have drilled.</p>';
     stepEl.innerHTML = txt;
   }
+  function ellNote(outPct) {
+    if (!obs.length) return '';
+    const far = ELL >= 28, near = ELL <= 8;
+    const head = '<p><b>Lengthscale ' + ELL.toFixed(0) + ' m.</b> ';
+    if (far) return head + 'A long lengthscale assumes smooth ground, so each hole narrows the band far from itself and the whole transect looks settled after three or four holes. Check the dashed orange truth: ' + outPct.toFixed(0) + ' percent of it now falls outside the 90 percent band, which should be about 10. A band this confident is only as good as the smoothness you assumed.</p>';
+    if (near) return head + 'A short lengthscale assumes rough ground: a hole barely informs the metre beside it, the band springs back between holes, and eight holes no longer cover 100 m. Nothing about the ground changed, only what you claimed to know about it. The truth is outside the band for ' + outPct.toFixed(0) + ' percent of the transect.</p>';
+    return head + 'The truth sits outside the 90 percent band for ' + outPct.toFixed(0) + ' percent of the transect; about 10 is what an honest band gives. Drag the handle to 5 m and to 35 m and watch that number, and the band, move without a single new borehole.</p>';
+  }
   stepEl.addEventListener("click", ev => { if (!ev.target || ev.target.id !== "drLock") return; const inp = document.getElementById("drGuess"); const v = parseInt(inp && inp.value, 10); if (!(v >= 1 && v <= 8)) { inp.focus(); return; } guess = v; draw(); });
   stepEl.addEventListener("keydown", ev => { if (ev.key === "Enter" && ev.target && ev.target.id === "drGuess") { const b = document.getElementById("drLock"); if (b) b.click(); } });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (!onSlider(mx, my)) return; dragEll = true; movedEll = false; ELL = slv(mx); draw(); try { board.c.setPointerCapture(ev.pointerId); } catch (e) {} ev.preventDefault(); });
+  board.c.addEventListener("pointermove", ev => { if (!dragEll) return; const [mx] = board.pos(ev); const v = slv(mx); if (Math.abs(v - ELL) < 0.05) return; ELL = v; movedEll = true; draw(); });
+  const endEll = () => { if (dragEll) { dragEll = false; setTimeout(() => { movedEll = false; }, 0); } };
+  board.c.addEventListener("pointerup", endEll); board.c.addEventListener("pointercancel", endEll);
   board.c.addEventListener("click", ev => {
-    const [mx, my] = board.pos(ev); if (guess === null || mx < X0 || mx > X1 || my < Y0 - 20 || my > Y1 + 10 || obs.length >= BUDGET) return;
+    const [mx, my] = board.pos(ev); if (movedEll || onSlider(mx, my)) return;
+    if (guess === null || mx < X0 || mx > X1 || my < Y0 - 20 || my > Y1 + 10 || obs.length >= BUDGET) return;
     const x = Math.round((mx - X0) / (X1 - X0) * 100); if (obs.some(o => Math.abs(o.x - x) <= 2)) twice = true;
     obs.push({ x, y: truth(x) + SN * gauss(rng) }); revealed = true; draw();
   });
-  document.getElementById("drReset").addEventListener("click", () => { obs = []; twice = false; revealed = false; guess = null; verdict = null; rng = mulberry32(11 + Math.floor(Math.random() * 1000)); draw(); });
+  document.getElementById("drReset").addEventListener("click", () => { obs = []; twice = false; revealed = false; guess = null; verdict = null; ELL = ELL0; rng = mulberry32(11 + Math.floor(Math.random() * 1000)); draw(); });
+  quiz(document.getElementById("drQuiz2"), { q: "Dragging the lengthscale from 15 m to 35 m narrows the band everywhere without drilling a single new hole. What has actually improved?", options: ["The ground is better known: the survey is cheaper than it looked", "Nothing was measured; a stronger smoothness assumption was asserted, and the band is only honest if the ground really is that smooth", "The sensor noise fell"], answer: 1, why: "The lengthscale is a prior belief about how fast the strength varies, not a measurement. Lengthening it lets one hole speak for more ground, which narrows the band and also makes it wrong if the ground varies faster than assumed. The share of the true field falling outside the band is the check: it should sit near 10 percent for a 90 percent band." });
   quiz(document.getElementById("drQuiz"), { q: "You drill the pier location four times and the readings are 61, 68, 55 and 64 kPa. What do the four holes buy you?", options: ["A narrower band on the next reading at the pier", "A narrower band on the true strength at the pier; the spread of readings is the noise and stays", "Nothing, since the readings disagree"], answer: 1, why: "Repeated readings average the sensor noise out of the estimate of the true strength, so the epistemic band shrinks like one over the square root of four. The next reading still carries its own noise, so the band on it never drops below the sensor's spread." });
   window.addEventListener("themechange", draw); draw();
 })();
