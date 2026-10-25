@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Week 3 Demos</title>
-<meta name="description" content="CE 7453 Week 3: carve a liquefaction chart into a decision tree, stack bootstrap trees like transparencies, run the boosting loop on girder deflections by hand, shuffle a column to read permutation importance, run k-means and a mixture on a year of bridge vibration, drag a damaged reading through the thin side of the Mahalanobis ellipse, and build a soil profile out of hidden units.">
+<meta name="description" content="CE 7453 Week 3: carve a liquefaction chart into a decision tree, stack bootstrap trees like transparencies, run the boosting loop on girder deflections by hand, shuffle a column to read permutation importance, run k-means and a mixture on a year of bridge vibration, rotate an axis through two strain gauges to find the first principal component, drag a damaged reading through the thin side of the Mahalanobis ellipse, build a soil profile out of hidden units, and run the chain rule backwards through a three-node chain.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -97,6 +97,23 @@ section.demo.active { display: block; }
 .caption p { margin: 0 0 6px; }
 footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* classroom mode and touch (shared patch) */
+canvas { touch-action: none; -webkit-user-select: none; user-select: none; }
+#classroomBtn { position: fixed; right: 14px; bottom: 14px; z-index: 50; font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; opacity: 0.85; }
+#classroomBtn:hover { opacity: 1; color: var(--ink); }
+body.classroom #classroomBtn { background: var(--blue); border-color: var(--blue); color: #fff; }
+body.classroom header, body.classroom .lead, body.classroom .caption, body.classroom footer, body.classroom .ask-note { display: none; }
+body.classroom nav { padding-block: 6px 4px; }
+body.classroom nav button { font-size: 17px; padding: 9px 16px; }
+body.classroom main { padding-block: 0 8px; }
+body.classroom .demo h2 { font-size: 26px; margin: 4px 0 8px; }
+body.classroom .step, body.classroom .ask, body.classroom .quiz, body.classroom .quiz button, body.classroom .readout, body.classroom .ctl label, body.classroom .choice button, body.classroom .bet button, body.classroom .btns button, body.classroom .legend, body.classroom .board { font-size: 18px; }
+body.classroom .step .k, body.classroom .ctl .hint, body.classroom .badge { font-size: 15px; }
+body.classroom .panel h3 { font-size: 15px; }
+body.classroom .stage { grid-template-columns: minmax(0, 1fr) 400px; }
+body.classroom .grid { grid-template-columns: minmax(0, 1fr) 360px; }
+@media (max-width: 1100px) { body.classroom .stage, body.classroom .grid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -110,6 +127,20 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 .step { font-size: 15px; line-height: 1.5; }
 .step .k { font-family: var(--mono); font-size: 12.5px; color: var(--blue); }
 .step p { margin: 6px 0; }
+.step .prompt { margin: 0 0 8px; font-weight: 500; color: var(--ink); }
+.gate { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; align-items: center; }
+.gate button { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.gate button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.gate button:disabled { opacity: 0.5; cursor: default; }
+.gate input[type="number"] { font: inherit; font-family: var(--mono); font-size: 14px; width: 96px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.gate span { font-size: 13.5px; color: var(--muted); }
+.btns button:disabled { opacity: 0.5; cursor: default; }
+.sheet th.twin { color: var(--orange); border-bottom-color: var(--orange); }
+.sheet td.twin { color: var(--orange); }
+.chin { display: grid; grid-template-columns: 72px 1fr 44px; gap: 8px; align-items: center; margin: 6px 0; font-size: 14px; }
+.chin label { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+.chin input { font: inherit; font-family: var(--mono); font-size: 14px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); min-width: 0; width: 100%; }
+.chin span { font-family: var(--mono); font-size: 12.5px; } .chin span.ok { color: #2E7D5B; } .chin span.no { color: var(--red); }
 .ask { border-left: 3px solid var(--blue); padding: 8px 12px; margin: 10px 0; background: var(--blue-soft); border-radius: 0 6px 6px 0; font-size: 15px; }
 .ask.ok { border-color: #2E7D5B; background: #E3F2EA; }
 .ask.no { border-color: var(--red); background: #F9E4E2; }
@@ -156,8 +187,10 @@ canvas.grab { cursor: grab; }
   <button role="tab" data-tab="boost" aria-selected="false">Readjust on the residuals<span class="slide">slide 6</span></button>
   <button role="tab" data-tab="credit" aria-selected="false">Shuffle a column<span class="slide">slide 9</span></button>
   <button role="tab" data-tab="kmeans" aria-selected="false">Assign, update, repeat<span class="slide">slides 11, 12</span></button>
-  <button role="tab" data-tab="novelty" aria-selected="false">The thin side of the ellipse<span class="slide">slides 13, 14</span></button>
+  <button role="tab" data-tab="pca" aria-selected="false">The rotating axis<span class="slide">slide 13</span></button>
+  <button role="tab" data-tab="novelty" aria-selected="false">The thin side of the ellipse<span class="slide">slide 14</span></button>
   <button role="tab" data-tab="bumps" aria-selected="false">Steps into bumps<span class="slide">slides 17, 19</span></button>
+  <button role="tab" data-tab="chain" aria-selected="false">The chain rule on a chain<span class="slide">slide 20</span></button>
 </nav>
 
 <main>
@@ -165,7 +198,7 @@ canvas.grab { cursor: grab; }
 <!-- ============ 1. CARVE: build a decision tree by cutting ============ -->
 <section class="demo active" id="carve" role="tabpanel">
   <h2>Carve the chart: cut the liquefaction cases into regions, then watch the algorithm's tree rearrange</h2>
-  <p class="lead">Ninety case histories from earthquake sites: blow count across, cyclic stress ratio up, red liquefied, blue did not. Choose a cut direction and click inside a region to cut it there; the tree on the right grows with every cut, like a design chart drawn from data. Thirty held-back cases score it. Then let the greedy algorithm choose its own cuts, and nudge the data to see how much a tree can change.</p>
+  <p class="lead">Ninety case histories from earthquake sites: blow count across, cyclic stress ratio up, red liquefied, blue did not. Choose a cut direction and click inside a region to cut it there; the tree on the right grows with every cut, like a design chart drawn from data. Thirty held-back cases score it. Commit to a prediction, then let the greedy algorithm choose its own cuts and compare the two counts, and nudge the data to see how much a tree can change.</p>
   <div class="stage">
     <div class="plot two">
       <canvas id="ctPlane" class="hit" width="760" height="540"></canvas>
@@ -175,12 +208,13 @@ canvas.grab { cursor: grab; }
       <div class="panel step" id="ctStep"></div>
       <div class="panel">
         <div class="btns"><button id="ctV" aria-pressed="true">vertical cut</button><button id="ctH" aria-pressed="false">horizontal cut</button></div>
-        <div class="btns" style="margin-top:8px"><button class="primary" id="ctCart">Let the algorithm cut</button><button id="ctNudge">Nudge the data</button><button id="ctClear">Clear</button></div>
+        <div class="btns" style="margin-top:8px"><button class="primary" id="ctCart" disabled>Let the algorithm cut</button><button id="ctNudge" disabled>Nudge the data</button><button id="ctClear">Clear</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>leaves</dt><dd id="ctLeaves">1</dd>
           <dt>training accuracy</dt><dd id="ctTr">-</dd>
-          <dt>held-out accuracy</dt><dd id="ctTe">-</dd>
-          <dt>algorithm's tree, held-out</dt><dd id="ctCartTe">-</dd>
+          <dt>held-out cases wrong, your carving</dt><dd id="ctMyErr">-</dd>
+          <dt>held-out cases wrong, the algorithm</dt><dd id="ctCartErr">-</dd>
+          <dt>algorithm's tree, held-out accuracy</dt><dd id="ctCartTe">-</dd>
           <dt>cuts that moved after the nudge</dt><dd id="ctMoved">-</dd>
         </dl>
       </div>
@@ -195,17 +229,20 @@ canvas.grab { cursor: grab; }
 <!-- ============ 2. FOREST: bagging as stacked transparencies ============ -->
 <section class="demo" id="forest" role="tabpanel">
   <h2>Stack the transparencies: one deep tree is jumpy, the average of many is not</h2>
-  <p class="lead">Settlement of a footing against applied load, sixty tests. One deep regression tree fitted to a bootstrap resample is a jagged staircase. Click to add trees: each new one is drawn faintly, like a transparency laid on the stack, and the bold line is their average. Watch the scatter between trees shrink while a shared mistake, past the heaviest test load, stays put.</p>
+  <p class="lead">Settlement of a footing against applied load, sixty tests. One deep regression tree fitted to a bootstrap resample is a jagged staircase. Each new tree is drawn faintly, like a transparency laid on the stack, and the bold line is their average. Pick the count at which you expect the average to settle, then step through 1, 2, 5, 10, 20 and 60 trees and watch the scatter between trees shrink while a shared mistake, past the heaviest test load, stays put.</p>
   <div class="stage">
     <div class="plot"><canvas id="rfPlot" class="hit" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel step" id="rfStep"></div>
       <div class="panel">
-        <div class="btns"><button class="primary" id="rfAdd">Add a tree</button><button id="rfTen">Add ten</button><button id="rfReset">Start over</button></div>
+        <h3>trees drawn</h3>
+        <div class="btns" id="rfCounts"><button data-n="1">1</button><button data-n="2">2</button><button data-n="5">5</button><button data-n="10">10</button><button data-n="20">20</button><button data-n="60">60</button></div>
+        <div class="btns" style="margin-top:8px"><button class="primary" id="rfAdd">Add a tree</button><button id="rfTen">Add ten</button><button id="rfReset">Start over</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>trees in the stack</dt><dd id="rfN">0</dd>
           <dt>held-out RMSE, the last single tree</dt><dd id="rfOne">-</dd>
           <dt>held-out RMSE, the average</dt><dd id="rfAvg">-</dd>
+          <dt>shift of the mean curve since the previous count</dt><dd id="rfShift">-</dd>
           <dt>spread between trees at 60 kN</dt><dd id="rfSpread">-</dd>
           <dt>error of the average beyond 100 kN</dt><dd id="rfBias">-</dd>
         </dl>
@@ -214,14 +251,14 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Each tree is grown to leaves of three points on a resample of the sixty tests, so it follows its own sample's noise; the resamples differ, so the trees disagree, and the disagreement averages away. The averaged variance falls to the correlated floor on slide 5, rho times the single-tree variance, which is why random forests also subsample features to lower rho. Beyond 100 kN no tree has data, so every tree returns its last leaf: a bias every transparency shares, and the average inherits it untouched.</p>
+    <p>Each tree is grown to leaves of three points on a resample of the sixty tests, so it follows its own sample's noise; the resamples differ, so the trees disagree, and the disagreement averages away. The shift readout is the root mean square change of the bold curve between two counts; once it drops under 0.3 mm, a fifth of the test noise, more trees change nothing a test could detect. The averaged variance falls to the correlated floor on slide 5, rho times the single-tree variance, which is why random forests also subsample features to lower rho. Beyond 100 kN no tree has data, so every tree returns its last leaf: a bias every transparency shares, and the average inherits it untouched.</p>
   </div>
 </section>
 
 <!-- ============ 3. BOOST: readjust on residuals ============ -->
 <section class="demo" id="boost" role="tabpanel">
   <h2>Readjust on the residuals: be the boosting loop, one stump at a time</h2>
-  <p class="lead">Mid-span deflection of a steel girder against deck temperature, a nonlinear record. The model starts as the plain mean. Below it are the residuals. Click a temperature on the residual strip to split there: the next stump takes the mean residual on each side, shrunk by the learning rate, and is added to the model. The algorithm's own best split is shown as a ghost after each of your choices. Keep going and watch the two error curves.</p>
+  <p class="lead">Mid-span deflection of a steel girder against deck temperature, a nonlinear record. The model starts as the plain mean. Below it are the residuals. Click a temperature on the residual strip to split there: the next stump takes the mean residual on each side, shrunk by the learning rate, and is added to the model. Only after your click does the algorithm's own best split for that round appear as a ghost, with the distance between the two. Keep going and watch the two error curves.</p>
   <div class="stage">
     <div class="plot"><canvas id="gbPlot" class="hit" width="1200" height="620"></canvas></div>
     <div class="side">
@@ -235,20 +272,21 @@ canvas.grab { cursor: grab; }
           <dt>training RMSE</dt><dd id="gbTr">-</dd>
           <dt>held-out RMSE</dt><dd id="gbTe">-</dd>
           <dt>best held-out so far, at round</dt><dd id="gbBest">-</dd>
+          <dt>your split against the ghost, last round</dt><dd id="gbGap">-</dd>
         </dl>
       </div>
       <div class="panel quiz" id="gbQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>Boosting is the surveyor's loop on slide 6: adjust, inspect the residuals, readjust. For squared loss the residual is the negative gradient of the loss, so each stump is a gradient step in function space, and the learning rate is its step size. Small steps need many rounds and overfit slowly; a rate of one fits the training points fast and the held-out curve turns up sooner. The ghost split is the greedy choice that minimizes the residual sum of squares; yours need not match it, and a worse split is simply a smaller step.</p>
+    <p>Boosting is the surveyor's loop on slide 6: adjust, inspect the residuals, readjust. For squared loss the residual is the negative gradient of the loss, so each stump is a gradient step in function space, and the learning rate is its step size. Small steps need many rounds and overfit slowly; a rate of one fits the training points fast and the held-out curve turns up sooner. The ghost split is the greedy choice that minimizes the residual sum of squares on the residuals you saw; yours need not match it, and a worse split is simply a smaller step.</p>
   </div>
 </section>
 
 <!-- ============ 4. CREDIT: permutation importance ============ -->
 <section class="demo" id="credit" role="tabpanel">
   <h2>Shuffle a column: permutation importance, and two columns that carry one signal</h2>
-  <p class="lead">Two hundred concrete mixes with their 28-day strength, and a nearest-neighbour model fitted to five columns. Click a column header to shuffle that column into noise on the held-out rows and read how far the error climbs; the bar underneath is that column's importance. Two columns, cement content and the water-cement ratio, carry nearly the same information. Remove one and watch the other's bar.</p>
+  <p class="lead">Two hundred concrete mixes with their 28-day strength, and a nearest-neighbour model fitted to five columns. Click a column header to shuffle that column into noise on the held-out rows and read how far the error climbs; then compute the importance of every column, the mean rise over five shuffles. Two columns, cement content and the water-cement ratio, carry nearly the same information. Choose one to remove and watch the other's bar.</p>
   <div class="stage">
     <div>
       <div class="panel" style="padding:10px 12px"><table class="sheet" id="piTable"></table>
@@ -257,7 +295,7 @@ canvas.grab { cursor: grab; }
     <div class="side">
       <div class="panel step" id="piStep"></div>
       <div class="panel">
-        <div class="btns"><button id="piTwin">Remove w/c ratio and refit</button><button id="piRestore">Restore it</button><button id="piReset">Unshuffle</button></div>
+        <div class="btns"><button class="primary" id="piCompute">Compute importance</button><button id="piRestore" disabled>Restore the removed column</button><button id="piReset">Start over</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>held-out RMSE, all columns intact</dt><dd id="piBase">-</dd>
           <dt>held-out RMSE, with the shuffle</dt><dd id="piNow">-</dd>
@@ -276,19 +314,21 @@ canvas.grab { cursor: grab; }
 <!-- ============ 5. KMEANS: assign, update, repeat ============ -->
 <section class="demo" id="kmeans" role="tabpanel">
   <h2>Assign, update, repeat: run k-means by hand on a year of bridge vibration data</h2>
-  <p class="lead">Each point is one day: the first natural frequency across, the damping ratio up, from a monitored bridge whose stiffness changes with the seasons. Click on the plane to place centroids, up to four. Then press assign to colour every day by its nearest centroid, and update to move each centroid to the mean of its days. Repeat until nothing moves, read the scatter, and try a different starting placement. Then let a Gaussian mixture give the clusters shape.</p>
+  <p class="lead">Each point is one day: the first natural frequency across, the damping ratio up, from a monitored bridge whose stiffness changes with the seasons. Click on the plane to place three centroids, then click the one you expect to move furthest. Press assign to colour every day by its nearest centroid, and update to move each centroid to the mean of its days. Repeat until nothing moves, read the scatter, and try a different starting placement. Then let a Gaussian mixture grow from the k-means result, one EM step at a time.</p>
   <div class="stage">
     <div class="plot"><canvas id="kmPlane" class="hit" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel step" id="kmStep"></div>
       <div class="panel">
         <div class="btns"><button class="primary" id="kmAssign" disabled>Assign</button><button id="kmUpdate" disabled>Update</button><button id="kmRun" disabled>Run to convergence</button></div>
-        <div class="btns" style="margin-top:8px"><button id="kmEM" disabled>Gaussian mixture from here</button><button id="kmClear">Clear centroids</button></div>
+        <div class="btns" style="margin-top:8px"><button id="kmEM" disabled>Gaussian mixture from here</button><button id="kmEMStep" disabled>Next EM step</button><button id="kmClear">Clear centroids</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>centroids K</dt><dd id="kmK">0</dd>
           <dt>iteration</dt><dd id="kmIt">0</dd>
           <dt>within-cluster scatter</dt><dd id="kmJ">-</dd>
           <dt>days that changed cluster last assign</dt><dd id="kmChanged">-</dd>
+          <dt>EM step</dt><dd id="kmEMn">-</dd>
+          <dt>days with a soft membership (under 0.9)</dt><dd id="kmSoft">-</dd>
           <dt>mixture log likelihood</dt><dd id="kmLL">-</dd>
         </dl>
       </div>
@@ -296,50 +336,77 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Every assign step and every update step lowers the within-cluster scatter, and the assignments can take only finitely many values, so the loop stops, but only at a local answer: start the centroids elsewhere and it can stop somewhere else, which is why slide 11 says to run several starts. The winter cluster here is elongated, because frequency and damping move together as the deck stiffens, and plain distance to a centroid cuts it badly. The mixture on slide 12 gives each cluster a covariance and each day a soft membership; its expectation-maximization loop is the same two steps with ellipses in place of circles.</p>
+    <p>Every assign step and every update step lowers the within-cluster scatter, and the assignments can take only finitely many values, so the loop stops, but only at a local answer: start the centroids elsewhere and it can stop somewhere else, which is why slide 11 says to run several starts. The winter cluster here is elongated, because frequency and damping move together as the deck stiffens, and plain distance to a centroid cuts it badly. The mixture on slide 12 gives each cluster a covariance and each day a soft membership; its expectation-maximization loop is the same two steps with ellipses in place of circles, and each step here is one E and one M, so the ellipses grow from the k-means circles while the memberships at the boundaries soften.</p>
+  </div>
+</section>
+
+<!-- ============ 5b. PCA: the rotating axis ============ -->
+<section class="demo" id="pca" role="tabpanel">
+  <h2>The rotating axis: principal components as the direction that holds the most variance</h2>
+  <p class="lead">About 150 readings from two strain gauges on the same bridge girder; the gauges respond to the same traffic, so the cloud is tilted. An axis passes through the mean. Drag its end to rotate it and lock in the angle where you think the projections spread the most. Then the variance of the projections appears as a fraction of the total, and a button snaps the axis to the eigenvector of the covariance.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="pcPlot" class="grab" width="1200" height="560"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="pcStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="pcSnap" disabled>Snap to the eigenvector</button><button id="pcReset">Reset the axis</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>axis angle</dt><dd id="pcAng">-</dd>
+          <dt>variance of the projections, fraction of total</dt><dd id="pcFrac">-</dd>
+          <dt>first principal direction</dt><dd id="pcPC1">-</dd>
+          <dt>eigenvalues of the covariance</dt><dd id="pcEig">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="pcQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Project every centred reading onto a unit vector v and the variance of the projections is v' S v, where S is the covariance of the two channels. S is the normal matrix of Week 1, A'A over n, built from the centred readings in place of the design columns. Rotating the axis sweeps v' S v around a full turn; its maximum over unit vectors is the largest eigenvalue of S, reached when v solves S v = lambda v, and that eigenvector is the first principal component. The second component is the perpendicular direction and holds the remaining variance, so the two fractions add to one. Slide 13.</p>
   </div>
 </section>
 
 <!-- ============ 6. NOVELTY: the thin side of the ellipse ============ -->
 <section class="demo" id="novelty" role="tabpanel">
   <h2>The thin side of the ellipse: which ruler notices the damage first?</h2>
-  <p class="lead">Two natural frequencies of a healthy bridge over 150 days make the cloud; they move together with temperature, so the cloud is a tilted ellipse, and its principal axes are the eigenvectors of the covariance. Drag today's reading anywhere and read its distance by the two rulers. Then drag the day marker along the monitoring record below: damage starts on an unknown day and drifts the reading out through the thin side.</p>
+  <p class="lead">Two natural frequencies of a healthy bridge over 150 days make the cloud; they move together with temperature, so the cloud is a tilted ellipse, and its principal axes are the eigenvectors of the covariance. Drag today's reading anywhere and read its distance by the two rulers. Then write down how many days each ruler will need to raise an alarm after damage begins, lock the two numbers in, and drag the day marker along the monitoring record below.</p>
   <div class="stage">
     <div class="plot"><canvas id="nvPlane" class="grab" width="1200" height="640"></canvas></div>
     <div class="side">
       <div class="panel step" id="nvStep"></div>
       <div class="panel">
         <dl class="readout">
-          <dt>Euclidean distance from the mean, in sigma</dt><dd id="nvEu">-</dd>
-          <dt>Mahalanobis distance</dt><dd id="nvMa">-</dd>
+          <dt>Euclidean distance in sigma, of its threshold</dt><dd id="nvEu">-</dd>
+          <dt>Mahalanobis distance, of its threshold</dt><dd id="nvMa">-</dd>
           <dt>day shown</dt><dd id="nvDay">-</dd>
           <dt>first alarm, Euclidean ruler</dt><dd id="nvAlarmE">-</dd>
           <dt>first alarm, Mahalanobis ruler</dt><dd id="nvAlarmM">-</dd>
           <dt>healthy days over the line</dt><dd id="nvFalse">-</dd>
         </dl>
-        <div class="btns" style="margin-top:10px"><button id="nvNew">New record</button></div>
+        <div class="btns" style="margin-top:10px"><button id="nvAxis" aria-pressed="false">drift along the long axis</button><button id="nvNew">New record</button></div>
       </div>
       <div class="panel quiz" id="nvQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>Only the healthy class exists, so the detector is a model of normal: the mean and covariance of the healthy cloud, slide 14. The Mahalanobis distance measures in the cloud's own units, so one sigma along the long axis and one sigma along the short axis are the same distance; a Euclidean circle treats the short axis as if it were as wide as the long one and goes blind in exactly the direction damage takes. Both thresholds are set for a one percent false alarm rate on the healthy days, and an alarm needs three days in a row over the line, so that a cold day on the long axis does not count as damage; the delay between onset and the alarm is set by the drift rate against the feature noise.</p>
+    <p>Only the healthy class exists, so the detector is a model of normal: the mean and covariance of the healthy cloud, slide 14. The Mahalanobis distance measures in the cloud's own units, so one sigma along the long axis and one sigma along the short axis are the same distance; a Euclidean circle treats the short axis as if it were as wide as the long one and goes blind in exactly the direction damage takes. Both thresholds are set for a one percent false alarm rate on the healthy days, and an alarm needs three days in a row over the line, so that a cold day on the long axis does not count as damage. The drift is synthetic and planted along the short axis of the healthy cloud, which is why the Mahalanobis distance wins by about 100 days; with the toggle the same drift runs along the long axis and the two rulers alarm at about the same day.</p>
   </div>
 </section>
 
 <!-- ============ 7. BUMPS: steps into bumps ============ -->
 <section class="demo" id="bumps" role="tabpanel">
   <h2>Steps into bumps: build a soil profile out of hidden units, then let the optimizer try</h2>
-  <p class="lead">The grey curve is a shear strength profile with depth. Each hidden unit is one soft step, a sigmoid placed at a depth with a height and a steepness. Click on the plot to add a unit at that depth; drag a unit's knob on the lane below to set where it steps (across) and how high (up); drag its tail to set the steepness. The blue curve is the sum. Get the error down by hand, then let gradient descent place sixteen units.</p>
+  <p class="lead">The grey curve is a shear strength profile with depth. Each hidden unit is one soft step, a sigmoid placed at a depth with a height and a steepness. Write down how many units you expect to need to fit the profile within 5 kPa, then click on the plot to add a unit at that depth; drag a unit's knob on the lane below to set where it steps (across) and how high (up); drag its tail to set the steepness. The blue curve is the sum. Reach the target by hand, then let gradient descent place sixteen units.</p>
   <div class="stage">
     <div class="plot"><canvas id="uaPlot" class="hit" width="1200" height="640"></canvas></div>
     <div class="side">
       <div class="panel step" id="uaStep"></div>
       <div class="panel">
-        <div class="btns"><button class="primary" id="uaFit">Fit 16 units by gradient descent</button><button id="uaUndo">Remove last unit</button><button id="uaClear">Clear</button></div>
+        <div class="btns"><button class="primary" id="uaFit" disabled>Fit 16 units by gradient descent</button><button id="uaUndo">Remove last unit</button><button id="uaClear">Clear</button></div>
         <dl class="readout" style="margin-top:10px">
-          <dt>units</dt><dd id="uaN">0</dd>
+          <dt>units placed</dt><dd id="uaN">0</dd>
+          <dt>target</dt><dd>5.0 kPa RMS</dd>
           <dt>RMSE of your sum (kPa)</dt><dd id="uaErr">-</dd>
+          <dt>units when the target was reached</dt><dd id="uaReached">-</dd>
           <dt>RMSE after gradient descent</dt><dd id="uaFitErr">-</dd>
           <dt>gradient steps taken</dt><dd id="uaSteps">-</dd>
         </dl>
@@ -349,6 +416,35 @@ canvas.grab { cursor: grab; }
   </div>
   <div class="caption">
     <p>A hidden layer is a basis the optimizer shapes, slide 17: each unit is sigmoid(w x + b), with b placing the step and w setting its steepness, and the output weights are the heights. Two steps of opposite sign make a bump, bumps add up to anything, which is the mechanism behind the universal approximation theorem on slide 19. The theorem promises that enough units exist; it says nothing about whether gradient descent from a random start will find them, and the fit button sometimes shows that: the same sixteen units land in a different place from a different start, and some starts stall.</p>
+  </div>
+</section>
+
+<!-- ============ 8. CHAIN: backpropagation as the chain rule ============ -->
+<section class="demo" id="chain" role="tabpanel">
+  <h2>The chain rule on a chain: backpropagation through three nodes by hand</h2>
+  <p class="lead">One input x passes through a linear node, a tanh node and an output weight, and the loss is the squared error against a target t. The forward values are printed above each node. Type the local derivative at each node, from the loss backwards; once all four are in, their product is dL/dw1, and a finite difference checks it. Then run the backward pass and watch the running product light the nodes from right to left.</p>
+  <div class="stage">
+    <div class="plot"><canvas id="chPlot" width="1200" height="370"></canvas></div>
+    <div class="side">
+      <div class="panel step" id="chStep"></div>
+      <div class="panel">
+        <h3>local derivatives</h3>
+        <div class="chin"><label for="chD0">dL/dy</label><input type="number" id="chD0" step="any" placeholder="?"><span id="chM0"></span></div>
+        <div class="chin"><label for="chD1">dy/dh</label><input type="number" id="chD1" step="any" placeholder="?"><span id="chM1"></span></div>
+        <div class="chin"><label for="chD2">dh/du</label><input type="number" id="chD2" step="any" placeholder="?"><span id="chM2"></span></div>
+        <div class="chin"><label for="chD3">du/dw1</label><input type="number" id="chD3" step="any" placeholder="?"><span id="chM3"></span></div>
+        <div class="btns" style="margin-top:8px"><button class="primary" id="chRun" disabled>Run backward</button><button id="chNew">New numbers</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>product of your four derivatives</dt><dd id="chProd">-</dd>
+          <dt>finite difference dL/dw1</dt><dd id="chFD">-</dd>
+          <dt>derivatives within 5 %</dt><dd id="chOk">0 of 4</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="chQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Backpropagation is the chain rule organised so that every local derivative is computed once and multiplied into a running product that travels from the loss back to the parameters, slide 20. Each node knows only its own input and output, so its local derivative needs nothing from the rest of the network: 2(y - t) at the loss, w2 at the output weight, 1 - h^2 at the tanh, and x at the first weight. The running product arriving at a node is the gradient of the loss with respect to that node's output; multiplying by the local derivative passes it one node further back. The finite difference, (L(w1 + e) - L(w1 - e)) / 2e, is the check every implementation should pass.</p>
   </div>
 </section>
 
@@ -389,7 +485,8 @@ function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAtt
   const TR = ALL.slice(0, 90), TE = ALL.slice(90);
   const plane = new Board(document.getElementById("ctPlane")), tree = new Board(document.getElementById("ctTree"));
   const L = 60, R = plane.W - 20, TOP = 40, BOT = plane.H - 50; const px = x => L + (x - 0) / 42 * (R - L), py = y => BOT - (y - 0) / 0.55 * (BOT - TOP);
-  let mode = "x", root = null, cart = null, cartPrev = null, view = "mine", nudgeSeed = 1, moved = null;
+  let mode = "x", root = null, cart = null, cartPrev = null, view = "mine", nudgeSeed = 1, moved = null, gateAns = null;
+  const GATE = ["yes, fewer errors", "no, more errors", "a tie"];
   const stepEl = document.getElementById("ctStep");
   function leaf(box, pts) { return { x0: box[0], x1: box[1], y0: box[2], y1: box[3], pts, split: null, depth: box[4] || 0 }; }
   function newRoot(pts) { return leaf([0, 42, 0, 0.55, 0], pts); }
@@ -399,6 +496,7 @@ function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAtt
   function doSplit(node, dim, val) { const lp = node.pts.filter(p => p[dim] <= val), rp = node.pts.filter(p => p[dim] > val); const lb = dim === "x" ? [node.x0, val, node.y0, node.y1, node.depth + 1] : [node.x0, node.x1, node.y0, val, node.depth + 1], rb = dim === "x" ? [val, node.x1, node.y0, node.y1, node.depth + 1] : [node.x0, node.x1, val, node.y1, node.depth + 1]; node.split = { dim, val, left: leaf(lb, lp), right: leaf(rb, rp) }; }
   function predict(node, p) { return majority(find(node, p.x, p.y)); }
   function acc(node, set) { return set.filter(p => predict(node, p) === p.c).length / set.length; }
+  function errs(node, set) { return set.filter(p => predict(node, p) !== p.c).length; }
   function gini(pts) { if (!pts.length) return 0; const q = pts.filter(p => p.c === 1).length / pts.length; return 2 * q * (1 - q); }
   function growCart(node, maxDepth) { if (node.depth >= maxDepth || node.pts.length < 10 || gini(node.pts) === 0) return; let best = null; ["x", "y"].forEach(dim => { const vals = node.pts.map(p => p[dim]).sort((a, b) => a - b); for (let i = 0; i < vals.length - 1; i++) { if (vals[i] === vals[i + 1]) continue; const v = (vals[i] + vals[i + 1]) / 2; const lp = node.pts.filter(p => p[dim] <= v), rp = node.pts.filter(p => p[dim] > v); if (lp.length < 5 || rp.length < 5) continue; const score = (lp.length * gini(lp) + rp.length * gini(rp)) / node.pts.length; if (!best || score < best.score) best = { dim, val: v, score }; } }); if (!best || best.score >= gini(node.pts) - 1e-9) return; doSplit(node, best.dim, best.val); growCart(node.split.left, maxDepth); growCart(node.split.right, maxDepth); }
   function cuts(node, out) { out = out || []; if (node.split) { out.push([node.split.dim, node.split.val]); cuts(node.split.left, out); cuts(node.split.right, out); } return out; }
@@ -420,15 +518,24 @@ function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAtt
     TR.forEach(p => plane.dot(px(p.x), py(p.y), 4.5, p.c ? css("--red") : css("--blue")));
     plane.label("solid dots: the 90 training cases; 30 held-out cases are scored but not drawn", L, plane.H - 14, css("--muted"), "left", 12);
     drawTree(node);
-    document.getElementById("ctLeaves").textContent = leaves(node).length; document.getElementById("ctTr").textContent = (100 * acc(node, TR)).toFixed(0) + " %"; document.getElementById("ctTe").textContent = (100 * acc(node, TE)).toFixed(0) + " %"; document.getElementById("ctCartTe").textContent = cart ? (100 * acc(cart, TE)).toFixed(0) + " %" : "-"; document.getElementById("ctMoved").textContent = moved === null ? "-" : moved;
-    stepEl.innerHTML = view === "mine" ? ('<span class="k">' + (leaves(root).length === 1 ? 'no cuts yet' : leaves(root).length + ' regions') + '</span><p>' + (leaves(root).length === 1 ? 'One region, one answer: everything predicted the majority class. Choose a direction and click where the first cut should go. Four cuts deep is the limit.' : 'Training accuracy ' + (100 * acc(root, TR)).toFixed(0) + ' %, held-out ' + (100 * acc(root, TE)).toFixed(0) + ' %. ' + (acc(root, TR) - acc(root, TE) > 0.12 ? 'The gap between the two is the tree memorizing its ninety cases.' : 'Each cut is a threshold question; the finished tree reads like a design chart.')) + '</p>') : ('<span class="k">the greedy tree</span><div class="ask ' + (moved !== null && moved >= 2 ? 'no' : '') + '">' + (moved === null ? 'The algorithm chose each cut to leave the purest two sides, one cut at a time, never looking ahead. Held-out accuracy ' + (100 * acc(cart, TE)).toFixed(0) + ' %.' : 'After resampling the ninety cases, ' + moved + ' of the cuts moved; the faint dashed lines are where they were. Same site, same physics, a different chart: that instability is the variance the next tab averages away.') + '</div>');
+    const myE = errs(root, TE), cartE = cart ? errs(cart, TE) : null, nl = leaves(root).length;
+    document.getElementById("ctLeaves").textContent = leaves(node).length; document.getElementById("ctTr").textContent = (100 * acc(node, TR)).toFixed(0) + " %"; document.getElementById("ctMyErr").textContent = myE + " of 30"; document.getElementById("ctCartErr").textContent = cart ? cartE + " of 30" : (gateAns === null ? "locked" : "-"); document.getElementById("ctCartTe").textContent = cart ? (100 * acc(cart, TE)).toFixed(0) + " %" : "-"; document.getElementById("ctMoved").textContent = moved === null ? "-" : moved;
+    document.getElementById("ctCart").disabled = gateAns === null; document.getElementById("ctNudge").disabled = gateAns === null;
+    let html = '<p class="prompt">Will the algorithm beat you on the 30 held-out cases?</p>';
+    if (gateAns === null) html += '<div class="gate">' + GATE.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div><p>' + (nl === 1 ? 'Carve first: one region predicts the majority class everywhere. Choose a direction and click where the first cut should go; four cuts deep is the limit.' : 'Your carving: ' + nl + ' regions, training accuracy ' + (100 * acc(root, TR)).toFixed(0) + ' %, ' + myE + ' of the 30 held-out cases wrong.' + (acc(root, TR) - acc(root, TE) > 0.12 ? ' The gap between training and held-out is the tree memorizing its ninety cases.' : '')) + ' Commit to an answer and the algorithm buttons unlock.</p>';
+    else if (!cart) html += '<span class="k">locked: ' + GATE[gateAns] + '</span><p>Your carving: ' + nl + ' regions, ' + myE + ' of the 30 held-out cases wrong. Press the algorithm button to see its tree and its count. More cuts of your own still count until then.</p>';
+    else { const actual = cartE < myE ? 0 : (cartE > myE ? 1 : 2);
+      html += '<div class="ask ' + (actual === gateAns ? 'ok' : 'no') + '">' + (actual === gateAns ? 'Right. ' : 'You said ' + GATE[gateAns] + '. ') + 'The algorithm misclassifies ' + cartE + ' of the 30 held-out cases; your carving misclassifies ' + myE + '. ' + (actual === 0 ? 'Greedy purity cuts, one at a time and never looking ahead, still found thresholds that generalize better than the hand-drawn ones.' : (actual === 1 ? 'A hand-drawn chart with a few well placed cuts beats a greedy tree that never looks two cuts ahead.' : 'Two different charts, the same count: thirty cases cannot tell them apart.')) + '</div>';
+      html += moved === null ? '<p>Press nudge to resample the ninety cases with replacement and refit the greedy tree; the readout counts the cuts that move.</p>' : '<div class="ask no">After resampling the ninety cases, ' + moved + ' of the cuts moved; the faint dashed lines are where they were. Same site, same physics, a different chart: that instability is the variance the next tab averages away.</div>'; }
+    stepEl.innerHTML = html;
+    stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { gateAns = parseInt(b.dataset.g, 10); draw(); }));
   }
-  function reset() { root = newRoot(TR.slice()); cart = null; cartPrev = null; view = "mine"; moved = null; draw(); }
+  function reset() { root = newRoot(TR.slice()); cart = null; cartPrev = null; view = "mine"; moved = null; gateAns = null; draw(); }
   plane.c.addEventListener("click", ev => { const [mx, my] = plane.pos(ev); if (mx < L || mx > R || my < TOP || my > BOT) return; const x = (mx - L) / (R - L) * 42, y = (BOT - my) / (BOT - TOP) * 0.55; view = "mine"; const n = find(root, x, y); if (n.depth >= 4) { draw(); return; } doSplit(n, mode, mode === "x" ? x : y); draw(); });
   document.getElementById("ctV").addEventListener("click", () => { mode = "x"; pressed(["ctV", "ctH"], "ctV"); });
   document.getElementById("ctH").addEventListener("click", () => { mode = "y"; pressed(["ctV", "ctH"], "ctH"); });
-  document.getElementById("ctCart").addEventListener("click", () => { cart = newRoot(TR.slice()); growCart(cart, 3); cartPrev = null; moved = null; view = "cart"; draw(); });
-  document.getElementById("ctNudge").addEventListener("click", () => { if (!cart) { cart = newRoot(TR.slice()); growCart(cart, 3); } const r = mulberry32(nudgeSeed++); const boot = []; for (let i = 0; i < 90; i++) boot.push(TR[Math.floor(r() * 90)]); cartPrev = cart; cart = newRoot(boot); growCart(cart, 3); const old = cuts(cartPrev), nw = cuts(cart); moved = nw.filter(c => !old.some(o => o[0] === c[0] && Math.abs(o[1] - c[1]) < (c[0] === "x" ? 1.0 : 0.015))).length; view = "cart"; draw(); });
+  document.getElementById("ctCart").addEventListener("click", () => { if (gateAns === null) return; cart = newRoot(TR.slice()); growCart(cart, 3); cartPrev = null; moved = null; view = "cart"; draw(); });
+  document.getElementById("ctNudge").addEventListener("click", () => { if (gateAns === null) return; if (!cart) { cart = newRoot(TR.slice()); growCart(cart, 3); } const r = mulberry32(nudgeSeed++); const boot = []; for (let i = 0; i < 90; i++) boot.push(TR[Math.floor(r() * 90)]); cartPrev = cart; cart = newRoot(boot); growCart(cart, 3); const old = cuts(cartPrev), nw = cuts(cart); moved = nw.filter(c => !old.some(o => o[0] === c[0] && Math.abs(o[1] - c[1]) < (c[0] === "x" ? 1.0 : 0.015))).length; view = "cart"; draw(); });
   document.getElementById("ctClear").addEventListener("click", reset);
   quiz(document.getElementById("ctQuiz"), { q: "A single deep decision tree is called a high-variance estimator on slide 4 because", options: ["Its predictions have large error bars on every point", "A small change in the training sample can move its cuts and rearrange whole branches", "It cannot represent smooth boundaries"], answer: 1, why: "Variance here is variance across training samples: the fitted model changes a lot when the data change a little. That is exactly what averaging over resamples reduces, which is why the next fix is a forest." });
   window.addEventListener("themechange", draw);
@@ -442,33 +549,54 @@ function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAtt
   const TR = [], TE = []; for (let i = 0; i < 60; i++) { const x = 5 + 95 * rng(); TR.push({ x, y: truth(x) + 1.5 * g[i] }); } for (let i = 0; i < 40; i++) { const x = 5 + 95 * rng(); TE.push({ x, y: truth(x) + 1.5 * g[60 + i] }); }
   const board = new Board(document.getElementById("rfPlot"));
   const L = 60, R = board.W - 30, TOP = 40, BOT = board.H - 60; const px = x => L + x / 130 * (R - L), py = y => BOT - y / 40 * (BOT - TOP);
-  let trees = [], seed = 1;
   function grow(pts, depth) { if (pts.length <= 6 || depth >= 8) return { v: mean(pts.map(p => p.y)) }; const s = pts.slice().sort((a, b) => a.x - b.x); let best = null; for (let i = 3; i <= s.length - 3; i++) { if (s[i - 1].x === s[i].x) continue; const lv = mean(s.slice(0, i).map(p => p.y)), rv = mean(s.slice(i).map(p => p.y)); const sse = s.slice(0, i).reduce((q, p) => q + (p.y - lv) ** 2, 0) + s.slice(i).reduce((q, p) => q + (p.y - rv) ** 2, 0); if (!best || sse < best.sse) best = { sse, i }; } if (!best) return { v: mean(pts.map(p => p.y)) }; const t = (s[best.i - 1].x + s[best.i].x) / 2; return { t, l: grow(s.slice(0, best.i), depth + 1), r: grow(s.slice(best.i), depth + 1) }; }
   const evalT = (n, x) => n.t === undefined ? n.v : (x <= n.t ? evalT(n.l, x) : evalT(n.r, x));
-  function addTree() { const r = mulberry32(seed++); const boot = []; for (let i = 0; i < 60; i++) boot.push(TR[Math.floor(r() * 60)]); trees.push(grow(boot, 0)); }
-  const avg = x => mean(trees.map(t => evalT(t, x)));
+  // sixty trees grown once from fixed resamples, so that the stack with n trees is always the first n of them
+  const POOL = []; for (let s = 1; s <= 60; s++) { const r = mulberry32(s); const boot = []; for (let i = 0; i < 60; i++) boot.push(TR[Math.floor(r() * 60)]); POOL.push(grow(boot, 0)); }
+  const COUNTS = [1, 2, 5, 10, 20, 60], TOL = 0.3;
+  let nT = 0, prevN = 0, gateAns = null;
+  const avgN = (n, x) => { let s = 0; for (let i = 0; i < n; i++) s += evalT(POOL[i], x); return s / n; };
+  const XS = []; for (let x = 5; x <= 100; x += 1) XS.push(x);
+  const shiftBetween = (a, b) => (a === 0 || b === 0) ? null : Math.sqrt(mean(XS.map(x => (avgN(a, x) - avgN(b, x)) ** 2)));
+  const MOVES = COUNTS.slice(0, 5).map((c, i) => shiftBetween(c, COUNTS[i + 1]));
+  let settledI = MOVES.findIndex(m => m < TOL); if (settledI < 0) settledI = 5;
+  const avg = x => avgN(nT, x);
   const rmse = (f, set) => Math.sqrt(mean(set.map(p => (f(p.x) - p.y) ** 2)));
   const stepEl = document.getElementById("rfStep");
+  function setN(n) { n = Math.max(0, Math.min(60, n)); if (n !== nT) { prevN = nT; nT = n; } }
   function draw() {
+    const trees = POOL.slice(0, nT);
     board.clear("settlement against load: faint staircases are single trees, bold is their average"); const ctx = board.ctx;
     board.line(L, BOT, R, BOT, css("--line"), 1); board.line(L, TOP, L, BOT, css("--line"), 1);
     for (let x = 0; x <= 130; x += 20) board.label(x + " kN", px(x), BOT + 16, css("--muted"), "center", 10, true); for (let y = 0; y <= 40; y += 10) board.label(y + " mm", L - 6, py(y) + 4, css("--muted"), "right", 10, true);
     ctx.fillStyle = mix(css("--panel"), css("--grey"), 0.12); ctx.fillRect(px(100), TOP, px(130) - px(100), BOT - TOP); board.label("no tests beyond 100 kN", px(115), TOP + 16, css("--muted"), "center", 11);
     const tp = []; for (let x = 0; x <= 130; x += 1) tp.push([px(x), py(truth(x))]); board.path(tp, css("--grey"), 1.5, [6, 4]);
-    trees.forEach((t, k) => { const pts = []; for (let x = 0; x <= 130; x += 0.5) pts.push([px(x), py(evalT(t, x))]); board.path(pts, mix(css("--panel"), css("--blue"), trees.length > 20 ? 0.18 : 0.3), 1); });
-    if (trees.length) { const pts = []; for (let x = 0; x <= 130; x += 0.5) pts.push([px(x), py(avg(x))]); board.path(pts, css("--blue"), 3); }
+    trees.forEach(t => { const pts = []; for (let x = 0; x <= 130; x += 0.5) pts.push([px(x), py(evalT(t, x))]); board.path(pts, mix(css("--panel"), css("--blue"), trees.length > 20 ? 0.18 : 0.3), 1); });
+    if (prevN > 0 && nT > 0 && prevN !== nT) { const pts = []; for (let x = 0; x <= 130; x += 0.5) pts.push([px(x), py(avgN(prevN, x))]); board.path(pts, css("--orange"), 2, [5, 4]); }
+    if (nT) { const pts = []; for (let x = 0; x <= 130; x += 0.5) pts.push([px(x), py(avg(x))]); board.path(pts, css("--blue"), 3); }
     TR.forEach(p => board.dot(px(p.x), py(p.y), 4, css("--ink")));
-    if (trees.length) { const vals = trees.map(t => evalT(t, 60)); const sd = Math.sqrt(mean(vals.map(v => (v - mean(vals)) ** 2))); board.line(px(60), py(mean(vals) - sd), px(60), py(mean(vals) + sd), css("--orange"), 3); board.label("spread of the trees at 60 kN", px(60) + 8, py(mean(vals) + sd) - 6, css("--orange"), "left", 11); }
-    board.label("grey dashed: the true settlement curve   dots: the 60 tests", L, board.H - 14, css("--muted"), "left", 12);
-    const vals = trees.length ? trees.map(t => evalT(t, 60)) : [0]; const sd = Math.sqrt(mean(vals.map(v => (v - mean(vals)) ** 2)));
-    let bias = null; if (trees.length) { let s = 0, n = 0; for (let x = 100; x <= 130; x += 2) { s += (avg(x) - truth(x)) ** 2; n++; } bias = Math.sqrt(s / n); }
-    document.getElementById("rfN").textContent = trees.length; document.getElementById("rfOne").textContent = trees.length ? rmse(x => evalT(trees[trees.length - 1], x), TE).toFixed(2) : "-"; document.getElementById("rfAvg").textContent = trees.length ? rmse(avg, TE).toFixed(2) : "-"; document.getElementById("rfSpread").textContent = trees.length > 1 ? sd.toFixed(2) + " mm" : "-"; document.getElementById("rfBias").textContent = bias === null ? "-" : bias.toFixed(1) + " mm";
-    stepEl.innerHTML = '<span class="k">' + (trees.length === 0 ? 'empty stack' : trees.length + (trees.length === 1 ? ' tree' : ' trees')) + '</span><p>' + (trees.length === 0 ? 'Add a tree. It will be grown to leaves of three tests on a resample of the sixty, so it follows its own sample\'s noise.' : (trees.length === 1 ? 'One staircase, held-out RMSE ' + rmse(x => evalT(trees[0], x), TE).toFixed(2) + ' mm. Its steps are where its resample happened to put them. Add more.' : 'The average scores ' + rmse(avg, TE).toFixed(2) + ' mm against ' + rmse(x => evalT(trees[trees.length - 1], x), TE).toFixed(2) + ' for the last single tree. The trees disagree by ' + sd.toFixed(2) + ' mm at 60 kN and the average smooths that away.')) + '</p>' + (trees.length >= 10 ? '<div class="ask no">Beyond 100 kN every tree returns its last leaf, so the average is flat where the truth keeps curving: ' + bias.toFixed(1) + ' mm off. Averaging removes random scatter and nothing else.</div>' : '');
+    if (nT) { const vals = trees.map(t => evalT(t, 60)); const sd = Math.sqrt(mean(vals.map(v => (v - mean(vals)) ** 2))); board.line(px(60), py(mean(vals) - sd), px(60), py(mean(vals) + sd), css("--orange"), 3); board.label("spread of the trees at 60 kN", px(60) + 8, py(mean(vals) + sd) - 6, css("--orange"), "left", 11); }
+    board.label("grey dashed: the true settlement curve   dots: the 60 tests" + (prevN > 0 && nT > 0 && prevN !== nT ? "   orange dashed: the average with " + prevN + (prevN === 1 ? " tree" : " trees") : ""), L, board.H - 14, css("--muted"), "left", 12);
+    const vals = nT ? trees.map(t => evalT(t, 60)) : [0]; const sd = Math.sqrt(mean(vals.map(v => (v - mean(vals)) ** 2)));
+    let bias = null; if (nT) { let s = 0, n = 0; for (let x = 100; x <= 130; x += 2) { s += (avg(x) - truth(x)) ** 2; n++; } bias = Math.sqrt(s / n); }
+    const sh = shiftBetween(prevN, nT);
+    document.getElementById("rfN").textContent = nT; document.getElementById("rfOne").textContent = nT ? rmse(x => evalT(trees[nT - 1], x), TE).toFixed(2) : "-"; document.getElementById("rfAvg").textContent = nT ? rmse(avg, TE).toFixed(2) : "-"; document.getElementById("rfShift").textContent = sh === null ? "-" : sh.toFixed(2) + " mm (from " + prevN + ")"; document.getElementById("rfSpread").textContent = nT > 1 ? sd.toFixed(2) + " mm" : "-"; document.getElementById("rfBias").textContent = bias === null ? "-" : bias.toFixed(1) + " mm";
+    const locked = gateAns !== null; document.getElementById("rfAdd").disabled = !locked; document.getElementById("rfTen").disabled = !locked; document.querySelectorAll("#rfCounts button").forEach(b => { b.disabled = !locked; b.setAttribute("aria-pressed", locked && +b.dataset.n === nT ? "true" : "false"); });
+    let html = '<p class="prompt">At what number of trees does the mean curve stop moving?</p>';
+    if (!locked) html += '<div class="gate">' + COUNTS.map((c, i) => '<button data-g="' + i + '">' + c + '</button>').join('') + '</div><p>Pick a count; the stack unlocks after that. Stop moving means a shift of the bold curve under ' + TOL.toFixed(1) + ' mm root mean square between one count in the row and the next, a fifth of the test noise.</p>';
+    else {
+      html += '<span class="k">' + (nT === 0 ? 'locked: ' + COUNTS[gateAns] + ' trees' : nT + (nT === 1 ? ' tree' : ' trees')) + '</span><p>' + (nT === 0 ? 'Step through the counts in the row, or add trees one at a time. Each tree is grown to leaves of three tests on a resample of the sixty, so it follows its own sample\'s noise.' : (nT === 1 ? 'One staircase, held-out RMSE ' + rmse(x => evalT(trees[0], x), TE).toFixed(2) + ' mm. Its steps are where its resample happened to put them. Add more.' : 'The average scores ' + rmse(avg, TE).toFixed(2) + ' mm against ' + rmse(x => evalT(trees[nT - 1], x), TE).toFixed(2) + ' for the last single tree. The trees disagree by ' + sd.toFixed(2) + ' mm at 60 kN' + (sh !== null ? ', and the bold curve shifted ' + sh.toFixed(2) + ' mm from the orange dashed one with ' + prevN + '.' : '.'))) + '</p>';
+      if (nT >= 60) html += '<div class="ask ' + (gateAns === settledI ? 'ok' : 'no') + '">' + (gateAns === settledI ? 'Right. ' : 'You said ' + COUNTS[gateAns] + '. ') + 'The mean curve shifted ' + MOVES.map((m, i) => m.toFixed(2) + ' mm from ' + COUNTS[i] + ' to ' + COUNTS[i + 1]).join(', ') + '. It drops under ' + TOL.toFixed(1) + ' mm from ' + COUNTS[settledI] + ' trees on; after that the shifts are the test noise divided by the square root of the count, and the extra trees cost compute for nothing a test could detect.</div>';
+      else if (nT >= 10) html += '<div class="ask no">Beyond 100 kN every tree returns its last leaf, so the average is flat where the truth keeps curving: ' + bias.toFixed(1) + ' mm off. Averaging removes random scatter and nothing else.</div>';
+    }
+    stepEl.innerHTML = html;
+    stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { gateAns = parseInt(b.dataset.g, 10); draw(); }));
   }
-  board.c.addEventListener("click", () => { addTree(); draw(); });
-  document.getElementById("rfAdd").addEventListener("click", () => { addTree(); draw(); });
-  document.getElementById("rfTen").addEventListener("click", () => { for (let i = 0; i < 10; i++) addTree(); draw(); });
-  document.getElementById("rfReset").addEventListener("click", () => { trees = []; draw(); });
+  board.c.addEventListener("click", () => { if (gateAns === null) return; setN(nT + 1); draw(); });
+  document.getElementById("rfAdd").addEventListener("click", () => { setN(nT + 1); draw(); });
+  document.getElementById("rfTen").addEventListener("click", () => { setN(nT + 10); draw(); });
+  document.querySelectorAll("#rfCounts button").forEach(b => b.addEventListener("click", () => { setN(+b.dataset.n); draw(); }));
+  document.getElementById("rfReset").addEventListener("click", () => { nT = 0; prevN = 0; gateAns = null; draw(); });
   quiz(document.getElementById("rfQuiz"), { q: "A forest of 500 trees still extrapolates a flat line beyond the heaviest test. Why does averaging not help?", options: ["Five hundred is too few trees", "Every tree shares the same mistake, so it is bias, and averaging removes only the uncorrelated part of the variance", "The learning rate was too small"], answer: 1, why: "Averaging kills random scatter between trees. A systematic error that every tree makes, like returning the last leaf past the data, survives the average untouched, which is slide 5's warning. Lowering the correlation between trees helps with variance, never with shared bias." });
   window.addEventListener("themechange", draw);
   draw();
@@ -481,12 +609,12 @@ function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAtt
   const TR = [], TE = []; for (let i = 0; i < 50; i++) { const T = -10 + 45 * rng(); TR.push({ x: T, y: truth(T) + 0.8 * g[i] }); } for (let i = 0; i < 30; i++) { const T = -10 + 45 * rng(); TE.push({ x: T, y: truth(T) + 0.8 * g[50 + i] }); }
   const board = new Board(document.getElementById("gbPlot"));
   const L = 60, R = 860, T1 = 40, B1 = 330, T2 = 400, B2 = 580; const px = x => L + (x + 10) / 45 * (R - L), py1 = y => B1 - (y - 0) / 26 * (B1 - T1), py2 = r => (T2 + B2) / 2 - r / 8 * (B2 - T2) / 2;
-  let F0 = mean(TR.map(p => p.y)), stumps = [], lr = 0.5, hist = [];
+  let F0 = mean(TR.map(p => p.y)), stumps = [], lr = 0.5, hist = [], ghost = null;
   const F = x => F0 + stumps.reduce((s, st) => s + st.lr * (x <= st.t ? st.l : st.r), 0);
   const resid = set => set.map(p => p.y - F(p.x));
   const rmse = set => Math.sqrt(mean(set.map(p => (F(p.x) - p.y) ** 2)));
   function bestSplit() { const r = resid(TR); const s = TR.map((p, i) => [p.x, r[i]]).sort((a, b) => a[0] - b[0]); let best = null; for (let i = 2; i <= s.length - 2; i++) { const lv = mean(s.slice(0, i).map(q => q[1])), rv = mean(s.slice(i).map(q => q[1])); const sse = s.slice(0, i).reduce((q, p) => q + (p[1] - lv) ** 2, 0) + s.slice(i).reduce((q, p) => q + (p[1] - rv) ** 2, 0); if (!best || sse < best.sse) best = { sse, t: (s[i - 1][0] + s[i][0]) / 2 }; } return best.t; }
-  function addStump(t) { const r = resid(TR); const lp = TR.map((p, i) => [p.x, r[i]]).filter(q => q[0] <= t), rp = TR.map((p, i) => [p.x, r[i]]).filter(q => q[0] > t); if (!lp.length || !rp.length) return; stumps.push({ t, l: mean(lp.map(q => q[1])), r: mean(rp.map(q => q[1])), lr }); hist.push([rmse(TR), rmse(TE)]); }
+  function addStump(t) { const r = resid(TR); const lp = TR.map((p, i) => [p.x, r[i]]).filter(q => q[0] <= t), rp = TR.map((p, i) => [p.x, r[i]]).filter(q => q[0] > t); if (!lp.length || !rp.length) return false; stumps.push({ t, l: mean(lp.map(q => q[1])), r: mean(rp.map(q => q[1])), lr }); hist.push([rmse(TR), rmse(TE)]); return true; }
   const stepEl = document.getElementById("gbStep");
   function draw() {
     board.clear("deflection against deck temperature, and the residuals of the current model"); const ctx = board.ctx;
@@ -498,8 +626,8 @@ function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAtt
     // residual strip
     const r = resid(TR); board.line(L, (T2 + B2) / 2, R, (T2 + B2) / 2, css("--line"), 1); board.label("residuals: reading minus model; click a temperature to split there", L, T2 - 8, css("--ink"), "left", 12);
     TR.forEach((p, i) => { board.line(px(p.x), (T2 + B2) / 2, px(p.x), py2(Math.max(-8, Math.min(8, r[i]))), r[i] >= 0 ? css("--red") : css("--blue"), 2); board.dot(px(p.x), py2(Math.max(-8, Math.min(8, r[i]))), 3, r[i] >= 0 ? css("--red") : css("--blue")); });
-    const bt = bestSplit(); board.line(px(bt), T2, px(bt), B2, "#2E7D5B", 2, [6, 4]); board.label("greedy best split: " + bt.toFixed(1) + " C", px(bt) + 6, T2 + 14, "#2E7D5B", "left", 11);
-    if (stumps.length) { const last = stumps[stumps.length - 1]; board.line(px(last.t), T2, px(last.t), B2, css("--orange"), 2); board.label("your last split", px(last.t) + 6, B2 - 6, css("--orange"), "left", 11); }
+    if (ghost) { board.line(px(ghost.t), T2, px(ghost.t), B2, "#2E7D5B", 2, [6, 4]); board.label("ghost: greedy best split for that round, " + ghost.t.toFixed(1) + " C", px(ghost.t) + 6, T2 + 14, "#2E7D5B", "left", 11); }
+    if (stumps.length) { const last = stumps[stumps.length - 1]; board.line(px(last.t), T2, px(last.t), B2, css("--orange"), 2); board.label("your last split, " + last.t.toFixed(1) + " C", px(last.t) + 6, B2 - 6, css("--orange"), "left", 11); }
     board.label("+8", L - 6, py2(8) + 4, css("--muted"), "right", 10, true); board.label("-8", L - 6, py2(-8) + 4, css("--muted"), "right", 10, true);
     // error chart
     const CX0 = 920, CX1 = 1180, CY0 = 60, CY1 = 300; board.label("RMSE by round", CX0, CY0 - 10, css("--ink"), "left", 12); board.line(CX0, CY1, CX1, CY1, css("--line"), 1); board.line(CX0, CY0, CX0, CY1, css("--line"), 1);
@@ -509,14 +637,17 @@ function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAtt
     board.label("black: training   red: held-out", CX0, CY1 + 18, css("--muted"), "left", 11);
     board.label("the model after each round:", CX0, 360, css("--ink"), "left", 12); board.label("F(x) = mean + lr x stump 1 + lr x stump 2 + ...", CX0, 380, css("--muted"), "left", 11, true); board.label("stump: a step at the split, one value each side,", CX0, 400, css("--muted"), "left", 11); board.label("fitted to the residuals, which are the negative", CX0, 418, css("--muted"), "left", 11); board.label("gradient of squared loss", CX0, 436, css("--muted"), "left", 11);
     let bestI = -1; hist.forEach((h, i) => { if (bestI < 0 || h[1] < hist[bestI][1]) bestI = i; });
-    document.getElementById("gbRounds").textContent = stumps.length; document.getElementById("gbTr").textContent = rmse(TR).toFixed(2); document.getElementById("gbTe").textContent = rmse(TE).toFixed(2); document.getElementById("gbBest").textContent = bestI >= 0 ? hist[bestI][1].toFixed(2) + " at round " + (bestI + 1) : "-";
-    stepEl.innerHTML = '<span class="k">round ' + stumps.length + '</span><p>' + (stumps.length === 0 ? 'The model is the mean, ' + F0.toFixed(1) + ' mm. The residual strip shows what it misses: a curve. Click where you would split.' : 'Training RMSE ' + rmse(TR).toFixed(2) + ', held-out ' + rmse(TE).toFixed(2) + '.' + (bestI >= 0 && stumps.length - 1 - bestI >= 4 ? ' The held-out curve has been rising for ' + (stumps.length - 1 - bestI) + ' rounds: the stumps are now fitting the training noise. The round to stop at was ' + (bestI + 1) + '.' : ' Keep splitting where the residuals are most lopsided.')) + '</p>';
+    document.getElementById("gbRounds").textContent = stumps.length; document.getElementById("gbTr").textContent = rmse(TR).toFixed(2); document.getElementById("gbTe").textContent = rmse(TE).toFixed(2); document.getElementById("gbBest").textContent = bestI >= 0 ? hist[bestI][1].toFixed(2) + " at round " + (bestI + 1) : "-"; document.getElementById("gbGap").textContent = ghost ? Math.abs(ghost.mine - ghost.t).toFixed(1) + " C apart" : "-";
+    let html = '<p class="prompt">Where would the greedy algorithm split? Click the residual strip there.</p>';
+    if (ghost) { const gap = Math.abs(ghost.mine - ghost.t), agree = gap <= 2; html += '<div class="ask ' + (agree ? 'ok' : 'no') + '">Did the ghost agree with you? ' + (agree ? 'Yes: ' : 'No: ') + 'the greedy split for that round was ' + ghost.t.toFixed(1) + ' C, yours ' + ghost.mine.toFixed(1) + ' C, ' + gap.toFixed(1) + ' C apart. ' + (agree ? 'Both sit where the residuals are most lopsided.' : 'The greedy split minimizes the residual sum of squares; yours is a smaller step in the same loop.') + '</div>'; }
+    html += '<span class="k">round ' + stumps.length + '</span><p>' + (stumps.length === 0 ? 'The model is the mean, ' + F0.toFixed(1) + ' mm. The residual strip shows what it misses: a curve. The ghost appears only after your click.' : 'Training RMSE ' + rmse(TR).toFixed(2) + ', held-out ' + rmse(TE).toFixed(2) + '.' + (bestI >= 0 && stumps.length - 1 - bestI >= 4 ? ' The held-out curve has been rising for ' + (stumps.length - 1 - bestI) + ' rounds: the stumps are now fitting the training noise. The round to stop at was ' + (bestI + 1) + '.' : ' Keep splitting where the residuals are most lopsided.')) + '</p>';
+    stepEl.innerHTML = html;
   }
-  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); if (my < T2 || my > B2 || mx < L || mx > R) return; const t = -10 + (mx - L) / (R - L) * 45; addStump(t); draw(); });
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); if (my < T2 || my > B2 || mx < L || mx > R) return; const t = -10 + (mx - L) / (R - L) * 45; const gb = bestSplit(); if (addStump(t)) ghost = { t: gb, mine: t }; draw(); });
   [["gbLr1", 0.1], ["gbLr5", 0.5], ["gbLr10", 1.0]].forEach(([id, v]) => document.getElementById(id).addEventListener("click", () => { lr = v; pressed(["gbLr1", "gbLr5", "gbLr10"], id); }));
-  document.getElementById("gbGreedy").addEventListener("click", () => { for (let k = 0; k < 20; k++) addStump(bestSplit()); draw(); });
-  document.getElementById("gbUndo").addEventListener("click", () => { stumps.pop(); hist.pop(); draw(); });
-  document.getElementById("gbReset").addEventListener("click", () => { stumps = []; hist = []; draw(); });
+  document.getElementById("gbGreedy").addEventListener("click", () => { for (let k = 0; k < 20; k++) addStump(bestSplit()); ghost = null; draw(); });
+  document.getElementById("gbUndo").addEventListener("click", () => { stumps.pop(); hist.pop(); ghost = null; draw(); });
+  document.getElementById("gbReset").addEventListener("click", () => { stumps = []; hist = []; ghost = null; draw(); });
   quiz(document.getElementById("gbQuiz"), { q: "Why is boosting with squared loss called gradient descent in function space?", options: ["Because it uses a learning rate", "Because the residual each stump fits is the negative gradient of the loss with respect to the model's predictions, so adding the stump is a gradient step", "Because the stumps are fitted by gradient descent"], answer: 1, why: "For squared loss with the one half, d loss / d prediction = prediction minus target, so the negative gradient is the residual. Fitting a stump to the residuals and adding it, shrunk by the learning rate, moves the function downhill, slide 6." });
   window.addEventListener("themechange", draw);
   draw();
@@ -529,31 +660,43 @@ function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAtt
   const AGES = [3, 7, 14, 28, 56, 90];
   const rows = []; for (let i = 0; i < n; i++) { const C = 250 + 200 * rng(), W = 168 + 16 * rng(), A = AGES[Math.floor(rng() * 6)], S = 50 + 150 * rng(); const y = 12 + 0.085 * C - 0.3 * (W - 176) + 11 * Math.log(A / 28 + 1) + 3 * g[i]; rows.push({ x: [C, W, W / C, A, S], y }); }
   const TRn = 140; const TR = rows.slice(0, TRn), TE = rows.slice(TRn);
-  let active = [true, true, true, true, true], shuffled = [false, false, false, false, false], seedS = 1;
+  const TWIN = [0, 2], WHY = ["Both carry the same information, so shuffling one leaves the other to cover for it", "Both are noise columns with no link to strength"], WHY_OK = 0;
+  let active = [true, true, true, true, true], shuffled = [false, false, false, false, false], seedS = 1, phase = 0, imps = null, impsBefore = null, removed = null, whyAns = null;
   const mu = COLS.map((c, j) => mean(TR.map(r => r.x[j]))), sd = COLS.map((c, j) => Math.sqrt(mean(TR.map(r => (r.x[j] - mu[j]) ** 2))));
   function knn(x) { const d = TR.map(r => { let s = 0; for (let j = 0; j < 5; j++) if (active[j]) s += ((r.x[j] - x[j]) / sd[j]) ** 2; return [s, r.y]; }).sort((a, b) => a[0] - b[0]); return mean(d.slice(0, 7).map(q => q[1])); }
   function rmse(testX) { return Math.sqrt(mean(testX.map((x, i) => (knn(x) - TE[i].y) ** 2))); }
   function permuted(j, seed) { const r = mulberry32(seed); const idx = TE.map((t, i) => i); for (let i = idx.length - 1; i > 0; i--) { const k = Math.floor(r() * (i + 1)); const t = idx[i]; idx[i] = idx[k]; idx[k] = t; } return TE.map((t, i) => { const x = t.x.slice(); x[j] = TE[idx[i]].x[j]; return x; }); }
   function importance(j) { if (!active[j]) return 0; const base = rmse(TE.map(t => t.x)); let s = 0; for (let k = 0; k < 5; k++) s += rmse(permuted(j, 100 + k)); return Math.max(0, s / 5 - base); }
+  const computeAll = () => COLS.map((c, j) => importance(j));
   const stepEl = document.getElementById("piStep");
   function draw() {
     const base = rmse(TE.map(t => t.x));
-    // current view: shuffled columns applied together
     let X = TE.map(t => t.x.slice()); COLS.forEach((c, j) => { if (shuffled[j]) { const P = permuted(j, seedS + j); X = X.map((x, i) => { x[j] = P[i][j]; return x; }); } });
     const now = rmse(X);
-    const imps = COLS.map((c, j) => importance(j)); const imax = Math.max.apply(null, imps) || 1;
-    const T = document.getElementById("piTable"); let html = '<tr><th>held-out row</th>' + COLS.map((c, j) => '<th class="' + (!active[j] ? 'gone' : (shuffled[j] ? 'on' : '')) + '" data-j="' + j + '">' + c + (shuffled[j] ? ' (shuffled)' : '') + '</th>').join('') + '<th>strength MPa</th></tr>';
-    for (let i = 0; i < 8; i++) html += '<tr><td>' + (TRn + i + 1) + '</td>' + COLS.map((c, j) => '<td class="' + (!active[j] ? 'gone' : (shuffled[j] ? 'sh' : '')) + '">' + (j === 2 ? X[i][j].toFixed(2) : X[i][j].toFixed(0)) + '</td>').join('') + '<td>' + TE[i].y.toFixed(1) + '</td></tr>';
-    html += '<tr><td colspan="7" style="color:var(--muted);font-family:var(--sans)">... 52 more held-out rows; the model was fitted to 140 other mixes</td></tr>';
-    T.innerHTML = html; T.querySelectorAll("th[data-j]").forEach(th => th.addEventListener("click", () => { const j = +th.dataset.j; if (!active[j]) return; shuffled[j] = !shuffled[j]; seedS++; draw(); }));
-    const B = document.getElementById("piBars"); B.innerHTML = '<span style="color:var(--muted)">importance</span><span style="color:var(--muted);font-size:12px">rise in held-out RMSE when the column is shuffled, mean of five shuffles</span><span></span>' + COLS.map((c, j) => '<span>' + c + '</span><div class="bar"><i style="width:' + (active[j] ? 100 * imps[j] / imax : 0) + '%"></i></div><span class="v">' + (active[j] ? imps[j].toFixed(2) : "gone") + '</span>').join('');
-    document.getElementById("piBase").textContent = base.toFixed(2); document.getElementById("piNow").textContent = now.toFixed(2); document.getElementById("piCem").textContent = imps[0].toFixed(2); document.getElementById("piWC").textContent = active[2] ? imps[2].toFixed(2) : "removed";
-    const anyS = shuffled.some(s => s);
-    stepEl.innerHTML = '<span class="k">' + (active[2] ? 'five columns' : 'four columns, the twin removed') + '</span><p>' + (anyS ? 'With ' + COLS.filter((c, j) => shuffled[j]).join(' and ') + ' shuffled, the held-out RMSE goes from ' + base.toFixed(2) + ' to ' + now.toFixed(2) + ' MPa.' : 'Held-out RMSE ' + base.toFixed(2) + ' MPa with every column intact. Click a header.') + '</p>' + (active[2] ? '<div class="ask">Cement content and the w/c ratio split the credit: ' + imps[0].toFixed(2) + ' and ' + imps[2].toFixed(2) + '. Shuffle one and the model reads the other. Remove the twin to see the survivor take the whole signal.</div>' : '<div class="ask ok">With the twin gone, cement content alone carries ' + imps[0].toFixed(2) + '. Same physics, one column, twice the bar: importances are facts about the fitted model, not about concrete.</div>');
+    const imax = imps ? (Math.max.apply(null, imps) || 1) : 1;
+    const twinOn = phase >= 1;
+    const T = document.getElementById("piTable"); let html = '<tr><th>held-out row</th>' + COLS.map((c, j) => '<th class="' + (!active[j] ? 'gone' : (shuffled[j] ? 'on' : (twinOn && TWIN.indexOf(j) >= 0 ? 'twin' : ''))) + '" data-j="' + j + '">' + c + (shuffled[j] ? ' (shuffled)' : (twinOn && active[j] && TWIN.indexOf(j) >= 0 ? ' (twin)' : '')) + '</th>').join('') + '<th>strength MPa</th></tr>';
+    for (let i = 0; i < 8; i++) html += '<tr><td>' + (TRn + i + 1) + '</td>' + COLS.map((c, j) => '<td class="' + (!active[j] ? 'gone' : (shuffled[j] ? 'sh' : (twinOn && TWIN.indexOf(j) >= 0 ? 'twin' : ''))) + '">' + (j === 2 ? X[i][j].toFixed(2) : X[i][j].toFixed(0)) + '</td>').join('') + '<td>' + TE[i].y.toFixed(1) + '</td></tr>';
+    html += '<tr><td colspan="7" style="color:var(--muted);font-family:var(--sans)">... 52 more held-out rows; the model was fitted to 140 other mixes' + (phase === 1 ? '; click a header to remove that column and refit' : '') + '</td></tr>';
+    T.innerHTML = html; T.querySelectorAll("th[data-j]").forEach(th => th.addEventListener("click", () => { const j = +th.dataset.j; if (!active[j]) return; if (phase === 1) { impsBefore = imps; active[j] = false; shuffled[j] = false; removed = j; phase = 2; imps = computeAll(); draw(); return; } shuffled[j] = !shuffled[j]; seedS++; draw(); }));
+    const B = document.getElementById("piBars"); B.innerHTML = '<span style="color:var(--muted)">importance</span><span style="color:var(--muted);font-size:12px">' + (imps ? 'rise in held-out RMSE when the column is shuffled, mean of five shuffles' : 'blank until you press compute importance') + '</span><span></span>' + COLS.map((c, j) => '<span>' + c + '</span><div class="bar"><i style="width:' + (imps && active[j] ? 100 * imps[j] / imax : 0) + '%"></i></div><span class="v">' + (!active[j] ? 'removed' : (imps ? imps[j].toFixed(2) : '-')) + '</span>').join('');
+    document.getElementById("piBase").textContent = base.toFixed(2); document.getElementById("piNow").textContent = now.toFixed(2); document.getElementById("piCem").textContent = imps ? (active[0] ? imps[0].toFixed(2) : "removed") : "-"; document.getElementById("piWC").textContent = imps ? (active[2] ? imps[2].toFixed(2) : "removed") : "-";
+    document.getElementById("piCompute").disabled = phase >= 1; document.getElementById("piRestore").disabled = removed === null;
+    const anyS = shuffled.some(s => s), shufTxt = anyS ? 'With ' + COLS.filter((c, j) => shuffled[j]).join(' and ') + ' shuffled, the held-out RMSE goes from ' + base.toFixed(2) + ' to ' + now.toFixed(2) + ' MPa. ' : '';
+    let s = '';
+    if (phase === 0) s += '<p class="prompt">Click a header to shuffle that column; then compute the importance of every column.</p><span class="k">five columns</span><p>' + (anyS ? shufTxt : 'Held-out RMSE ' + base.toFixed(2) + ' MPa with every column intact. ') + 'Each shuffle keeps the column\'s distribution and breaks its link to the rows.</p>';
+    else if (phase === 1) s += '<p class="prompt">Which column would you remove? Click its header.</p><div class="ask">Cement content reads ' + imps[0].toFixed(2) + ' and the w/c ratio ' + imps[2].toFixed(2) + ', the highlighted pair. ' + shufTxt + 'Water reads ' + imps[1].toFixed(2) + ', age ' + imps[3].toFixed(2) + ', slump ' + imps[4].toFixed(2) + '.</div>';
+    else { const isTwin = TWIN.indexOf(removed) >= 0, surv = removed === 0 ? 2 : 0;
+      s += '<div class="ask ' + (isTwin ? 'ok' : 'no') + '">' + (isTwin ? 'You removed ' + COLS[removed] + '. With the twin gone, ' + COLS[surv] + ' alone carries ' + imps[surv].toFixed(2) + ', up from ' + impsBefore[surv].toFixed(2) + '. Same physics, one column, about twice the bar.' : 'You removed ' + COLS[removed] + ', which has no twin, so its signal is lost: held-out RMSE is now ' + base.toFixed(2) + ' MPa. Cement and the w/c ratio still split their credit, ' + imps[0].toFixed(2) + ' and ' + imps[2].toFixed(2) + '.') + '</div>';
+      s += '<p class="prompt">' + (isTwin ? 'Why did its twin also read low?' : 'Why did the two twins both read low?') + '</p>';
+      if (whyAns === null) s += '<div class="gate">' + WHY.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>';
+      else s += '<div class="ask ' + (whyAns === WHY_OK ? 'ok' : 'no') + '">' + (whyAns === WHY_OK ? 'Right. ' : 'The answer is the first option. ') + 'The water-cement ratio is water over cement, so the model can read cement through it; shuffling either column leaves the other to cover, and each bar shows only the part of the signal the other cannot supply. Slump is the noise column, and its bar sits near zero whatever is shuffled.</div><p>Importance is a fact about the fitted model with these columns present; the physics of cement did not change when a column was removed.</p>'; }
+    stepEl.innerHTML = s;
+    stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { whyAns = parseInt(b.dataset.g, 10); draw(); }));
   }
-  document.getElementById("piTwin").addEventListener("click", () => { active[2] = false; shuffled[2] = false; draw(); });
-  document.getElementById("piRestore").addEventListener("click", () => { active[2] = true; draw(); });
-  document.getElementById("piReset").addEventListener("click", () => { shuffled = [false, false, false, false, false]; draw(); });
+  document.getElementById("piCompute").addEventListener("click", () => { if (phase >= 1) return; imps = computeAll(); phase = 1; draw(); });
+  document.getElementById("piRestore").addEventListener("click", () => { if (removed === null) return; active[removed] = true; removed = null; whyAns = null; phase = 1; imps = computeAll(); draw(); });
+  document.getElementById("piReset").addEventListener("click", () => { active = [true, true, true, true, true]; shuffled = [false, false, false, false, false]; phase = 0; imps = null; impsBefore = null; removed = null; whyAns = null; draw(); });
   quiz(document.getElementById("piQuiz"), { q: "Permutation importance ranks cement content fourth. A colleague concludes cement does not matter for strength. What is wrong?", options: ["Nothing; the model has spoken", "Importance is a fact about the fitted model: with the w/c ratio in the table the model can read cement through it, so the two split the credit", "The model should have been linear"], answer: 1, why: "Shuffling cement leaves the water-cement ratio intact and the model keeps most of the signal, so the drop is small. Importances become physics only when correlated inputs are handled on purpose, which is slide 9's warning." });
   window.addEventListener("themechange", draw);
   draw();
@@ -564,89 +707,176 @@ function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAtt
   const rng = mulberry32(77), g = randn(rng, 400);
   const D = []; for (let i = 0; i < 50; i++) D.push({ f: 2.10 + 0.03 * g[i], z: 1.2 + 0.12 * g[50 + i], s: 0 }); for (let i = 0; i < 50; i++) D.push({ f: 2.22 + 0.03 * g[100 + i], z: 1.55 + 0.12 * g[150 + i], s: 1 }); for (let i = 0; i < 50; i++) { const u = rng(); D.push({ f: 2.30 + 0.25 * u + 0.015 * g[200 + i], z: 1.6 + 0.8 * u + 0.08 * g[250 + i], s: 2 }); }
   const sf = Math.sqrt(mean(D.map(d => (d.f - mean(D.map(q => q.f))) ** 2))), sz = Math.sqrt(mean(D.map(d => (d.z - mean(D.map(q => q.z))) ** 2)));
+  const X = D.map(d => [d.f / sf, d.z / sz]);
+  const NAMES = ["blue", "orange", "green", "purple"], EMN = 5;
   const board = new Board(document.getElementById("kmPlane"));
   const L = 70, R = board.W - 30, TOP = 40, BOT = board.H - 50; const px = f => L + (f - 1.9) / 0.8 * (R - L), py = z => BOT - (z - 0.8) / 2.0 * (BOT - TOP);
-  let C = [], assign = null, it = 0, changed = null, prev = null, gmm = null;
+  let C = [], assign = null, it = 0, changed = null, prev = null, gmm = null, gmmPrev = null, gateAns = null, moves = null, emStep = 0;
   const stepEl = document.getElementById("kmStep");
   const dist2 = (d, c) => ((d.f - c.f) / sf) ** 2 + ((d.z - c.z) / sz) ** 2;
-  function doAssign() { const a = D.map(d => { let b = 0; for (let k = 1; k < C.length; k++) if (dist2(d, C[k]) < dist2(d, C[b])) b = k; return b; }); changed = assign ? a.filter((v, i) => v !== assign[i]).length : D.length; assign = a; gmm = null; }
-  function doUpdate() { prev = C.map(c => ({ f: c.f, z: c.z })); C = C.map((c, k) => { const m = D.filter((d, i) => assign[i] === k); return m.length ? { f: mean(m.map(d => d.f)), z: mean(m.map(d => d.z)) } : c; }); it++; }
+  function doAssign() { const a = D.map(d => { let b = 0; for (let k = 1; k < C.length; k++) if (dist2(d, C[k]) < dist2(d, C[b])) b = k; return b; }); changed = assign ? a.filter((v, i) => v !== assign[i]).length : D.length; assign = a; }
+  function doUpdate() { prev = C.map(c => ({ f: c.f, z: c.z })); C = C.map((c, k) => { const m = D.filter((d, i) => assign[i] === k); return m.length ? { f: mean(m.map(d => d.f)), z: mean(m.map(d => d.z)) } : c; }); it++; if (it === 1) moves = C.map((c, k) => Math.sqrt(dist2(prev[k], c))); }
   function J() { if (!assign) return null; return D.reduce((s, d, i) => s + dist2(d, C[assign[i]]), 0); }
-  function runEM() { const K = C.length; let comps = C.map(c => ({ m: [c.f / sf, c.z / sz], S: [[0.3, 0], [0, 0.3]], w: 1 / K })); const X = D.map(d => [d.f / sf, d.z / sz]); let ll = 0; for (let iter = 0; iter < 60; iter++) { const resp = X.map(x => { const p = comps.map(c => { const det = c.S[0][0] * c.S[1][1] - c.S[0][1] * c.S[1][0], inv = [[c.S[1][1] / det, -c.S[0][1] / det], [-c.S[1][0] / det, c.S[0][0] / det]], dx = x[0] - c.m[0], dy = x[1] - c.m[1]; const q = dx * (inv[0][0] * dx + inv[0][1] * dy) + dy * (inv[1][0] * dx + inv[1][1] * dy); return c.w * Math.exp(-0.5 * q) / (2 * Math.PI * Math.sqrt(det)); }); const s = p.reduce((a, b) => a + b, 0) || 1e-300; return { r: p.map(v => v / s), s }; }); ll = resp.reduce((a, r) => a + Math.log(r.s), 0); comps = comps.map((c, k) => { const rk = resp.map(r => r.r[k]), N = rk.reduce((a, b) => a + b, 0) || 1e-9; const m = [X.reduce((a, x, i) => a + rk[i] * x[0], 0) / N, X.reduce((a, x, i) => a + rk[i] * x[1], 0) / N]; let a = 0, b = 0, d = 0; X.forEach((x, i) => { const dx = x[0] - m[0], dy = x[1] - m[1]; a += rk[i] * dx * dx; b += rk[i] * dx * dy; d += rk[i] * dy * dy; }); return { m, S: [[a / N + 0.01, b / N], [b / N, d / N + 0.01]], w: N / X.length }; }); } gmm = { comps, ll }; assign = X.map(x => { const p = comps.map(c => { const det = c.S[0][0] * c.S[1][1] - c.S[0][1] * c.S[1][0], inv = [[c.S[1][1] / det, -c.S[0][1] / det], [-c.S[1][0] / det, c.S[0][0] / det]], dx = x[0] - c.m[0], dy = x[1] - c.m[1]; const q = dx * (inv[0][0] * dx + inv[0][1] * dy) + dy * (inv[1][0] * dx + inv[1][1] * dy); return c.w * Math.exp(-0.5 * q) / Math.sqrt(det); }); let b = 0; for (let k = 1; k < p.length; k++) if (p[k] > p[b]) b = k; return b; }); C = comps.map(c => ({ f: c.m[0] * sf, z: c.m[1] * sz })); }
+  function pdf(x, c) { const det = c.S[0][0] * c.S[1][1] - c.S[0][1] * c.S[1][0], inv = [[c.S[1][1] / det, -c.S[0][1] / det], [-c.S[1][0] / det, c.S[0][0] / det]], dx = x[0] - c.m[0], dy = x[1] - c.m[1]; const q = dx * (inv[0][0] * dx + inv[0][1] * dy) + dy * (inv[1][0] * dx + inv[1][1] * dy); return c.w * Math.exp(-0.5 * q) / (2 * Math.PI * Math.sqrt(det)); }
+  function respOf(comps) { return X.map(x => { const p = comps.map(c => pdf(x, c)); const s = p.reduce((a, b) => a + b, 0) || 1e-300; return { r: p.map(v => v / s), s }; }); }
+  function initEM() { const counts = C.map((c, k) => assign.filter(a => a === k).length); const comps = C.map((c, k) => ({ m: [c.f / sf, c.z / sz], S: [[0.05, 0], [0, 0.05]], w: Math.max(counts[k], 1) / D.length })); const resp = respOf(comps); gmm = { comps, resp, ll: resp.reduce((a, r) => a + Math.log(r.s), 0) }; gmmPrev = null; emStep = 0; }
+  function stepEM() { const resp = gmm.resp; gmmPrev = gmm.comps; const comps = gmm.comps.map((c, k) => { const rk = resp.map(r => r.r[k]), N = rk.reduce((a, b) => a + b, 0) || 1e-9; const m = [X.reduce((a, x, i) => a + rk[i] * x[0], 0) / N, X.reduce((a, x, i) => a + rk[i] * x[1], 0) / N]; let a = 0, b = 0, d = 0; X.forEach((x, i) => { const dx = x[0] - m[0], dy = x[1] - m[1]; a += rk[i] * dx * dx; b += rk[i] * dx * dy; d += rk[i] * dy * dy; }); return { m, S: [[a / N + 0.01, b / N], [b / N, d / N + 0.01]], w: N / X.length }; }); const resp2 = respOf(comps); gmm = { comps, resp: resp2, ll: resp2.reduce((a, r) => a + Math.log(r.s), 0) }; emStep++; assign = resp2.map(r => { let b = 0; for (let k = 1; k < r.r.length; k++) if (r.r[k] > r.r[b]) b = k; return b; }); prev = C.map(c => ({ f: c.f, z: c.z })); C = comps.map(c => ({ f: c.m[0] * sf, z: c.m[1] * sz })); }
+  function blend(ws) { const rgb = [0, 0, 0]; ws.forEach((w, k) => { const c = hexToRgb(PAL[k]); for (let i = 0; i < 3; i++) rgb[i] += w * c[i]; }); return "rgb(" + rgb.map(v => Math.round(v)).join(",") + ")"; }
+  function ellipse(ctx, c, color, width, alphaMix) { const tr = c.S[0][0] + c.S[1][1], det = c.S[0][0] * c.S[1][1] - c.S[0][1] * c.S[1][0], disc = Math.sqrt(Math.max(0, tr * tr / 4 - det)), l1 = tr / 2 + disc, l2 = tr / 2 - disc; let v = [c.S[0][1], l1 - c.S[0][0]]; if (Math.abs(c.S[0][1]) < 1e-9) v = c.S[0][0] >= c.S[1][1] ? [1, 0] : [0, 1]; const nv = Math.hypot(v[0], v[1]); v = [v[0] / nv, v[1] / nv]; [1, 2].forEach(s => { ctx.strokeStyle = alphaMix ? mix(css("--panel"), color, alphaMix) : color; ctx.lineWidth = s === 1 ? width : Math.max(1, width / 2); ctx.setLineDash(s === 1 ? [] : [4, 4]); ctx.beginPath(); for (let t = 0; t <= 60; t++) { const th = 2 * Math.PI * t / 60, a = s * Math.sqrt(l1) * Math.cos(th), b = s * Math.sqrt(l2) * Math.sin(th); const x = (c.m[0] + a * v[0] - b * v[1]) * sf, y = (c.m[1] + a * v[1] + b * v[0]) * sz; if (t === 0) ctx.moveTo(px(x), py(y)); else ctx.lineTo(px(x), py(y)); } ctx.stroke(); ctx.setLineDash([]); }); }
   function draw() {
     board.clear("one year of days: first natural frequency across, damping ratio up; click to place centroids"); const ctx = board.ctx;
     board.line(L, BOT, R, BOT, css("--line"), 1); board.line(L, TOP, L, BOT, css("--line"), 1);
     for (let f = 1.9; f <= 2.71; f += 0.1) board.label(f.toFixed(1) + " Hz", px(f), BOT + 16, css("--muted"), "center", 10, true); for (let z = 1.0; z <= 2.8; z += 0.4) board.label(z.toFixed(1) + " %", L - 6, py(z) + 4, css("--muted"), "right", 10, true);
-    if (gmm) gmm.comps.forEach((c, k) => { const tr = c.S[0][0] + c.S[1][1], det = c.S[0][0] * c.S[1][1] - c.S[0][1] * c.S[1][0], disc = Math.sqrt(Math.max(0, tr * tr / 4 - det)), l1 = tr / 2 + disc, l2 = tr / 2 - disc; let v = [c.S[0][1], l1 - c.S[0][0]]; if (Math.abs(c.S[0][1]) < 1e-9) v = c.S[0][0] >= c.S[1][1] ? [1, 0] : [0, 1]; const nv = Math.hypot(v[0], v[1]); v = [v[0] / nv, v[1] / nv]; [1, 2].forEach(s => { ctx.strokeStyle = PAL[k]; ctx.lineWidth = s === 1 ? 2 : 1; ctx.setLineDash(s === 1 ? [] : [4, 4]); ctx.beginPath(); for (let t = 0; t <= 60; t++) { const th = 2 * Math.PI * t / 60, a = s * Math.sqrt(l1) * Math.cos(th), b = s * Math.sqrt(l2) * Math.sin(th); const x = (c.m[0] + a * v[0] - b * v[1]) * sf, y = (c.m[1] + a * v[1] + b * v[0]) * sz; if (t === 0) ctx.moveTo(px(x), py(y)); else ctx.lineTo(px(x), py(y)); } ctx.stroke(); ctx.setLineDash([]); }); });
-    D.forEach((d, i) => board.dot(px(d.f), py(d.z), 4, assign ? PAL[assign[i]] : css("--grey")));
+    if (gmm && gmmPrev) gmmPrev.forEach((c, k) => ellipse(ctx, c, PAL[k], 1.5, 0.35));
+    if (gmm) gmm.comps.forEach((c, k) => ellipse(ctx, c, PAL[k], 2, 0));
+    D.forEach((d, i) => board.dot(px(d.f), py(d.z), 4, gmm ? blend(gmm.resp[i].r) : (assign ? PAL[assign[i]] : css("--grey"))));
     if (prev) prev.forEach((p, k) => { board.line(px(p.f), py(p.z), px(C[k].f), py(C[k].z), PAL[k], 2, [4, 3]); board.dot(px(p.f), py(p.z), 5, mix(css("--panel"), PAL[k], 0.5)); });
-    C.forEach((c, k) => { ctx.fillStyle = PAL[k]; ctx.beginPath(); ctx.moveTo(px(c.f), py(c.z) - 13); ctx.lineTo(px(c.f) + 12, py(c.z) + 9); ctx.lineTo(px(c.f) - 12, py(c.z) + 9); ctx.closePath(); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke(); });
-    board.label("triangles: centroids; faint dots and dashes: where they were before the last update; features scaled to unit variance before distances", L, board.H - 14, css("--muted"), "left", 12);
-    const j = J(); document.getElementById("kmK").textContent = C.length; document.getElementById("kmIt").textContent = it; document.getElementById("kmJ").textContent = j === null ? "-" : j.toFixed(1); document.getElementById("kmChanged").textContent = changed === null ? "-" : changed; document.getElementById("kmLL").textContent = gmm ? gmm.ll.toFixed(1) : "-";
-    document.getElementById("kmAssign").disabled = C.length === 0; document.getElementById("kmUpdate").disabled = !assign; document.getElementById("kmRun").disabled = C.length === 0; document.getElementById("kmEM").disabled = C.length === 0;
-    stepEl.innerHTML = '<span class="k">' + (C.length === 0 ? 'place centroids' : (gmm ? 'gaussian mixture' : (changed === 0 ? 'converged' : 'iteration ' + it))) + '</span><p>' + (C.length === 0 ? 'The days fall into seasons but nobody labelled them. Click to place K guesses, two to four, anywhere.' : (gmm ? 'Expectation-maximization from your centroids: each cluster now has a covariance, drawn at one and two sigma, and each day a soft membership. The elongated winter cluster is finally one cluster. Log likelihood ' + gmm.ll.toFixed(1) + '; it never falls from one iteration to the next.' : (!assign ? 'Press assign: every day joins its nearest centroid.' : (changed === 0 ? 'Nothing moved: a local minimum of the scatter, ' + j.toFixed(1) + '. Clear and start the centroids elsewhere; a different placement can stop at a different answer with a different scatter.' : changed + ' days changed cluster. Press update to move each centroid to the mean of its days, then assign again. Scatter ' + j.toFixed(1) + '.')))) + '</p>';
+    C.forEach((c, k) => { ctx.fillStyle = PAL[k]; ctx.beginPath(); ctx.moveTo(px(c.f), py(c.z) - 13); ctx.lineTo(px(c.f) + 12, py(c.z) + 9); ctx.lineTo(px(c.f) - 12, py(c.z) + 9); ctx.closePath(); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke(); if (gateAns === k && !gmm) { ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(px(c.f), py(c.z), 20, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]); board.label("your pick", px(c.f) + 24, py(c.z) + 4, css("--ink"), "left", 12); } });
+    board.label(gmm ? "ellipses at one and two sigma; faint: the previous EM step; dot colour blends the memberships" : "triangles: centroids; faint dots and dashes: where they were before the last update; features scaled to unit variance before distances", L, board.H - 14, css("--muted"), "left", 12);
+    const j = J(), soft = gmm ? gmm.resp.filter(r => Math.max.apply(null, r.r) < 0.9).length : null;
+    document.getElementById("kmK").textContent = C.length; document.getElementById("kmIt").textContent = it; document.getElementById("kmJ").textContent = j === null ? "-" : j.toFixed(1); document.getElementById("kmChanged").textContent = changed === null ? "-" : changed; document.getElementById("kmEMn").textContent = gmm ? emStep + " of " + EMN : "-"; document.getElementById("kmSoft").textContent = soft === null ? "-" : soft; document.getElementById("kmLL").textContent = gmm ? gmm.ll.toFixed(1) : "-";
+    const gateOpen = C.length >= 2 && gateAns === null;
+    document.getElementById("kmAssign").disabled = C.length < 2 || gateAns === null || !!gmm; document.getElementById("kmUpdate").disabled = !assign || !!gmm; document.getElementById("kmRun").disabled = C.length < 2 || gateAns === null || !!gmm; document.getElementById("kmEM").disabled = it < 1 || !!gmm; document.getElementById("kmEMStep").disabled = !gmm || emStep >= EMN;
+    let html = '<p class="prompt">Place three centroids. Which one will move furthest on the first update?</p>';
+    if (C.length === 0) html += '<span class="k">place centroids</span><p>The days fall into seasons but nobody labelled them. Click to place K guesses, three is the question, two to four allowed.</p>';
+    else if (C.length === 1) html += '<span class="k">one centroid</span><p>Place at least one more, then click the one you expect to move furthest.</p>';
+    else if (gateOpen) html += '<span class="k">' + C.length + ' centroids</span><p>Click one of the triangles to commit. A centroid moves to the mean of the days that choose it; the assign button unlocks after your pick.</p>';
+    else {
+      if (moves) { let far = 0; moves.forEach((m, k) => { if (m > moves[far]) far = k; }); html += '<div class="ask ' + (far === gateAns ? 'ok' : 'no') + '">' + (far === gateAns ? 'Right. ' : 'You picked the ' + NAMES[gateAns] + ' centroid. ') + 'The ' + NAMES[far] + ' centroid moved furthest on the first update, ' + moves[far].toFixed(2) + ' scaled units' + (far === gateAns ? '' : '; yours moved ' + moves[gateAns].toFixed(2)) + '. Each centroid jumps to the mean of the days that chose it, so the one placed furthest from the middle of its own days moves most.</div>'; }
+      else html += '<span class="k">locked: the ' + NAMES[gateAns] + ' centroid</span>';
+      html += '<p>' + (gmm ? 'EM step ' + emStep + ' of ' + EMN + ' from the k-means result: each cluster has a covariance drawn at one and two sigma, and each day a soft membership. ' + soft + ' days sit under 0.9 on their best cluster' + (emStep === 0 ? ', almost none yet, because the starting ellipses are small circles.' : (emStep < EMN ? '; the ellipses grew from the faint ones as the memberships at the boundaries softened.' : '. The elongated winter cluster is one ellipse. Log likelihood ' + gmm.ll.toFixed(1) + '; it never falls from one step to the next.')) : (!assign ? 'Press assign: every day joins its nearest centroid.' : (changed === 0 ? 'Nothing moved: a local minimum of the scatter, ' + j.toFixed(1) + '. Start the mixture from here, or clear and place the centroids elsewhere; a different placement can stop at a different answer with a different scatter.' : changed + ' days changed cluster. Press update to move each centroid to the mean of its days, then assign again. Scatter ' + j.toFixed(1) + '.'))) + '</p>'; }
+    stepEl.innerHTML = html;
   }
-  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); if (mx < L || mx > R || my < TOP || my > BOT) return; if (C.length >= 4) return; C.push({ f: 1.9 + (mx - L) / (R - L) * 0.8, z: 0.8 + (BOT - my) / (BOT - TOP) * 2.0 }); assign = null; prev = null; gmm = null; it = 0; changed = null; draw(); });
-  document.getElementById("kmAssign").addEventListener("click", () => { doAssign(); prev = null; draw(); });
+  board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); if (mx < L || mx > R || my < TOP || my > BOT) return; if (gmm) return; if (C.length >= 2 && gateAns === null && !assign) { let hit = -1; C.forEach((c, k) => { if (Math.hypot(mx - px(c.f), my - py(c.z)) < 18) hit = k; }); if (hit >= 0) { gateAns = hit; draw(); return; } } if (C.length >= 4) return; C.push({ f: 1.9 + (mx - L) / (R - L) * 0.8, z: 0.8 + (BOT - my) / (BOT - TOP) * 2.0 }); assign = null; prev = null; gmm = null; gmmPrev = null; it = 0; changed = null; gateAns = null; moves = null; emStep = 0; draw(); });
+  document.getElementById("kmAssign").addEventListener("click", () => { if (gateAns === null) return; doAssign(); prev = null; draw(); });
   document.getElementById("kmUpdate").addEventListener("click", () => { doUpdate(); draw(); });
-  document.getElementById("kmRun").addEventListener("click", () => { for (let k = 0; k < 50; k++) { doAssign(); if (changed === 0 && k > 0) break; doUpdate(); } doAssign(); draw(); });
-  document.getElementById("kmEM").addEventListener("click", () => { runEM(); prev = null; draw(); });
-  document.getElementById("kmClear").addEventListener("click", () => { C = []; assign = null; prev = null; gmm = null; it = 0; changed = null; draw(); });
+  document.getElementById("kmRun").addEventListener("click", () => { if (gateAns === null) return; for (let k = 0; k < 50; k++) { doAssign(); if (changed === 0 && k > 0) break; doUpdate(); } doAssign(); draw(); });
+  document.getElementById("kmEM").addEventListener("click", () => { if (it < 1 || !assign) return; initEM(); prev = null; draw(); });
+  document.getElementById("kmEMStep").addEventListener("click", () => { if (!gmm || emStep >= EMN) return; stepEM(); draw(); });
+  document.getElementById("kmClear").addEventListener("click", () => { C = []; assign = null; prev = null; gmm = null; gmmPrev = null; it = 0; changed = null; gateAns = null; moves = null; emStep = 0; draw(); });
   quiz(document.getElementById("kmQuiz"), { q: "k-means always stops, but two runs from different starts give different clusters. Which is right?", options: ["The first run; k-means is deterministic", "Neither is guaranteed: each run reaches a local minimum of the within-cluster scatter, so run several starts and keep the lowest scatter", "The one with more iterations"], answer: 1, why: "Every assign and update step lowers the scatter and there are finitely many assignments, so the loop converges, but only to a local answer. Slide 11: run several starts, state the K you chose and why." });
+  window.addEventListener("themechange", draw);
+  draw();
+})();
+
+/* ================= 5b. THE ROTATING AXIS ================= */
+(function pca() {
+  const N = 150, rng = mulberry32(99), g = randn(rng, 3 * N);
+  const P = []; for (let i = 0; i < N; i++) { const u = g[i]; P.push([140 + 32 * u + 8 * g[N + i], 100 + 20 * u + 8 * g[2 * N + i]]); }
+  const mu = [mean(P.map(p => p[0])), mean(P.map(p => p[1]))]; let a = 0, b = 0, d = 0; P.forEach(p => { a += (p[0] - mu[0]) ** 2; b += (p[0] - mu[0]) * (p[1] - mu[1]); d += (p[1] - mu[1]) ** 2; }); const S = [[a / N, b / N], [b / N, d / N]], trS = S[0][0] + S[1][1];
+  const det = S[0][0] * S[1][1] - S[0][1] * S[1][0], disc = Math.sqrt(Math.max(0, trS * trS / 4 - det)), l1 = trS / 2 + disc, l2 = trS / 2 - disc; let v1 = [S[0][1], l1 - S[0][0]]; const nv = Math.hypot(v1[0], v1[1]); v1 = [v1[0] / nv, v1[1] / nv]; if (v1[0] < 0) v1 = [-v1[0], -v1[1]]; const ANG1 = Math.atan2(v1[1], v1[0]);
+  const board = new Board(document.getElementById("pcPlot"));
+  const L = 70, TOP = 50, SZ = 460, BOT = TOP + SZ, R = L + SZ; const px = x => L + x / 280 * SZ, py = y => BOT - (y + 40) / 280 * SZ;
+  const cx = px(mu[0]), cy = py(mu[1]), HR = 215;
+  const THETA0 = 20 * Math.PI / 180;
+  let theta = THETA0, locked = null, snapped = false, anim = null, dragging = false;
+  const stepEl = document.getElementById("pcStep");
+  const frac = th => { const v = [Math.cos(th), Math.sin(th)]; return (v[0] * (S[0][0] * v[0] + S[0][1] * v[1]) + v[1] * (S[1][0] * v[0] + S[1][1] * v[1])) / trS; };
+  const deg = th => { let dg = th * 180 / Math.PI; while (dg <= -90) dg += 180; while (dg > 90) dg -= 180; return dg; };
+  const angDiff = (p, q) => { let dd = Math.abs(deg(p) - deg(q)); if (dd > 90) dd = 180 - dd; return dd; };
+  function draw() {
+    board.clear("two strain gauges on one girder, 150 readings; drag the end of the axis to rotate it"); const ctx = board.ctx;
+    board.line(L, BOT, R, BOT, css("--line"), 1); board.line(L, TOP, L, BOT, css("--line"), 1);
+    for (let x = 0; x <= 280; x += 70) board.label(String(x), px(x), BOT + 16, css("--muted"), "center", 10, true); for (let y = 30; y <= 240; y += 70) board.label(String(y), L - 6, py(y) + 4, css("--muted"), "right", 10, true);
+    board.label("gauge A, microstrain", (L + R) / 2, BOT + 34, css("--muted"), "center", 12); ctx.save(); ctx.translate(L - 44, (TOP + BOT) / 2); ctx.rotate(-Math.PI / 2); board.label("gauge B, microstrain", 0, 0, css("--muted"), "center", 12); ctx.restore();
+    const v = [Math.cos(theta), Math.sin(theta)];
+    // projections of the readings onto the axis, as faint ticks
+    P.forEach(p => { const s = (p[0] - mu[0]) * v[0] + (p[1] - mu[1]) * v[1]; const fx = mu[0] + s * v[0], fy = mu[1] + s * v[1]; board.line(px(p[0]), py(p[1]), px(fx), py(fy), mix(css("--panel"), css("--grey"), 0.25), 1); board.dot(px(fx), py(fy), 2, mix(css("--panel"), css("--blue"), 0.6)); });
+    P.forEach(p => board.dot(px(p[0]), py(p[1]), 3.5, css("--ink")));
+    if (snapped) { const w = [-v1[1], v1[0]]; board.line(cx - w[0] * 150, cy + w[1] * 150, cx + w[0] * 150, cy - w[1] * 150, css("--orange"), 2, [6, 4]); board.label("second component", cx + w[0] * 160 + 6, cy - w[1] * 160, css("--orange"), "left", 12); }
+    board.line(cx - v[0] * HR, cy + v[1] * HR, cx + v[0] * HR, cy - v[1] * HR, css("--blue"), 3);
+    board.dot(cx, cy, 5, css("--blue"), "#fff"); board.dot(cx + v[0] * HR, cy - v[1] * HR, 9, css("--blue"), "#fff"); board.label("drag", cx + v[0] * HR + 12, cy - v[1] * HR + 4, css("--blue"), "left", 12);
+    board.label("axis at " + deg(theta).toFixed(1) + " deg", L + 6, TOP + 18, css("--blue"), "left", 13);
+    // right panel
+    const RX = 600, RW = 560, f = frac(theta);
+    board.label("variance of the projections onto the axis, as a fraction of the total", RX, 90, css("--ink"), "left", 13);
+    ctx.fillStyle = css("--bg"); ctx.fillRect(RX, 104, RW, 26); ctx.strokeStyle = css("--line"); ctx.strokeRect(RX, 104, RW, 26);
+    if (locked !== null) { ctx.fillStyle = css("--blue"); ctx.fillRect(RX, 104, RW * f, 26); board.label(f.toFixed(3), RX + RW * f + (f > 0.85 ? -8 : 8), 123, f > 0.85 ? "#fff" : css("--ink"), f > 0.85 ? "right" : "left", 13, true); board.label("locked at " + deg(locked).toFixed(1) + " deg: fraction " + frac(locked).toFixed(3), RX, 152, css("--muted"), "left", 12); }
+    else board.label("hidden until you lock in an angle", RX + 10, 123, css("--muted"), "left", 12);
+    if (snapped) { ctx.fillStyle = css("--bg"); ctx.fillRect(RX, 180, RW, 26); ctx.strokeStyle = css("--line"); ctx.strokeRect(RX, 180, RW, 26); ctx.fillStyle = css("--orange"); ctx.fillRect(RX, 180, RW * (l2 / trS), 26); board.label("second component: " + (l2 / trS).toFixed(3) + ", the rest", RX + RW * (l2 / trS) + 8, 199, css("--ink"), "left", 13, true); }
+    board.label("S = [[" + S[0][0].toFixed(0) + ", " + S[0][1].toFixed(0) + "], [" + S[1][0].toFixed(0) + ", " + S[1][1].toFixed(0) + "]]  microstrain^2", RX, 250, css("--muted"), "left", 12, true);
+    board.label("fraction shown = v' S v / trace(S) for the unit vector v along the axis", RX, 272, css("--muted"), "left", 12);
+    board.label("S v = lambda v;  lambda1 = " + l1.toFixed(0) + ", lambda2 = " + l2.toFixed(0) + (snapped ? ";  eigenvector at " + deg(ANG1).toFixed(1) + " deg" : "") , RX, 294, css("--muted"), "left", 12, true);
+    board.label("S is the normal matrix A'A / n of Week 1, built from the centred readings", RX, 316, css("--muted"), "left", 12);
+    document.getElementById("pcAng").textContent = deg(theta).toFixed(1) + " deg"; document.getElementById("pcFrac").textContent = locked === null ? "locked" : f.toFixed(3); document.getElementById("pcPC1").textContent = snapped ? deg(ANG1).toFixed(1) + " deg" : "-"; document.getElementById("pcEig").textContent = l1.toFixed(0) + " and " + l2.toFixed(0);
+    document.getElementById("pcSnap").disabled = locked === null || snapped;
+    let html = '<p class="prompt">Where is the direction of largest variance?</p>';
+    if (locked === null) html += '<div class="gate"><button class="primary" data-g="0">Lock in this angle</button></div><p>Rotate the axis by dragging its end. The faint ticks are the projections of the readings onto it; lock the angle where they spread the most. The variance bar appears after that.</p>';
+    else { const err = angDiff(locked, ANG1), ok = err <= 10;
+      html += '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + 'You locked ' + deg(locked).toFixed(1) + ' deg; the eigenvector of the covariance is at ' + deg(ANG1).toFixed(1) + ' deg, ' + err.toFixed(1) + ' deg away. Your axis holds ' + frac(locked).toFixed(3) + ' of the variance, the eigenvector ' + (l1 / trS).toFixed(3) + ', the largest any axis can hold.</div>';
+      html += '<span class="k">' + (snapped ? 'two components' : 'axis unlocked') + '</span><p>' + (snapped ? 'The axis sits on the first principal component. The dashed perpendicular is the second; it holds the remaining ' + (l2 / trS).toFixed(3) + ' of the variance, and the two eigenvalues add to the trace of S. One number per reading along the first axis keeps ' + (100 * l1 / trS).toFixed(0) + ' percent of what two gauges recorded.' : 'Keep rotating and watch the bar: it peaks at the eigenvector and bottoms out ninety degrees away. Press snap to see the axis find the eigenvector on its own.') + '</p>'; }
+    stepEl.innerHTML = html;
+    stepEl.querySelectorAll(".gate button").forEach(bt => bt.addEventListener("click", () => { locked = theta; draw(); }));
+  }
+  board.c.addEventListener("pointerdown", ev => { if (anim) return; const [mx, my] = board.pos(ev); if (mx > R + 40) return; dragging = true; snapped = false; board.c.setPointerCapture && board.c.setPointerCapture(ev.pointerId); theta = Math.atan2(cy - my, mx - cx); draw(); });
+  board.c.addEventListener("pointermove", ev => { if (!dragging) return; const [mx, my] = board.pos(ev); theta = Math.atan2(cy - my, mx - cx); draw(); });
+  board.c.addEventListener("pointerup", () => { dragging = false; }); board.c.addEventListener("pointercancel", () => { dragging = false; });
+  document.getElementById("pcSnap").addEventListener("click", () => { if (locked === null || anim) return; let target = ANG1; while (target - theta > Math.PI / 2) target -= Math.PI; while (target - theta < -Math.PI / 2) target += Math.PI; const start = theta, t0 = performance.now(); (function frame(now) { const u = Math.min(1, (now - t0) / 900), e = u * u * (3 - 2 * u); theta = start + (target - start) * e; if (u < 1) { draw(); anim = requestAnimationFrame(frame); } else { theta = target; anim = null; snapped = true; draw(); } })(t0); });
+  document.getElementById("pcReset").addEventListener("click", () => { if (anim) cancelAnimationFrame(anim); anim = null; theta = THETA0; locked = null; snapped = false; draw(); });
+  quiz(document.getElementById("pcQuiz"), { q: "The first principal component of the two gauges is the eigenvector of the covariance with the largest eigenvalue. Which Week 1 object is that covariance matrix?", options: ["The normal matrix A'A over n, with the centred readings as the columns of A", "The residual vector of the least squares fit", "The Jacobian of the measurement model"], answer: 0, why: "Centre the readings, stack them as the rows of A, and A'A / n is the covariance. Least squares solved A'A x = A'b; PCA asks the same matrix a different question, which direction it stretches most, and that is its eigenproblem." });
   window.addEventListener("themechange", draw);
   draw();
 })();
 
 /* ================= 6. THE THIN SIDE OF THE ELLIPSE ================= */
 (function novelty() {
-  const NH = 150, NT = 300; let seed = 88, H = [], REC = [], onset = 150, cov = null, mu = null, eig = null, inv = null, thrM = Math.sqrt(9.21), thrE = null, rE = null;
+  const NH = 150, NT = 300; let seed = 88, H = [], REC = [], onset = 150, cov = null, mu = null, eig = null, inv = null, thrM = Math.sqrt(9.21), thrE = null, rE = null, axis = "short", locked = null, typedE = "", typedM = "";
   const board = new Board(document.getElementById("nvPlane"));
   const L = 70, R = 760, TOP = 40, BOT = 440; const px = f => L + (f - 2.10) / 0.35 * (R - L), py = f => BOT - (f - 5.55) / 1.0 * (BOT - TOP);
   let today = [2.26, 6.0], day = 0, drag = null;
   function make() { const rng = mulberry32(seed), g = randn(rng, 4 * NT); onset = 130 + Math.floor(rng() * 60); H = []; REC = []; for (let t = 0; t < NT; t++) { const T = -5 + 35 * rng(); let f1 = 2.30 - 0.004 * T + 0.010 * g[t], f2 = 6.10 - 0.012 * T + 0.030 * g[NT + t]; if (t < NH) H.push([f1, f2]); REC.push([f1, f2, T]); }
     mu = [mean(H.map(h => h[0])), mean(H.map(h => h[1]))]; let a = 0, b = 0, d = 0; H.forEach(h => { a += (h[0] - mu[0]) ** 2; b += (h[0] - mu[0]) * (h[1] - mu[1]); d += (h[1] - mu[1]) ** 2; }); cov = [[a / NH, b / NH], [b / NH, d / NH]];
     const tr = cov[0][0] + cov[1][1], det = cov[0][0] * cov[1][1] - cov[0][1] * cov[1][0], disc = Math.sqrt(Math.max(0, tr * tr / 4 - det)); const l1 = tr / 2 + disc, l2 = tr / 2 - disc; let v1 = [cov[0][1], l1 - cov[0][0]]; const nv = Math.hypot(v1[0], v1[1]); v1 = [v1[0] / nv, v1[1] / nv]; eig = { l1, l2, v1, v2: [-v1[1], v1[0]] }; inv = [[cov[1][1] / det, -cov[0][1] / det], [-cov[1][0] / det, cov[0][0] / det]];
-    // damage drift along the short axis from the onset day
-    for (let t = onset; t < NT; t++) { const s = 0.1 * Math.sqrt(l2) * (t - onset); REC[t][0] += s * eig.v2[0]; REC[t][1] += s * eig.v2[1]; }
+    // synthetic damage drift from the onset day: a tenth of a sigma per day along the chosen axis of the healthy cloud
+    const dir = axis === "short" ? eig.v2 : eig.v1, step = 0.1 * Math.sqrt(axis === "short" ? l2 : l1);
+    for (let t = onset; t < NT; t++) { const s = step * (t - onset); REC[t][0] += s * dir[0]; REC[t][1] += s * dir[1]; }
     rE = Math.sqrt(l1); const de = H.map(h => Math.hypot(h[0] - mu[0], h[1] - mu[1]) / rE).sort((p, q) => p - q); thrE = de[Math.floor(0.99 * NH)]; }
   const dM = p => { const dx = p[0] - mu[0], dy = p[1] - mu[1]; return Math.sqrt(dx * (inv[0][0] * dx + inv[0][1] * dy) + dy * (inv[1][0] * dx + inv[1][1] * dy)); };
   const dE = p => Math.hypot(p[0] - mu[0], p[1] - mu[1]) / rE;
   const stepEl = document.getElementById("nvStep");
+  function alarms() { let aE = null, aM = null, fE = 0, fM = 0, runE = 0, runM = 0; REC.forEach((r, t) => { const xe = dE(r) > thrE, xm = dM(r) > thrM; runE = xe ? runE + 1 : 0; runM = xm ? runM + 1 : 0; if (t < onset) { if (xe) fE++; if (xm) fM++; } else { if (runE >= 3 && aE === null) aE = t; if (runM >= 3 && aM === null) aM = t; } }); return { aE, aM, fE, fM }; }
   function draw() {
     board.clear("two natural frequencies of the healthy bridge; drag the orange reading, drag the day marker below"); const ctx = board.ctx;
     board.line(L, BOT, R, BOT, css("--line"), 1); board.line(L, TOP, L, BOT, css("--line"), 1);
     for (let f = 2.10; f <= 2.46; f += 0.05) board.label(f.toFixed(2) + " Hz", px(f), BOT + 16, css("--muted"), "center", 10, true); for (let f = 5.6; f <= 6.55; f += 0.2) board.label(f.toFixed(1) + " Hz", L - 6, py(f) + 4, css("--muted"), "right", 10, true);
-    // euclidean circle (in the scaled sense: radius thrE * rE in both axes, drawn in data coords => ellipse on screen because axes differ; keep it a true circle in data units)
     ctx.strokeStyle = css("--grey"); ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath(); for (let t = 0; t <= 80; t++) { const th = 2 * Math.PI * t / 80; const x = mu[0] + thrE * rE * Math.cos(th), y = mu[1] + thrE * rE * Math.sin(th); if (t === 0) ctx.moveTo(px(x), py(y)); else ctx.lineTo(px(x), py(y)); } ctx.stroke(); ctx.setLineDash([]);
     ctx.strokeStyle = css("--blue"); ctx.lineWidth = 2.5; ctx.beginPath(); for (let t = 0; t <= 80; t++) { const th = 2 * Math.PI * t / 80, a = thrM * Math.sqrt(eig.l1) * Math.cos(th), b = thrM * Math.sqrt(eig.l2) * Math.sin(th); const x = mu[0] + a * eig.v1[0] + b * eig.v2[0], y = mu[1] + a * eig.v1[1] + b * eig.v2[1]; if (t === 0) ctx.moveTo(px(x), py(y)); else ctx.lineTo(px(x), py(y)); } ctx.stroke();
-    // eigen axes
-    [["v1", eig.l1], ["v2", eig.l2]].forEach((e, k) => { const v = eig[e[0]], s = Math.sqrt(e[1]); board.line(px(mu[0] - v[0] * s * 3), py(mu[1] - v[1] * s * 3), px(mu[0] + v[0] * s * 3), py(mu[1] + v[1] * s * 3), css("--ink"), 1, [2, 3]); board.label(k === 0 ? "long axis: temperature" : "short axis: where damage goes", px(mu[0] + v[0] * s * 3.2), py(mu[1] + v[1] * s * 3.2) + (k === 0 ? -6 : 14), css("--ink"), k === 0 ? "left" : "center", 10); });
+    [["v1", eig.l1], ["v2", eig.l2]].forEach((e, k) => { const v = eig[e[0]], s = Math.sqrt(e[1]); board.line(px(mu[0] - v[0] * s * 3), py(mu[1] - v[1] * s * 3), px(mu[0] + v[0] * s * 3), py(mu[1] + v[1] * s * 3), css("--ink"), 1, [2, 3]); board.label(k === 0 ? "long axis: temperature" + (axis === "long" ? ", and the planted drift" : "") : "short axis" + (axis === "short" ? ": where the planted drift goes" : ""), px(mu[0] + v[0] * s * 3.2), py(mu[1] + v[1] * s * 3.2) + (k === 0 ? -6 : 14), css("--ink"), k === 0 ? "left" : "center", 10); });
     H.forEach(h => board.dot(px(h[0]), py(h[1]), 2.5, css("--grey")));
     board.label("grey dashed circle: Euclidean threshold   blue ellipse: Mahalanobis threshold, both at 1 % false alarms", L, board.H - 206, css("--muted"), "left", 11);
     const p = REC[day]; board.dot(px(p[0]), py(p[1]), 6, day >= onset ? css("--red") : "#2E7D5B", "#fff"); board.label("day " + (day + 1), px(p[0]) + 10, py(p[1]) - 8, day >= onset ? css("--red") : "#2E7D5B", "left", 11);
     board.dot(px(today[0]), py(today[1]), 8, css("--orange"), "#fff"); board.label("reading (drag)", px(today[0]) + 12, py(today[1]) + 5, css("--orange"), "left", 11);
-    // right panel: distances of the dragged reading
     const RX = 800; board.label("the dragged reading", RX, 60, css("--ink"), "left", 13); const e = dE(today), m = dM(today);
     board.label("Euclidean: " + e.toFixed(2) + " of a threshold " + thrE.toFixed(2) + (e > thrE ? "  ALARM" : "  quiet"), RX, 86, e > thrE ? css("--red") : css("--muted"), "left", 12, true); board.label("Mahalanobis: " + m.toFixed(2) + " of a threshold " + thrM.toFixed(2) + (m > thrM ? "  ALARM" : "  quiet"), RX, 108, m > thrM ? css("--red") : css("--muted"), "left", 12, true);
     board.label("Euclidean distance is measured in units of the", RX, 150, css("--muted"), "left", 11); board.label("long axis, so a reading can leave the healthy", RX, 166, css("--muted"), "left", 11); board.label("cloud through the thin side and still read quiet", RX, 182, css("--muted"), "left", 11);
     board.label("Mahalanobis: d^2 = (x - mu)' S^-1 (x - mu)", RX, 214, css("--muted"), "left", 11, true); board.label("one sigma along either axis is one unit", RX, 232, css("--muted"), "left", 11);
     board.label("eigenvalues of S: " + eig.l1.toExponential(2) + " and " + eig.l2.toExponential(2), RX, 264, css("--muted"), "left", 11, true); board.label("ratio of axis lengths " + Math.sqrt(eig.l1 / eig.l2).toFixed(1) + " to 1", RX, 282, css("--muted"), "left", 11, true);
+    board.label("the drift is synthetic: a tenth of a sigma per day along the " + axis + " axis", RX, 314, css("--muted"), "left", 11);
     // timeline
-    const TY0 = 470, TY1 = 600, TX0 = L, TX1 = board.W - 30; board.label("the monitoring record: distance over threshold, by day (drag the marker); an alarm is three days in a row over the line", TX0, TY0 - 10, css("--ink"), "left", 12);
+    const TY0 = 486, TY1 = 600, TX0 = L, TX1 = board.W - 30; board.label("the monitoring record: distance over threshold, by day (drag the marker); an alarm is three days in a row over the line", TX0, TY0 - 8, css("--ink"), "left", 12);
     board.line(TX0, TY1, TX1, TY1, css("--line"), 1); const tx = t => TX0 + t / (NT - 1) * (TX1 - TX0), ty = v => TY1 - Math.min(3, v) / 3 * (TY1 - TY0); board.line(TX0, ty(1), TX1, ty(1), css("--red"), 1, [4, 4]); board.label("threshold", TX1 + 4, ty(1) + 4, css("--red"), "left", 10);
-    board.path(REC.map((r, t) => [tx(t), ty(dE(r) / thrE)]), css("--grey"), 1.5); board.path(REC.map((r, t) => [tx(t), ty(dM(r) / thrM)]), css("--blue"), 1.5);
-    let aE = null, aM = null, fE = 0, fM = 0, runE = 0, runM = 0; REC.forEach((r, t) => { const xe = dE(r) > thrE, xm = dM(r) > thrM; runE = xe ? runE + 1 : 0; runM = xm ? runM + 1 : 0; if (t < onset) { if (xe) fE++; if (xm) fM++; } else { if (runE >= 3 && aE === null) aE = t; if (runM >= 3 && aM === null) aM = t; } });
-    board.line(tx(onset), TY0, tx(onset), TY1, css("--red"), 1.5); board.label("damage begins, day " + (onset + 1), tx(onset) + 4, TY0 + 12, css("--red"), "left", 10);
+    const al = alarms();
+    if (locked) { board.path(REC.map((r, t) => [tx(t), ty(dE(r) / thrE)]), css("--grey"), 1.5); board.path(REC.map((r, t) => [tx(t), ty(dM(r) / thrM)]), css("--blue"), 1.5); board.line(tx(onset), TY0, tx(onset), TY1, css("--red"), 1.5); board.label("damage begins, day " + (onset + 1), tx(onset) + 4, TY0 + 12, css("--red"), "left", 10); if (al.aE !== null) board.label("E", tx(al.aE), ty(1) - 6, css("--grey"), "center", 11, true); if (al.aM !== null) board.label("M", tx(al.aM), ty(1) - 6, css("--blue"), "center", 11, true); }
+    else board.label("the record is hidden until you lock in your two numbers", (TX0 + TX1) / 2, (TY0 + TY1) / 2 + 4, css("--muted"), "center", 13);
     board.line(tx(day), TY0, tx(day), TY1 + 8, css("--orange"), 2); board.dot(tx(day), TY1 + 10, 7, css("--orange"), "#fff");
     [0, 100, 200, 299].forEach(t => board.label("day " + (t + 1), tx(t), TY1 + 28, css("--muted"), "center", 10));
-    document.getElementById("nvEu").textContent = e.toFixed(2) + " (threshold " + thrE.toFixed(2) + ")"; document.getElementById("nvMa").textContent = m.toFixed(2) + " (threshold 3.03)"; document.getElementById("nvDay").textContent = (day + 1) + (day >= onset ? ", damaged" : ", healthy"); document.getElementById("nvAlarmE").textContent = aE === null ? "never in this record" : "day " + (aE + 1) + " (" + (aE - onset) + " days late)"; document.getElementById("nvAlarmM").textContent = aM === null ? "never in this record" : "day " + (aM + 1) + " (" + (aM - onset) + " days late)"; document.getElementById("nvFalse").textContent = fE + " Euclidean, " + fM + " Mahalanobis (single days)";
-    stepEl.innerHTML = '<span class="k">' + (day >= onset ? 'damaged bridge' : 'healthy bridge') + '</span><div class="ask ' + (aM !== null && (aE === null || aM < aE) ? 'ok' : '') + '">The drift leaves through the short axis. The Mahalanobis ruler fires ' + (aM === null ? 'never' : (aM - onset) + ' days after onset') + '; the Euclidean ruler ' + (aE === null ? 'never fires in this record' : 'needs ' + (aE - onset) + ' days') + '. Both thresholds were set to fire on one percent of healthy days, and did: ' + fM + ' and ' + fE + ' healthy days over the line; the three-in-a-row rule keeps those from becoming alarms.</div><p>Drag the orange reading along the long axis and then along the short one: the blue ellipse treats both as the same distance, the grey circle does not.</p>';
+    const late = v => v === null ? "never in this record" : "day " + (v + 1) + " (" + (v - onset) + " days late)";
+    document.getElementById("nvEu").textContent = e.toFixed(2) + " of " + thrE.toFixed(2); document.getElementById("nvMa").textContent = m.toFixed(2) + " of 3.03"; document.getElementById("nvDay").textContent = (day + 1) + (day >= onset ? ", damaged" : ", healthy"); document.getElementById("nvAlarmE").textContent = locked ? late(al.aE) : "locked"; document.getElementById("nvAlarmM").textContent = locked ? late(al.aM) : "locked"; document.getElementById("nvFalse").textContent = al.fE + " Euclidean, " + al.fM + " Mahalanobis (single days)";
+    let html = '<p class="prompt">How many days until the alarm, by each distance?</p>';
+    if (!locked) html += '<div class="gate"><span>Euclidean</span><input type="number" id="nvInE" min="0" max="999" step="1" placeholder="days" value="' + typedE + '" aria-label="days until the Euclidean alarm"><span>Mahalanobis</span><input type="number" id="nvInM" min="0" max="999" step="1" placeholder="days" value="' + typedM + '" aria-label="days until the Mahalanobis alarm"><button class="primary" id="nvLock">Lock in</button></div><p>Damage begins on an unknown day and drifts the reading a tenth of a sigma per day along the ' + axis + ' axis of the healthy cloud. Type the delay you expect for each ruler; the record below unlocks after that.</p><p>Drag the orange reading along the long axis and then along the short one: the blue ellipse treats both as the same distance, the grey circle does not.</p>';
+    else { const okOne = (typed, actual) => actual === null ? typed >= 90 : Math.abs(typed - actual) <= Math.max(10, 0.3 * actual); const dEa = al.aE === null ? null : al.aE - onset, dMa = al.aM === null ? null : al.aM - onset; const okE = okOne(locked.e, dEa), okM = okOne(locked.m, dMa);
+      html += '<div class="ask ' + (okE && okM ? 'ok' : 'no') + '">' + (okE && okM ? 'Both within reach. ' : (okM ? 'Mahalanobis right, Euclidean off. ' : (okE ? 'Euclidean right, Mahalanobis off. ' : 'Both off. '))) + 'You wrote ' + locked.e + ' and ' + locked.m + ' days. The Mahalanobis ruler fires ' + (dMa === null ? 'never in this record' : dMa + ' days after onset') + '; the Euclidean ruler ' + (dEa === null ? 'never fires in the ' + (NT - onset) + ' days left in the record' : 'needs ' + dEa + ' days') + '. Both thresholds were set to fire on one percent of healthy days, and did: ' + al.fM + ' and ' + al.fE + ' healthy days over the line; the three-in-a-row rule keeps those from becoming alarms.</div>';
+      html += '<p>' + (axis === "short" ? 'The drift is synthetic and planted along the short axis of the healthy cloud, which is why the Mahalanobis distance wins by about 100 days: at a tenth of a short-axis sigma per day it crosses three sigma in about thirty days, while the Euclidean circle is sized by the long axis, ' + Math.sqrt(eig.l1 / eig.l2).toFixed(1) + ' times wider.' : 'The drift is synthetic and here runs along the long axis of the healthy cloud, so both rulers measure it in the same units and alarm at about the same day; the Mahalanobis advantage exists only where the cloud is thin.') + ' Drag the day marker to follow the reading out of the cloud.</p>'; }
+    stepEl.innerHTML = html;
+    const iE = document.getElementById("nvInE"), iM = document.getElementById("nvInM"); if (iE) { iE.addEventListener("input", () => { typedE = iE.value; }); iM.addEventListener("input", () => { typedM = iM.value; }); document.getElementById("nvLock").addEventListener("click", () => { const a = parseFloat(iE.value), b = parseFloat(iM.value); if (!isFinite(a) || !isFinite(b)) { iE.focus(); return; } locked = { e: a, m: b }; draw(); }); }
   }
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (Math.hypot(mx - px(today[0]), my - py(today[1])) < 16) { drag = "pt"; return; } if (my > 460) { drag = "day"; moveDay(ev); } });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (Math.hypot(mx - px(today[0]), my - py(today[1])) < 16) { drag = "pt"; return; } if (my > 460 && locked) { drag = "day"; moveDay(ev); } });
   function moveDay(ev) { const [mx] = board.pos(ev); day = Math.max(0, Math.min(NT - 1, Math.round((mx - L) / (board.W - 30 - L) * (NT - 1)))); draw(); }
-  window.addEventListener("mousemove", ev => { if (!drag) return; if (drag === "day") { moveDay(ev); return; } const [mx, my] = board.pos(ev); today = [2.10 + (mx - L) / (R - L) * 0.35, 5.55 + (BOT - my) / (BOT - TOP) * 1.0]; draw(); });
-  window.addEventListener("mouseup", () => { drag = null; });
-  document.getElementById("nvNew").addEventListener("click", () => { seed += 1; make(); day = 0; draw(); });
+  window.addEventListener("pointermove", ev => { if (!drag) return; if (drag === "day") { moveDay(ev); return; } const [mx, my] = board.pos(ev); today = [2.10 + (mx - L) / (R - L) * 0.35, 5.55 + (BOT - my) / (BOT - TOP) * 1.0]; draw(); });
+  window.addEventListener("pointerup", () => { drag = null; });
+  function fresh() { make(); day = 0; locked = null; typedE = ""; typedM = ""; draw(); }
+  document.getElementById("nvNew").addEventListener("click", () => { seed += 1; fresh(); });
+  document.getElementById("nvAxis").addEventListener("click", () => { axis = axis === "short" ? "long" : "short"; document.getElementById("nvAxis").setAttribute("aria-pressed", axis === "long" ? "true" : "false"); fresh(); });
   quiz(document.getElementById("nvQuiz"), { q: "Why does a structural health monitor model only the healthy class?", options: ["Because damage data are too noisy", "Because damage labels barely exist: nobody breaks a bridge to collect the second class, so normal is defined and anything outside it is flagged", "Because one class trains faster"], answer: 1, why: "Novelty detection fits the healthy cloud, its mean and covariance, and flags departures. The threshold on Mahalanobis distance sets the false alarm rate in advance, and the detection delay follows from the drift rate and the feature noise, slide 14." });
   window.addEventListener("themechange", draw);
   make(); draw();
@@ -658,39 +888,98 @@ function pressed(ids, on) { ids.forEach(id => document.getElementById(id).setAtt
   const ZS = []; for (let i = 0; i <= 200; i++) ZS.push(20 * i / 200);
   const board = new Board(document.getElementById("uaPlot"));
   const L = 70, R = board.W - 30, T1 = 40, B1 = 360, T2 = 430, B2 = 610; const px = z => L + z / 20 * (R - L), py1 = s => B1 - s / 130 * (B1 - T1), py2 = w => (T2 + B2) / 2 - w / 70 * (B2 - T2) / 2;
-  let units = [], drag = null, fitErr = null, steps = null, anim = null;
+  const TARGET = 5;
+  let units = [], drag = null, fitErr = null, steps = null, anim = null, guess = null, typed = "", reached = null, fitting = false, hand = true;
   const stepEl = document.getElementById("uaStep");
   function sum(z, us, b0) { return b0 + us.reduce((s, u) => s + u.w * sigmoid(u.k * (z - u.c)), 0); }
   function bias(us) { return mean(ZS.map(z => target(z) - sum(z, us, 0))); }
   function rmse(us) { const b0 = bias(us); return Math.sqrt(mean(ZS.map(z => (sum(z, us, b0) - target(z)) ** 2))); }
   function draw() {
     const b0 = bias(units), err = rmse(units);
+    if (hand && units.length && err < TARGET && reached === null) reached = units.length;
     board.clear("shear strength with depth: grey is the profile, blue is the sum of your units; click a depth to add a unit"); const ctx = board.ctx;
     board.line(L, B1, R, B1, css("--line"), 1); board.line(L, T1, L, B1, css("--line"), 1);
     for (let z = 0; z <= 20; z += 5) board.label(z + " m", px(z), B1 + 16, css("--muted"), "center", 10, true); for (let s = 0; s <= 120; s += 30) board.label(s + " kPa", L - 6, py1(s) + 4, css("--muted"), "right", 10, true);
     board.path(ZS.map(z => [px(z), py1(target(z))]), css("--grey"), 3);
     units.forEach((u, i) => board.path(ZS.map(z => [px(z), py1(b0 + u.w * sigmoid(u.k * (z - u.c)))]), mix(css("--panel"), PAL[i % 4], 0.45), 1));
     if (units.length) board.path(ZS.map(z => [px(z), py1(sum(z, units, b0))]), css("--blue"), 2.5);
-    board.label("faint curves: each unit on its own, raised by the shared bias " + b0.toFixed(1), L, T1 - 8, css("--muted"), "left", 12);
-    // lane
+    board.label("faint curves: each unit on its own, raised by the shared bias " + b0.toFixed(1) + (units.length ? "   units: " + units.length + "   RMSE " + err.toFixed(1) + " kPa, target " + TARGET.toFixed(1) : ""), L, T1 - 8, css("--muted"), "left", 12);
     board.label("the units: knob at (depth of the step, height); tail sets steepness", L, T2 - 10, css("--ink"), "left", 12);
     board.line(L, (T2 + B2) / 2, R, (T2 + B2) / 2, css("--line"), 1); board.line(L, T2, L, B2, css("--line"), 1); board.label("+70", L - 6, py2(70) + 4, css("--muted"), "right", 10, true); board.label("-70", L - 6, py2(-70) + 4, css("--muted"), "right", 10, true); board.label("0", L - 6, py2(0) + 4, css("--muted"), "right", 10, true);
     units.forEach((u, i) => { const x = px(u.c), y = py2(u.w), tx = px(u.c + 2 / u.k); board.line(x, (T2 + B2) / 2, x, y, PAL[i % 4], 2); board.line(x, y, tx, y, PAL[i % 4], 2, [3, 3]); board.dot(tx, y, 5, PAL[i % 4], "#fff"); board.dot(x, y, 8, PAL[i % 4], "#fff"); board.label("k " + u.k.toFixed(1), tx + 8, y + 4, PAL[i % 4], "left", 10, true); });
-    document.getElementById("uaN").textContent = units.length; document.getElementById("uaErr").textContent = units.length ? err.toFixed(1) : "-"; document.getElementById("uaFitErr").textContent = fitErr === null ? "-" : fitErr.toFixed(1); document.getElementById("uaSteps").textContent = steps === null ? "-" : steps;
-    stepEl.innerHTML = '<span class="k">' + (units.length === 0 ? 'no units' : units.length + (units.length === 1 ? ' unit' : ' units')) + '</span><p>' + (units.length === 0 ? 'The profile has three jumps and a wobble. A single sigmoid is one soft step; place one where the first jump is.' : (err < 4 ? 'RMSE ' + err.toFixed(1) + ' kPa: a close fit. Two steps of opposite sign made each bump, and the wobble took a few more. Now press fit and watch the optimizer try to find a placement from a random start.' : 'RMSE ' + err.toFixed(1) + ' kPa. Steps up where the profile rises, a step down where it falls; steepen a step with its tail. Below 4 kPa counts as done.')) + '</p>';
+    if (guess === null) board.label("type your count in the panel first; clicks add nothing until then", L, T1 + 20, css("--orange"), "left", 13);
+    document.getElementById("uaN").textContent = units.length; document.getElementById("uaErr").textContent = units.length ? err.toFixed(1) : "-"; document.getElementById("uaReached").textContent = reached === null ? "not yet" : reached; document.getElementById("uaFitErr").textContent = fitErr === null ? "-" : fitErr.toFixed(1); document.getElementById("uaSteps").textContent = steps === null ? "-" : steps;
+    document.getElementById("uaFit").disabled = guess === null;
+    let html = '<p class="prompt">How many sigmoids do you need to fit this profile within ' + TARGET + ' kPa?</p>';
+    if (guess === null) html += '<div class="gate"><input type="number" id="uaIn" min="1" max="40" step="1" placeholder="units" value="' + typed + '" aria-label="number of units"><button class="primary" id="uaLock">Lock in</button></div><p>The profile has three jumps and a wobble. A single sigmoid is one soft step. Write a count; the plot accepts clicks after that.</p>';
+    else {
+      html += '<span class="k">' + (fitting ? 'gradient descent' : (units.length === 0 ? 'locked: ' + guess + ' units' : units.length + (units.length === 1 ? ' unit' : ' units') + ', RMSE ' + err.toFixed(1) + ' kPa')) + '</span>';
+      if (reached !== null) html += '<div class="ask ' + (Math.abs(reached - guess) <= 1 ? 'ok' : 'no') + '">' + (Math.abs(reached - guess) <= 1 ? 'Right. ' : 'You said ' + guess + '. ') + 'The target of ' + TARGET + ' kPa was reached with ' + reached + ' units' + (reached < guess - 1 ? ', fewer than your ' + guess + ': at this tolerance one step per jump is enough, and the 6 kPa wobble fits inside the 5 kPa budget.' : (reached > guess + 1 ? ', more than your ' + guess + ': each jump takes a step, and the wobble needs a pair of opposite steps per hump.' : '.')) + (fitErr !== null ? ' Gradient descent with sixteen units from a random start reached ' + fitErr.toFixed(1) + ' kPa.' : '') + '</div>';
+      html += '<p>' + (fitting ? 'Adam is placing sixteen units from a random start; the RMSE readout updates as it goes.' : (units.length === 0 ? 'Place one where the first jump is: click the plot at that depth, above the grey curve for a step up.' : (reached !== null ? 'Now press fit and watch the optimizer try to find a placement from a random start; some starts stall.' : 'Steps up where the profile rises, a step down where it falls; steepen a step with its tail. Under ' + TARGET + ' kPa counts as done.'))) + '</p>'; }
+    stepEl.innerHTML = html;
+    const inp = document.getElementById("uaIn"); if (inp) { inp.addEventListener("input", () => { typed = inp.value; }); document.getElementById("uaLock").addEventListener("click", () => { const v = parseInt(inp.value, 10); if (!isFinite(v) || v < 1) { inp.focus(); return; } guess = v; draw(); }); }
   }
-  board.c.addEventListener("click", ev => { if (drag) return; const [mx, my] = board.pos(ev); if (my < T1 || my > B1 || mx < L || mx > R) return; const z = (mx - L) / (R - L) * 20; const b0 = bias(units); const above = (B1 - my) / (B1 - T1) * 130 > sum(z, units, b0); units.push({ c: z, w: above ? 25 : -25, k: 1.5 }); fitErr = null; steps = null; draw(); });
-  board.c.addEventListener("mousedown", ev => { const [mx, my] = board.pos(ev); if (my < T2 - 10) return; let best = null, bd = 16; units.forEach((u, i) => { const d1 = Math.hypot(mx - px(u.c), my - py2(u.w)), d2 = Math.hypot(mx - px(u.c + 2 / u.k), my - py2(u.w)); if (d1 < bd) { bd = d1; best = { i, what: "knob" }; } if (d2 < bd) { bd = d2; best = { i, what: "tail" }; } }); drag = best; });
-  window.addEventListener("mousemove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); const u = units[drag.i]; if (drag.what === "knob") { u.c = Math.max(0, Math.min(20, (mx - L) / (R - L) * 20)); u.w = Math.max(-70, Math.min(70, ((T2 + B2) / 2 - my) / ((B2 - T2) / 2) * 70)); } else { const dz = Math.max(0.2, (mx - L) / (R - L) * 20 - u.c); u.k = Math.max(0.3, Math.min(12, 2 / dz)); } draw(); });
-  window.addEventListener("mouseup", () => { setTimeout(() => { drag = null; }, 0); });
-  document.getElementById("uaFit").addEventListener("click", () => { if (anim) cancelAnimationFrame(anim); const rng = mulberry32(Date.now() % 100000); const us = []; for (let i = 0; i < 16; i++) us.push({ c: 20 * rng(), w: 10 * (rng() - 0.5), k: 1.0 }); let b0 = bias(us); const m = { c: us.map(() => 0), w: us.map(() => 0), k: us.map(() => 0), b: 0 }, v = { c: us.map(() => 0), w: us.map(() => 0), k: us.map(() => 0), b: 0 }; let t = 0; const lr = 0.05;
+  board.c.addEventListener("click", ev => { if (drag || guess === null || fitting) return; const [mx, my] = board.pos(ev); if (my < T1 || my > B1 || mx < L || mx > R) return; const z = (mx - L) / (R - L) * 20; const b0 = bias(units); const above = (B1 - my) / (B1 - T1) * 130 > sum(z, units, b0); units.push({ c: z, w: above ? 25 : -25, k: 1.5 }); fitErr = null; steps = null; draw(); });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (my < T2 - 10) return; let best = null, bd = 16; units.forEach((u, i) => { const d1 = Math.hypot(mx - px(u.c), my - py2(u.w)), d2 = Math.hypot(mx - px(u.c + 2 / u.k), my - py2(u.w)); if (d1 < bd) { bd = d1; best = { i, what: "knob" }; } if (d2 < bd) { bd = d2; best = { i, what: "tail" }; } }); drag = best; });
+  window.addEventListener("pointermove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); const u = units[drag.i]; if (drag.what === "knob") { u.c = Math.max(0, Math.min(20, (mx - L) / (R - L) * 20)); u.w = Math.max(-70, Math.min(70, ((T2 + B2) / 2 - my) / ((B2 - T2) / 2) * 70)); } else { const dz = Math.max(0.2, (mx - L) / (R - L) * 20 - u.c); u.k = Math.max(0.3, Math.min(12, 2 / dz)); } draw(); });
+  window.addEventListener("pointerup", () => { setTimeout(() => { drag = null; }, 0); });
+  document.getElementById("uaFit").addEventListener("click", () => { if (guess === null) return; if (anim) cancelAnimationFrame(anim); const rng = mulberry32(Date.now() % 100000); const us = []; for (let i = 0; i < 16; i++) us.push({ c: 20 * rng(), w: 10 * (rng() - 0.5), k: 1.0 }); let b0 = bias(us); const m = { c: us.map(() => 0), w: us.map(() => 0), k: us.map(() => 0), b: 0 }, v = { c: us.map(() => 0), w: us.map(() => 0), k: us.map(() => 0), b: 0 }; let t = 0; const lr = 0.05;
     function stepGD() { t++; const gc = us.map(() => 0), gw = us.map(() => 0), gk = us.map(() => 0); let gb = 0; ZS.forEach(z => { const e = sum(z, us, b0) - target(z); gb += 2 * e / ZS.length; us.forEach((u, i) => { const s = sigmoid(u.k * (z - u.c)), ds = s * (1 - s); gw[i] += 2 * e * s / ZS.length; gc[i] += 2 * e * u.w * ds * (-u.k) / ZS.length; gk[i] += 2 * e * u.w * ds * (z - u.c) / ZS.length; }); }); const adam = (key, i, gr) => { const b1 = 0.9, b2 = 0.999; m[key][i] = b1 * m[key][i] + (1 - b1) * gr; v[key][i] = b2 * v[key][i] + (1 - b2) * gr * gr; return lr * (m[key][i] / (1 - Math.pow(b1, t))) / (Math.sqrt(v[key][i] / (1 - Math.pow(b2, t))) + 1e-8); }; us.forEach((u, i) => { u.w -= adam("w", i, gw[i]) * 20; u.c -= adam("c", i, gc[i]) * 2; u.k = Math.max(0.2, Math.min(12, u.k - adam("k", i, gk[i]))); }); m.b = 0.9 * m.b + 0.1 * gb; v.b = 0.999 * v.b + 0.001 * gb * gb; b0 -= lr * 20 * (m.b / (1 - Math.pow(0.9, t))) / (Math.sqrt(v.b / (1 - Math.pow(0.999, t))) + 1e-8); }
-    units = us; (function frame() { for (let k = 0; k < 25; k++) stepGD(); steps = t; const r0 = rmse(units); fitErr = r0; draw(); if (t < 2500) anim = requestAnimationFrame(frame); })(); });
-  document.getElementById("uaUndo").addEventListener("click", () => { units.pop(); draw(); });
-  document.getElementById("uaClear").addEventListener("click", () => { if (anim) cancelAnimationFrame(anim); units = []; fitErr = null; steps = null; draw(); });
+    units = us; fitting = true; hand = false; (function frame() { for (let k = 0; k < 25; k++) stepGD(); steps = t; const r0 = rmse(units); fitErr = r0; if (t < 2500) { draw(); anim = requestAnimationFrame(frame); } else { fitting = false; anim = null; draw(); } })(); });
+  document.getElementById("uaUndo").addEventListener("click", () => { if (fitting) return; units.pop(); draw(); });
+  document.getElementById("uaClear").addEventListener("click", () => { if (anim) cancelAnimationFrame(anim); anim = null; fitting = false; hand = true; units = []; fitErr = null; steps = null; guess = null; typed = ""; reached = null; draw(); });
   quiz(document.getElementById("uaQuiz"), { q: "The universal approximation theorem says one hidden layer can approximate any continuous function. What does it not say?", options: ["That the activation must be a sigmoid", "How many units are enough, whether gradient descent will find them, or how much data it takes", "That the function must be smooth"], answer: 1, why: "Existence is cheap; slide 19 lists what the theorem is silent on. The fit button shows it: sixteen units can represent the profile, and the optimizer from a random start sometimes lands near it and sometimes stalls with units parked where they do no good." });
   window.addEventListener("themechange", draw);
   draw();
+})();
+
+/* ================= 8. THE CHAIN RULE ON A CHAIN ================= */
+(function chain() {
+  const board = new Board(document.getElementById("chPlot"));
+  const XS = [110, 350, 590, 830, 1070], Y = 150, NR = 34, NAMES = ["x", "u", "h", "y", "L"];
+  const DN = ["dL/dy", "dy/dh", "dh/du", "du/dw1"];
+  let seed = 7, P = null, vals = [null, null, null, null], lit = -1, anim = null;
+  const stepEl = document.getElementById("chStep");
+  const r1 = v => Math.round(v * 10) / 10;
+  function roll() { for (let tries = 0; tries < 50; tries++) { const r = mulberry32(seed++); P = { x: r1(0.5 + 2 * r()), w1: r1(-1 + 2 * r()), b1: r1(-0.5 + r()), w2: r1(0.5 + 1.5 * r()), t: r1(2 * r()) }; const f = fwd(P.w1); if (Math.abs(f.u) > 0.15 && Math.abs(f.u) < 1.6 && Math.abs(P.w1) >= 0.2 && Math.abs(f.y - P.t) > 0.1) break; } }
+  function fwd(w1) { const u = w1 * P.x + P.b1, h = Math.tanh(u), y = P.w2 * h, Lo = (y - P.t) ** 2; return { u, h, y, L: Lo }; }
+  function truth() { const f = fwd(P.w1); return [2 * (f.y - P.t), P.w2, 1 - f.h * f.h, P.x]; }
+  function fd() { const e = 1e-4; return (fwd(P.w1 + e).L - fwd(P.w1 - e).L) / (2 * e); }
+  const okAt = i => vals[i] !== null && Math.abs(vals[i] - truth()[i]) <= Math.max(0.05 * Math.abs(truth()[i]), 1e-3);
+  function fmt(v) { return (Math.abs(v) < 0.01 ? v.toExponential(2) : v.toFixed(3)); }
+  function draw() {
+    const f = fwd(P.w1), tr = truth(), all = vals.every(v => v !== null), nOk = vals.filter((v, i) => okAt(i)).length, prod = all ? vals.reduce((a, b) => a * b, 1) : null, fdv = fd();
+    board.clear("forward pass left to right; local derivatives below each node; the backward pass runs right to left"); const ctx = board.ctx;
+    const fwdTxt = ["x = " + P.x.toFixed(2), "u = w1 x + b1 = " + f.u.toFixed(3), "h = tanh(u) = " + f.h.toFixed(3), "y = w2 h = " + f.y.toFixed(3), "L = (y - t)^2 = " + f.L.toFixed(4)];
+    const edgeTxt = ["w1 = " + P.w1.toFixed(2) + ", b1 = " + P.b1.toFixed(2), "tanh", "w2 = " + P.w2.toFixed(2), "t = " + P.t.toFixed(2)];
+    // running products of the true local derivatives from the loss backwards
+    const run = [1]; for (let i = 0; i < 4; i++) run.push(run[i] * tr[i]);
+    const runName = ["dL/dL", "dL/dy", "dL/dh", "dL/du", "dL/dw1"];
+    for (let i = 0; i < 4; i++) { const x0 = XS[i] + NR, x1 = XS[i + 1] - NR; board.line(x0, Y, x1, Y, css("--line"), 2); ctx.fillStyle = css("--line"); ctx.beginPath(); ctx.moveTo(x1, Y); ctx.lineTo(x1 - 10, Y - 6); ctx.lineTo(x1 - 10, Y + 6); ctx.closePath(); ctx.fill(); board.label(edgeTxt[i], (x0 + x1) / 2, Y - 10, css("--muted"), "center", 12, true);
+      // the local derivative slot belongs to the node on the right of this edge (the derivative of its output with respect to its input), listed from the loss backwards
+      const j = 3 - i; const typed = vals[j]; const col = typed === null ? css("--muted") : (okAt(j) ? "#2E7D5B" : css("--red"));
+      board.label(DN[j] + (typed === null ? " = ?" : " = " + fmt(typed) + (okAt(j) ? "  right" : "  off")), (x0 + x1) / 2, Y + 70, col, "center", 13, true);
+      if (all) board.label("exact " + fmt(tr[j]), (x0 + x1) / 2, Y + 90, css("--muted"), "center", 12, true); }
+    NAMES.forEach((nm, i) => { const on = lit >= 0 && (4 - i) <= lit; ctx.fillStyle = on ? css("--orange") : css("--blue-soft"); ctx.beginPath(); ctx.arc(XS[i], Y, NR, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = on ? css("--orange") : css("--blue"); ctx.lineWidth = 2; ctx.stroke(); board.label(nm, XS[i], Y + 6, on ? "#fff" : css("--ink"), "center", 18, true); board.label(fwdTxt[i], XS[i], Y - 56, css("--ink"), "center", 13, true); if (on) { const k = 4 - i; board.label(runName[k] + " = " + fmt(run[k]), XS[i], Y + 125, css("--orange"), "center", 13, true); } });
+    board.label("the backward pass carries the running product; each node multiplies in its own local derivative", 110, 320, css("--muted"), "left", 12);
+    if (lit >= 4) board.label("arrived: dL/dw1 = " + fmt(run[4]) + ", finite difference " + fmt(fdv), 110, 342, css("--orange"), "left", 13, true);
+    document.getElementById("chProd").textContent = prod === null ? "-" : fmt(prod); document.getElementById("chFD").textContent = fmt(fdv); document.getElementById("chOk").textContent = nOk + " of 4";
+    for (let i = 0; i < 4; i++) { const m = document.getElementById("chM" + i); m.textContent = vals[i] === null ? "" : (okAt(i) ? "right" : "off"); m.className = vals[i] === null ? "" : (okAt(i) ? "ok" : "no"); }
+    document.getElementById("chRun").disabled = !all || !!anim;
+    let html = '<p class="prompt">Type the local derivative at each node; their product is dL/dw1.</p>';
+    if (!all) html += '<span class="k">' + vals.filter(v => v !== null).length + ' of 4 typed</span><p>Each node knows only its own input and output. At the loss, dL/dy from (y - t)^2; at the output weight, dy/dh; at the tanh, dh/du in terms of h; at the first weight, du/dw1. Marks appear as you type, within 5 percent counts as right.</p>';
+    else { const pOk = Math.abs(prod - fdv) <= Math.max(0.05 * Math.abs(fdv), 1e-3);
+      html += '<div class="ask ' + (nOk === 4 ? 'ok' : 'no') + '">' + (nOk === 4 ? 'All four within 5 percent. ' : (4 - nOk) + ' of the four local derivatives are off; the exact values are now printed under the chain. ') + 'Your product is ' + fmt(prod) + '; the finite difference (L(w1 + e) - L(w1 - e)) / 2e gives ' + fmt(fdv) + (pOk ? ', a match.' : ', so a wrong local derivative has multiplied through.') + '</div>';
+      html += '<p>' + (lit >= 4 ? 'The product arrived at w1 as ' + fmt(run[4]) + '. Nothing at the loss had to know about w1; the chain passed the number back one local derivative at a time, slide 20.' : 'Press run backward: the nodes light from the loss to w1 and the running product is printed under each.') + '</p>'; }
+    stepEl.innerHTML = html;
+  }
+  for (let i = 0; i < 4; i++) document.getElementById("chD" + i).addEventListener("input", ev => { const v = parseFloat(ev.target.value); vals[i] = isFinite(v) ? v : null; lit = -1; if (anim) { clearTimeout(anim); anim = null; } draw(); });
+  document.getElementById("chRun").addEventListener("click", () => { if (vals.some(v => v === null) || anim) return; lit = 0; draw(); (function next() { anim = setTimeout(() => { lit++; if (lit < 4) next(); else anim = null; draw(); }, 650); })(); });
+  function reset() { roll(); vals = [null, null, null, null]; lit = -1; if (anim) { clearTimeout(anim); anim = null; } for (let i = 0; i < 4; i++) document.getElementById("chD" + i).value = ""; draw(); }
+  document.getElementById("chNew").addEventListener("click", reset);
+  quiz(document.getElementById("chQuiz"), { q: "A network has a million weights. Why does backpropagation cost about as much as one forward pass instead of a million?", options: ["Because the weights are small", "Because the running product dL/d(node output) is computed once per node and reused by every weight feeding that node, so each weight costs one multiplication", "Because the chain rule only applies to the last layer"], answer: 1, why: "The backward pass visits each node once, carrying the gradient of the loss with respect to that node's output; a weight's gradient is that number times the node's local input. Finite differences would need a forward pass per weight, slide 20." });
+  window.addEventListener("themechange", draw);
+  reset();
 })();
 
 /* ---------- tabs ---------- */
@@ -708,6 +997,46 @@ show(location.hash.slice(1) || "carve", false);
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
 if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
 new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+
+<script>
+/* Classroom mode (shared patch): larger canvas text through the font setter, prose hidden, redraw via themechange. */
+(function () {
+  var desc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "font");
+  var on = false;
+  function scale(v) {
+    return String(v).replace(/(\d+(?:\.\d+)?)px/, function (m, n) {
+      var s = parseFloat(n); var t = s < 13 ? s + 5 : Math.round(s * 1.35);
+      return t + "px";
+    });
+  }
+  Object.defineProperty(CanvasRenderingContext2D.prototype, "font", {
+    configurable: true,
+    get: function () { return desc.get.call(this); },
+    set: function (v) { desc.set.call(this, on ? scale(v) : v); }
+  });
+  function apply(state) {
+    on = !!state;
+    document.body.classList.toggle("classroom", on);
+    var b = document.getElementById("classroomBtn");
+    if (b) { b.textContent = on ? "Classroom: on" : "Classroom"; b.setAttribute("aria-pressed", on ? "true" : "false"); }
+    try { localStorage.setItem("ce_classroom", on ? "1" : "0"); } catch (e) {}
+    window.dispatchEvent(new Event("themechange"));
+    window.dispatchEvent(new Event("resize"));
+  }
+  window.addEventListener("DOMContentLoaded", function () {
+    var b = document.createElement("button");
+    b.id = "classroomBtn"; b.type = "button"; b.title = "Large text for a projector; hides the explanatory prose (key: c)";
+    b.textContent = "Classroom";
+    b.addEventListener("click", function () { apply(!on); });
+    document.body.appendChild(b);
+    var saved = "0"; try { saved = localStorage.getItem("ce_classroom") || "0"; } catch (e) {}
+    if (saved === "1" || /[?&]classroom\b/.test(location.search)) apply(true);
+    window.addEventListener("keydown", function (ev) {
+      if (ev.key === "c" && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) apply(!on);
+    });
+  });
 })();
 </script>
 </body>
