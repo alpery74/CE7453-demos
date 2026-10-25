@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Week 9 Demos</title>
-<meta name="description" content="CE 7453 Week 9: estimate the diffusion step from a noised terrain patch, place a budget of denoising steps, guess the guidance weight from the samples, and probe the error map of a physics-informed fit.">
+<meta name="description" content="CE 7453 Week 9: estimate the diffusion step from a noised terrain patch, paint the noise a denoiser must predict, place a budget of denoising steps, set and then guess the guidance weight, fit a river profile from three gauges and an equation, and probe the error map of a physics-informed fit.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -97,6 +97,23 @@ section.demo.active { display: block; }
 .caption p { margin: 0 0 6px; }
 footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* classroom mode and touch (shared patch) */
+canvas { touch-action: none; -webkit-user-select: none; user-select: none; }
+#classroomBtn { position: fixed; right: 14px; bottom: 14px; z-index: 50; font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; opacity: 0.85; }
+#classroomBtn:hover { opacity: 1; color: var(--ink); }
+body.classroom #classroomBtn { background: var(--blue); border-color: var(--blue); color: #fff; }
+body.classroom header, body.classroom .lead, body.classroom .caption, body.classroom footer, body.classroom .ask-note { display: none; }
+body.classroom nav { padding-block: 6px 4px; }
+body.classroom nav button { font-size: 17px; padding: 9px 16px; }
+body.classroom main { padding-block: 0 8px; }
+body.classroom .demo h2 { font-size: 26px; margin: 4px 0 8px; }
+body.classroom .step, body.classroom .ask, body.classroom .quiz, body.classroom .quiz button, body.classroom .readout, body.classroom .ctl label, body.classroom .choice button, body.classroom .bet button, body.classroom .btns button, body.classroom .legend, body.classroom .board { font-size: 18px; }
+body.classroom .step .k, body.classroom .ctl .hint, body.classroom .badge { font-size: 15px; }
+body.classroom .panel h3 { font-size: 15px; }
+body.classroom .stage { grid-template-columns: minmax(0, 1fr) 400px; }
+body.classroom .grid { grid-template-columns: minmax(0, 1fr) 360px; }
+@media (max-width: 1100px) { body.classroom .stage, body.classroom .grid { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -139,6 +156,11 @@ footer { padding-block: 10px 18px; font-size: 12.5px; color: var(--muted); borde
 canvas.hit { cursor: pointer; }
 canvas.grab { cursor: grab; }
 .score { font-family: var(--mono); font-size: 22px; font-weight: 600; }
+.gate { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; align-items: center; }
+.gate button { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.gate button:disabled, .btns button:disabled, .bet button:disabled { opacity: 0.5; cursor: default; }
+.step .prompt { margin: 0 0 6px; font-weight: 600; }
+canvas.hit, canvas.grab { touch-action: none; }
 </style>
 
 <header>
@@ -149,8 +171,10 @@ canvas.grab { cursor: grab; }
 
 <nav role="tablist" aria-label="Demos">
   <button role="tab" data-tab="forward" aria-selected="true">Noise detective<span class="slide">slide 4</span></button>
+  <button role="tab" data-tab="noise" aria-selected="false">Predict the noise<span class="slide">slide 6</span></button>
   <button role="tab" data-tab="steps" aria-selected="false">Spend the budget<span class="slide">slide 8</span></button>
   <button role="tab" data-tab="guidance" aria-selected="false">Guess the guidance<span class="slide">slide 9</span></button>
+  <button role="tab" data-tab="gauges" aria-selected="false">Three gauges<span class="slide">slide 15</span></button>
   <button role="tab" data-tab="physics" aria-selected="false">Reveal the map<span class="slide">slide 16</span></button>
 </nav>
 
@@ -179,14 +203,43 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>The picture at step t is x_t = sqrt(abar_t) x_0 + sqrt(1 - abar_t) eps, the closed form on slide 4, with one fixed noise draw per round. The schedule beta_t rises linearly from 0.0001 to 0.02 over T = 1000 steps, so abar_t falls below one half near t = 260 and below 0.02 by t = 600. Past that point every step looks the same, which is why the eye judges signal-to-noise, not t.</p>
+    <p>The picture at step t is x_t = sqrt(abar_t) x_0 + sqrt(1 - abar_t) eps, the closed form on slide 4, with one fixed noise draw per round. The schedule beta_t rises linearly from 0.0001 to 0.02 over T = 1000 steps, so abar_t falls below one half near t = 260 and below 0.02 by t = 600. Past that point every step looks the same, which is why the eye judges the signal-to-noise ratio. After each round the guess and the truth are added as dots on the abar curve, so a set of five rounds leaves a record of where the eye is reliable.</p>
+  </div>
+</section>
+
+<!-- ============ 2. TRAINING TARGET: predict the noise ============ -->
+<section class="demo" id="noise" role="tabpanel">
+  <h2>Predict the noise: paint what the forward process added</h2>
+  <p class="lead">An 8 by 8 coarse version of the site and the same patch after a fixed number of forward steps sit side by side. Paint the noise you believe was added, cell by cell, score it against the true noise, then let a closed-form denoiser estimate the same noise from the noised patch alone.</p>
+  <div class="stage">
+    <div class="plot">
+      <canvas id="pnImg" class="hit" width="1200" height="400"></canvas>
+      <canvas id="pnOut" width="1200" height="320"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="pnStep"></div>
+      <div class="panel">
+        <h3>brush, in noise standard deviations</h3>
+        <div class="bet" id="pnLevels"><button data-l="0" aria-pressed="false">-1.6</button><button data-l="1" aria-pressed="false">-0.8</button><button data-l="2" aria-pressed="false">0</button><button data-l="3" aria-pressed="true">+0.8</button><button data-l="4" aria-pressed="false">+1.6</button></div>
+        <div class="btns" style="margin-top:12px"><button class="primary" id="pnScore" disabled>Score</button><button id="pnDenoise" disabled>Let the denoiser do it</button><button id="pnReset">Clear, new noise</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>cells painted</dt><dd id="pnCount">0 / 64</dd>
+          <dt>your RMS error</dt><dd id="pnMine">-</dd>
+          <dt>denoiser RMS error</dt><dd id="pnTheirs">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="pnQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>The training objective on slide 6 scores the network on the noise itself, L = E || eps - eps_theta(x_t, t) ||^2. A student with both pictures reads eps off the difference, which is exactly the information the data set supplies during training. The denoiser on the right has only x_t and a Gaussian prior over smooth 8 by 8 patches (the cosine-basis prior of the Spend the budget tab, scaled to 0.24 per pixel), and its estimate is the exact posterior mean of eps, the function a well-trained network converges to. At t = 250 about half the signal variance remains, which is where the prior still helps to tell terrain from noise.</p>
   </div>
 </section>
 
 <!-- ============ 2. REVERSE STEPS: spend the budget ============ -->
 <section class="demo" id="steps" role="tabpanel">
   <h2>Spend the budget: where should a few denoising steps go?</h2>
-  <p class="lead">A deterministic sampler is allowed N network calls to turn pure noise into a terrain patch. You decide at which noise levels those calls are spent: drag the markers on the timeline or start from a preset, run, and read your placement's rank on the board.</p>
+  <p class="lead">A deterministic sampler is allowed N network calls to turn pure noise into a terrain patch. You decide at which noise levels those calls are spent: commit to a placement, run, and read its rank on the board; then drag the markers on the timeline or change the budget to beat it.</p>
   <div class="stage">
     <div class="plot">
       <canvas id="sbLine" class="grab" width="1200" height="150"></canvas>
@@ -194,6 +247,7 @@ canvas.grab { cursor: grab; }
       <canvas id="sbOut" width="1200" height="330"></canvas>
     </div>
     <div class="side">
+      <div class="panel step" id="sbStep"></div>
       <div class="panel">
         <h3>budget</h3>
         <div class="bet"><button id="sbN4" aria-pressed="false">4 steps</button><button id="sbN8" aria-pressed="true">8 steps</button><button id="sbN16" aria-pressed="false">16 steps</button></div>
@@ -221,15 +275,15 @@ canvas.grab { cursor: grab; }
 <!-- ============ 3. GUIDANCE: guess the weight ============ -->
 <section class="demo" id="guidance" role="tabpanel">
   <h2>Guess the guidance weight from the samples</h2>
-  <p class="lead">A model has learned three land-cover clusters in a two-band reflectance space. It is asked for one class, roof, and sampled with classifier-free guidance at a hidden weight w. Watch the 300 samples land, then say which w produced them.</p>
+  <p class="lead">A model has learned three land-cover clusters in a two-band reflectance space. It is asked for one class, roof, and sampled with classifier-free guidance at weight w. First set w yourself and watch the 300 samples land; then flip to identification, where w is hidden and you name it from the cloud.</p>
   <div class="stage">
     <div class="plot"><canvas id="ggPlot" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel step" id="ggStep"></div>
       <div class="panel">
-        <h3>which weight?</h3>
+        <h3>guidance weight w</h3>
         <div class="choice" id="ggChoice"><button data-w="0">w = 0</button><button data-w="1">w = 1</button><button data-w="3">w = 3</button><button data-w="10">w = 10</button></div>
-        <div class="btns" style="margin-top:10px"><button id="ggNext" disabled>Next round</button><button id="ggReplay">Replay the landing</button></div>
+        <div class="btns" style="margin-top:10px"><button class="primary" id="ggFlip">Flip to identification</button><button id="ggNext" disabled>Next round</button><button id="ggReplay">Replay the landing</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>samples on the roof cluster</dt><dd id="ggOn">-</dd>
           <dt>spread, relative to the true class</dt><dd id="ggSd">-</dd>
@@ -244,7 +298,34 @@ canvas.grab { cursor: grab; }
   </div>
 </section>
 
-<!-- ============ 4. PHYSICS WEIGHT: reveal the map ============ -->
+<!-- ============ 5. PHYSICS-INFORMED FIT: three gauges plus an equation ============ -->
+<section class="demo" id="gauges" role="tabpanel">
+  <h2>Three gauges plus an equation: fit a river profile</h2>
+  <p class="lead">A 100 m reach has a hidden water-surface profile h(x) that obeys d2h/dx2 = s(x) with a known, smooth source. Drag the three gauges to where you want readings, commit to which fit will be closer, and compare a fit from the readings alone with a fit from the readings and the equation.</p>
+  <div class="stage">
+    <div class="plot">
+      <canvas id="rgPlot" class="grab" width="1200" height="470"></canvas>
+      <canvas id="rgSrc" width="1200" height="180"></canvas>
+    </div>
+    <div class="side">
+      <div class="panel step" id="rgStep"></div>
+      <div class="panel">
+        <div class="btns"><button class="primary" id="rgNext">Next round</button><button id="rgReset">Reset gauges</button></div>
+        <dl class="readout" style="margin-top:10px">
+          <dt>gauges at</dt><dd id="rgPos">15, 50, 85 m</dd>
+          <dt>RMS error, data only</dt><dd id="rgA">-</dd>
+          <dt>RMS error, data plus equation</dt><dd id="rgB">-</dd>
+        </dl>
+      </div>
+      <div class="panel quiz" id="rgQuiz"></div>
+    </div>
+  </div>
+  <div class="caption">
+    <p>Both fits use 24 Gaussian radial basis functions plus a linear term. The data-only fit is a ridge least-squares solution through the three readings, each with 2 cm of noise. The second fit adds the residual of d2h/dx2 = s(x) at 30 collocation points with a fixed weight lambda = 1, the loss L_data + lambda L_pde on slide 15. In round 2 the source handed to the fit is 20 % too large while the hidden profile stays the same, so the equation fit carries a model error. The Reveal the map tab turns lambda into the quantity to choose once s(x) cannot be trusted.</p>
+  </div>
+</section>
+
+<!-- ============ 6. PHYSICS WEIGHT: reveal the map ============ -->
 <section class="demo" id="physics" role="tabpanel">
   <h2>Reveal the map: find the right physics weight with a few probes</h2>
   <p class="lead">Three temperature gauges on a member, one heat equation whose source term may be wrong by a percentage you do not control. Every cell of the map is one fit; its colour is the error against the true field. The map starts hidden. Probe it.</p>
@@ -314,13 +395,14 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
 (function detective() {
   const img = new Board(document.getElementById("ndImg")), line = new Board(document.getElementById("ndLine"));
   const ROUNDS = [150, 420, 60, 800, 300];
-  let round = 0, guess = 500, locked = false, eps = null, score = 0, played = 0, dragging = false;
+  let round = 0, guess = 500, locked = false, eps = null, score = 0, played = 0, dragging = false, history = [];
   const L = 60, R = line.W - 30, TOP = 120, BOT = line.H - 40;
+  const PROMPT = '<p class="prompt">At which t is the site picture gone? Place the marker.</p>';
   const tx = t => L + (R - L) * t / T, xt = x => Math.round(Math.max(0, Math.min(T, (x - L) / (R - L) * T)));
   function noised(t) { const a = abar[t], s = Math.sqrt(a), n = Math.sqrt(1 - a), out = new Float64Array(S * S); for (let i = 0; i < S * S; i++) out[i] = s * SITE[i] + n * eps[i]; return out; }
   const stepEl = document.getElementById("ndStep");
   function text() {
-    if (!locked) stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>The large image is the site after a hidden number of forward steps. The small one is the clean site for reference.</p><p>Drag the marker on the schedule to your estimate of t, then press Lock in.</p>';
+    if (!locked) stepEl.innerHTML = PROMPT + '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>The large image is the site after a hidden number of forward steps. The small one is the clean site for reference.</p><p>Drag the marker on the schedule to the t that produced the large image, then press Lock in. Each round adds your guess and the truth as dots on the abar curve.</p>';
   }
   function draw() {
     const t = ROUNDS[round];
@@ -346,6 +428,14 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
     } else line.label("drag the marker to your estimate", L, 40, css("--muted"), "left", 13);
     c.strokeStyle = css("--orange"); c.lineWidth = 3; c.beginPath(); c.moveTo(tx(guess), locked ? 28 : 50); c.lineTo(tx(guess), BOT); c.stroke();
     c.fillStyle = css("--orange"); c.beginPath(); c.arc(tx(guess), BOT, 8, 0, 2 * Math.PI); c.fill();
+    // the record of the set so far: guess and truth as dots on the abar curve, joined by a thin line
+    const ya = t2 => BOT - (BOT - TOP) * abar[t2];
+    history.forEach(h => {
+      c.strokeStyle = css("--grey"); c.lineWidth = 1.2; c.beginPath(); c.moveTo(tx(h.g), ya(h.g)); c.lineTo(tx(h.t), ya(h.t)); c.stroke();
+      c.fillStyle = "#2E7D5B"; c.beginPath(); c.arc(tx(h.t), ya(h.t), 6, 0, 2 * Math.PI); c.fill();
+      c.fillStyle = css("--orange"); c.strokeStyle = css("--panel"); c.lineWidth = 1.5; c.beginPath(); c.arc(tx(h.g), ya(h.g), 6, 0, 2 * Math.PI); c.fill(); c.stroke();
+    });
+    if (history.length) line.label("dots on the curve: your guesses (orange) and the truth (green), " + history.length + (history.length === 1 ? " round" : " rounds"), R, locked ? 20 : 40, css("--muted"), "right", 12);
     document.getElementById("ndGuess").textContent = guess;
     document.getElementById("ndAbar").textContent = abar[guess].toFixed(3) + "  (" + (100 * abar[guess]).toFixed(0) + " % signal)";
     document.getElementById("ndScore").textContent = score + " / " + played;
@@ -353,19 +443,19 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   function lock() {
     if (locked) return; locked = true; played++;
     const t = ROUNDS[round], dA = Math.abs(abar[guess] - abar[t]), dT = Math.abs(guess - t);
-    const pts = dA < 0.08 ? 1 : 0; score += pts;
+    const pts = dA < 0.08 ? 1 : 0; score += pts; history.push({ g: guess, t: t });
     let why;
     if (abar[t] < 0.05 && abar[guess] < 0.05) why = "Both your guess and the truth are past the point where the picture is gone: abar is under 5 % for every t beyond about 540, so the eye cannot tell t = 600 from t = 1000. A point here counts whenever the signal level matches.";
     else if (dT < 60) why = "Close. This is the part of the schedule where abar moves fastest, so the picture changes quickly and small errors in t are visible.";
     else if (guess < t) why = "You guessed earlier than the truth: the picture kept " + (100 * abar[t]).toFixed(0) + " % of its signal, less than the " + (100 * abar[guess]).toFixed(0) + " % at your estimate. Compare the building pad in the strip, it is the first feature to disappear.";
     else why = "You guessed later than the truth: the picture kept " + (100 * abar[t]).toFixed(0) + " % of its signal, more than the " + (100 * abar[guess]).toFixed(0) + " % at your estimate. The hill survives long after the road, since it is a large low-frequency feature.";
-    stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><div class="ask ' + (pts ? 'ok' : 'no') + '">' + (pts ? 'Point. ' : 'No point. ') + 'The truth is t = ' + t + ' (' + (100 * abar[t]).toFixed(0) + ' % signal); you said ' + guess + ' (' + (100 * abar[guess]).toFixed(0) + ' %).</div><p>' + why + '</p>' + (round === ROUNDS.length - 1 ? '<p>Final score ' + score + ' of ' + ROUNDS.length + '. Press Next round to play the set again with new noise.</p>' : '');
+    stepEl.innerHTML = PROMPT + '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><div class="ask ' + (pts ? 'ok' : 'no') + '">' + (pts ? 'Point. ' : 'No point. ') + 'The truth is t = ' + t + ' (' + (100 * abar[t]).toFixed(0) + ' % signal); you said ' + guess + ' (' + (100 * abar[guess]).toFixed(0) + ' %).</div><p>' + why + '</p>' + (round === ROUNDS.length - 1 ? '<p>Final score ' + score + ' of ' + ROUNDS.length + '. Press Next round to play the set again with new noise.</p>' : '');
     document.getElementById("ndNext").disabled = false; document.getElementById("ndLock").disabled = true; draw();
   }
-  function next() { round = (round + 1) % ROUNDS.length; if (round === 0) { score = 0; played = 0; } eps = randn(mulberry32(101 + round + 7 * played), S * S); locked = false; guess = 500; document.getElementById("ndNext").disabled = true; document.getElementById("ndLock").disabled = false; text(); draw(); }
-  line.c.addEventListener("mousedown", ev => { if (locked) return; dragging = true; guess = xt(line.pos(ev)[0]); draw(); });
-  window.addEventListener("mousemove", ev => { if (!dragging) return; guess = xt(line.pos(ev)[0]); draw(); });
-  window.addEventListener("mouseup", () => { dragging = false; });
+  function next() { round = (round + 1) % ROUNDS.length; if (round === 0) { score = 0; played = 0; history = []; } eps = randn(mulberry32(101 + round + 7 * played), S * S); locked = false; guess = 500; document.getElementById("ndNext").disabled = true; document.getElementById("ndLock").disabled = false; text(); draw(); }
+  line.c.addEventListener("pointerdown", ev => { if (locked) return; dragging = true; guess = xt(line.pos(ev)[0]); draw(); });
+  window.addEventListener("pointermove", ev => { if (!dragging) return; guess = xt(line.pos(ev)[0]); draw(); });
+  window.addEventListener("pointerup", () => { dragging = false; });
   document.getElementById("ndLock").addEventListener("click", lock);
   document.getElementById("ndNext").addEventListener("click", next);
   quiz(document.getElementById("ndQuiz"), { q: "With this linear beta schedule, where along t does the picture change fastest to the eye?", options: ["In the first 100 steps", "Around t = 200 to 400, where abar crosses one half", "Near t = 1000"], answer: 1, why: "abar falls from 0.8 to 0.2 between roughly t = 150 and t = 400, so that is where features appear and vanish. The first steps barely touch the image and the last 400 are noise reshuffling noise, which is why cosine schedules were later proposed to spend the steps more evenly." });
@@ -373,7 +463,87 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   eps = randn(mulberry32(101), S * S); text(); draw();
 })();
 
-/* ================= 2. SPEND THE BUDGET ================= */
+/* ================= 2. PREDICT THE NOISE ================= */
+(function paintNoise() {
+  // 8 by 8 coarse site, a Gaussian prior on the 8 by 8 cosine basis (0.24 per pixel), one fixed t
+  const G = 8, TT = 250, LV = [-1.6, -0.8, 0, 0.8, 1.6], NG = G * G;
+  const coarse = new Float64Array(NG);
+  for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) { let s = 0; for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 4; dx++) s += SITE[(4 * y + dy) * S + 4 * x + dx]; coarse[y * G + x] = s / 16; }
+  const modes = []; for (let a = 0; a < G; a++) for (let b = 0; b < G; b++) modes.push([a, b]);
+  const lam = modes.map(([a, b]) => 0.004 * Math.exp(-0.5 * ((Math.PI * 0.12) ** 2) * (a * a + b * b)));
+  const basis = modes.map(([a, b]) => { const r = new Float64Array(NG); for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) r[y * G + x] = (a === 0 ? 1 : Math.SQRT2 * Math.cos(Math.PI * a * (x + 0.5) / G)) * (b === 0 ? 1 : Math.SQRT2 * Math.cos(Math.PI * b * (y + 0.5) / G)); return r; });
+  const coef = img => modes.map((m, k) => { let s = 0; for (let i = 0; i < NG; i++) s += img[i] * basis[k][i]; return s / NG; });
+  const synth = c => { const f = new Float64Array(NG); for (let k = 0; k < NG; k++) { const ck = c[k]; if (ck === 0) continue; for (let i = 0; i < NG; i++) f[i] += ck * basis[k][i]; } return f; };
+  const mu = coef(coarse), a = abar[TT], sa = Math.sqrt(a), sn = Math.sqrt(1 - a), nv = (1 - a) / NG;
+  const top = new Board(document.getElementById("pnImg")), out = new Board(document.getElementById("pnOut"));
+  const SZ = 300, Y0 = 50, X0 = [50, 450, 850], CELL = SZ / G;
+  let seed = 11, x0 = null, eps = null, xt = null, epsHat = null, paint = new Uint8Array(NG), level = 3, scored = false, denoised = false, mine = null, theirs = null, down = -1, moved = false;
+  const stepEl = document.getElementById("pnStep");
+  function grid(ctx, arr, x, y, size, lo, hi, lines) {
+    const p = size / G;
+    for (let r = 0; r < G; r++) for (let c = 0; c < G; c++) { let t = (arr[r * G + c] - lo) / (hi - lo); t = Math.max(0, Math.min(1, t)); const g = Math.round(20 + 220 * t); ctx.fillStyle = "rgb(" + g + "," + g + "," + g + ")"; ctx.fillRect(x + c * p, y + r * p, p + 0.5, p + 0.5); }
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1;
+    if (lines) for (let k = 1; k < G; k++) { ctx.beginPath(); ctx.moveTo(x + k * p, y); ctx.lineTo(x + k * p, y + size); ctx.moveTo(x, y + k * p); ctx.lineTo(x + size, y + k * p); ctx.stroke(); }
+    ctx.strokeRect(x, y, size, size);
+  }
+  function painting() { return Array.from(paint, v => LV[v]); }
+  function rms(arr) { let d = 0; for (let i = 0; i < NG; i++) d += (arr[i] - eps[i]) ** 2; return Math.sqrt(d / NG); }
+  function painted() { let n = 0; for (let i = 0; i < NG; i++) if (paint[i] !== 2) n++; return n; }
+  function newRound() {
+    seed += 1; const rng = mulberry32(seed), zk = randn(rng, NG);
+    x0 = synth(mu.map((m, k) => m + Math.sqrt(lam[k]) * zk[k])); eps = randn(rng, NG); xt = x0.map((v, i) => sa * v + sn * eps[i]);
+    paint.fill(2); scored = false; denoised = false; mine = null; theirs = null; epsHat = null; text(); draw();
+  }
+  function denoise() {
+    const ct = coef(xt), c0 = ct.map((c, k) => mu[k] + sa * lam[k] * (c - sa * mu[k]) / (a * lam[k] + nv)), x0h = synth(c0);
+    epsHat = xt.map((v, i) => (v - sa * x0h[i]) / sn); theirs = rms(epsHat); denoised = true; text(); draw();
+  }
+  function text() {
+    let html = '<p class="prompt">Which noise turned the clean patch into the noised one? Paint it.</p>';
+    if (!scored) html += '<p>Pick a brush level, then drag across the right-hand grid, or click a cell to step it through the five levels. Positive noise brightens a cell, negative noise darkens it. Score unlocks after eight cells are painted; the true noise stays hidden until then.</p>';
+    else {
+      const zero = rms(new Float64Array(NG));
+      if (!denoised) html += '<div class="ask">Your painting is ' + mine.toFixed(2) + ' RMS from the true noise, in units of its standard deviation. Painting nothing would score ' + zero.toFixed(2) + '.</div><p>Press Let the denoiser do it. The denoiser never sees the clean patch; it works from the noised patch and a prior over smooth terrain.</p>';
+      else html += '<div class="ask ' + (mine <= theirs ? 'ok' : 'no') + '">' + (mine <= theirs ? 'You are closer. ' : 'The denoiser is closer. ') + 'Your RMS ' + mine.toFixed(2) + ', the denoiser ' + theirs.toFixed(2) + ', painting nothing ' + zero.toFixed(2) + '.</div><p>You had both pictures, which is the situation of the training set: the target eps is known. The denoiser had only x_t and the prior, which is the situation at sampling time, and its answer is the posterior mean of eps. A network trained on the slide 6 objective learns to produce that estimate.</p>';
+    }
+    stepEl.innerHTML = html;
+  }
+  function draw() {
+    top.clear(""); const ctx = top.ctx;
+    grid(ctx, x0, X0[0], Y0, SZ, -1.5, 1.5, false); top.label("clean patch x_0, the coarse site", X0[0], 30, css("--ink"), "left", 14);
+    grid(ctx, xt, X0[1], Y0, SZ, -1.5, 1.5, false); top.label("after t = " + TT + " steps: x_t = " + sa.toFixed(2) + " x_0 + " + sn.toFixed(2) + " eps", X0[1], 30, css("--ink"), "left", 14);
+    grid(ctx, painting(), X0[2], Y0, SZ, -2.5, 2.5, true); top.label(scored ? "your noise estimate (locked)" : "your noise estimate: paint here", X0[2], 30, css("--orange"), "left", 14);
+    top.label("same grey scale for both patches", X0[0], Y0 + SZ + 22, css("--muted"), "left", 12);
+    top.label("brush level " + (LV[level] > 0 ? "+" : "") + LV[level].toFixed(1) + "; mid-grey is zero noise", X0[2], Y0 + SZ + 22, css("--muted"), "left", 12);
+    out.clear(scored ? "the comparison" : "press Score to compare your painting with the true noise");
+    if (scored) {
+      const sz = 230, y = 50;
+      grid(out.ctx, eps, X0[0], y, sz, -2.5, 2.5, false); out.label("true noise eps", X0[0], 40, css("--ink"), "left", 14);
+      grid(out.ctx, painting(), X0[1], y, sz, -2.5, 2.5, false); out.label("yours, RMS " + mine.toFixed(2), X0[1], 40, css("--orange"), "left", 14);
+      if (denoised) { grid(out.ctx, epsHat, X0[2], y, sz, -2.5, 2.5, false); out.label("posterior-mean denoiser, RMS " + theirs.toFixed(2), X0[2], 40, css("--blue"), "left", 14); }
+      else { out.ctx.strokeStyle = css("--line"); out.ctx.strokeRect(X0[2], y, sz, sz); out.label("the denoiser's estimate", X0[2], 40, css("--muted"), "left", 14); }
+    }
+    document.getElementById("pnCount").textContent = painted() + " / " + NG;
+    document.getElementById("pnMine").textContent = mine === null ? "-" : mine.toFixed(3);
+    document.getElementById("pnTheirs").textContent = theirs === null ? "-" : theirs.toFixed(3);
+    document.getElementById("pnScore").disabled = scored || painted() < 8;
+    document.getElementById("pnDenoise").disabled = !scored || denoised;
+  }
+  function cellAt(ev) { const [mx, my] = top.pos(ev), c = Math.floor((mx - X0[2]) / CELL), r = Math.floor((my - Y0) / CELL); if (c < 0 || r < 0 || c >= G || r >= G) return -1; return r * G + c; }
+  top.c.addEventListener("pointerdown", ev => { if (scored) return; const i = cellAt(ev); if (i < 0) return; down = i; moved = false; try { top.c.setPointerCapture(ev.pointerId); } catch (e) {} ev.preventDefault(); });
+  top.c.addEventListener("pointermove", ev => { if (down < 0) return; const i = cellAt(ev); if (i < 0 || (i === down && !moved)) return; if (!moved) { moved = true; paint[down] = level; } paint[i] = level; draw(); });
+  top.c.addEventListener("pointerup", () => { if (down < 0) return; if (!moved) paint[down] = (paint[down] + 1) % 5; down = -1; draw(); });
+  top.c.addEventListener("pointercancel", () => { down = -1; });
+  document.querySelectorAll("#pnLevels button").forEach(b => b.addEventListener("click", () => { level = parseInt(b.dataset.l, 10); document.querySelectorAll("#pnLevels button").forEach(o => o.setAttribute("aria-pressed", o === b ? "true" : "false")); draw(); }));
+  document.getElementById("pnScore").addEventListener("click", () => { if (scored || painted() < 8) return; scored = true; mine = rms(painting()); text(); draw(); });
+  document.getElementById("pnDenoise").addEventListener("click", () => { if (!scored || denoised) return; denoise(); });
+  document.getElementById("pnReset").addEventListener("click", newRound);
+  quiz(document.getElementById("pnQuiz"), { q: "During training the network receives x_t and t and is scored on its estimate of eps. Which piece of information does it never receive?", options: ["The clean patch x_0, which only enters through the target eps", "The step t", "The noised patch x_t"], answer: 0, why: "The loss on slide 6 is the mean square of eps minus eps_theta(x_t, t). The clean image appears only inside the target eps = (x_t - sqrt(abar_t) x_0) / sqrt(1 - abar_t). At sampling time there is no x_0 at all, so the network has to carry the estimate shown on the right, the posterior mean of the noise under what it learned about terrain." });
+  window.addEventListener("themechange", draw);
+  newRound();
+})();
+
+/* ================= 3. SPEND THE BUDGET ================= */
 (function budget() {
   // Gaussian prior over smooth patches: coefficients on a 10 by 10 cosine basis, mean = the site
   const KM = 10, ell = 0.12, modes = []; for (let a = 0; a < KM; a++) for (let b = 0; b < KM; b++) modes.push([a, b]);
@@ -395,31 +565,59 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   const L = 60, R = line.W - 30, AX = line.H - 45;
   const tx = t => L + (R - L) * (T - t) / T, xt = x => Math.round(Math.max(0, Math.min(T, T - (x - L) / (R - L) * T)));
   let N = 8, inner = [], seed = 5, z = null, ref = null, result = null, board = [], dragIdx = -1, animTimer = null, shown = 0, label = "even";
-  function preset(p, name) { inner = []; for (let j = 1; j < N; j++) inner.push(Math.round(T * (1 - Math.pow(j / N, p)))); inner.sort((a, b) => b - a); label = name; result = null; shown = 0; draw(); }
+  // prediction gate: the student commits to early, even or late before any preset, marker or run is available
+  const GATE = [["early", 3, "early-heavy"], ["even", 1, "even"], ["late", 0.5, "late-heavy"]];
+  const CTRL = ["sbN4", "sbN8", "sbN16", "sbEven", "sbEarly", "sbLate", "sbRun"];
+  let gate = null, revealed = false, feedback = "";
+  const stepEl = document.getElementById("sbStep");
+  function placement(p, n) { const inn = []; for (let j = 1; j < n; j++) inn.push(Math.round(T * (1 - Math.pow(j / n, p)))); inn.sort((a, b) => b - a); return inn; }
+  function preset(p, name) { inner = placement(p, N); label = name; result = null; shown = 0; draw(); }
+  function setN(n) { N = n; ["sbN4", "sbN8", "sbN16"].forEach(id => document.getElementById(id).setAttribute("aria-pressed", id === "sbN" + n ? "true" : "false")); }
+  function enable() { CTRL.forEach(id => { document.getElementById(id).disabled = gate === null; }); }
+  function text() {
+    let html = '<p class="prompt">Eight steps: spend them early or late?</p>';
+    if (gate === null) html += '<p>Early means most of the eight calls at high noise, late means most of them near the clean end. Commit first; the presets, the markers and the run button unlock after that.</p><div class="gate">' + GATE.map((g, i) => '<button data-g="' + i + '">' + g[0] + '</button>').join('') + '</div>';
+    else if (!revealed) html += '<p>Locked: ' + GATE[gate][2] + ' with 8 steps, now on the timeline. Press Run the sampler to watch the picture form and to see where this placement ranks.</p>';
+    else html += feedback;
+    stepEl.innerHTML = html;
+    stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { gate = parseInt(b.dataset.g, 10); setN(8); preset(GATE[gate][1], GATE[gate][2]); enable(); text(); }));
+  }
   function times() { return [T].concat(inner).concat([0]); }
-  function newNoise() { seed += 1; z = randn(mulberry32(seed), K); for (let k = 0; k < K; k++) z[k] *= 1; ref = null; result = null; board = []; shown = 0; draw(); }
+  function newNoise() { seed += 1; z = randn(mulberry32(seed), K); ref = null; result = null; board = []; shown = 0; gate = null; revealed = false; feedback = ""; setN(8); preset(1, "even"); enable(); text(); }
   function reference() { if (!ref) { const all = []; for (let j = 0; j <= T; j++) all.push(T - j); ref = ddim(z, all, false); ref.img = synth(ref.c); } return ref; }
+  function finalErr(img) { const rf = reference(); let d = 0; for (let i = 0; i < S * S; i++) d += (img[i] - rf.img[i]) ** 2; return Math.sqrt(d / (S * S)); }
+  function revealGate() {
+    revealed = true;
+    const errs = GATE.map(g => finalErr(synth(ddim(z, [T].concat(placement(g[1], 8)).concat([0]), false).c)));
+    GATE.forEach((g, i) => { if (!(label === g[2] && N === 8)) board.push({ name: g[2] + ", 8 steps", N: 8, err: errs[i], ts: [] }); });
+    board.sort((a, b) => a.err - b.err);
+    const win = errs.indexOf(Math.min.apply(null, errs)), ok = win === gate;
+    const others = GATE.map((g, i) => i === win ? null : errs[i].toFixed(2) + " for " + g[2]).filter(Boolean).join(" and ");
+    feedback = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'You chose ' + GATE[gate][2] + '. ') + GATE[win][2].charAt(0).toUpperCase() + GATE[win][2].slice(1) + ' wins with an error of ' + errs[win].toFixed(2) + ' against ' + others + '.</div><p>At high noise the denoiser returns something close to the prior mean whatever it is given, so a coarse jump there costs little. The fine structure is decided at low noise, where a skipped step loses detail that no later call recovers. All three presets are on the board; drag a marker or change the budget to beat them.</p>';
+    text();
+  }
   function run() {
+    if (gate === null) return;
     if (animTimer) clearTimeout(animTimer);
-    const r = ddim(z, times(), true), rf = reference(); let d = 0; for (let i = 0; i < S * S; i++) d += (r.frames[r.frames.length - 1][i] - rf.img[i]) ** 2; r.err = Math.sqrt(d / (S * S));
+    const r = ddim(z, times(), true); r.err = finalErr(r.frames[r.frames.length - 1]);
     let v = 0; for (let k = 0; k < K; k++) v += (r.c[k] - mu[k]) ** 2; r.spread = Math.sqrt(v) / priorStd;
     result = r; shown = 0;
     const entry = { name: label + ", " + N + " steps", N: N, err: r.err, ts: inner.slice() }; board.push(entry); board.sort((a, b) => a.err - b.err); board.forEach(b => b.last = b === entry);
-    (function reveal() { shown++; draw(); if (shown < result.frames.length) animTimer = setTimeout(reveal, 160); })();
+    (function reveal() { shown++; draw(); if (shown < result.frames.length) animTimer = setTimeout(reveal, 160); else if (!revealed) { revealGate(); draw(); } })();
   }
   function draw() {
     const ts = times();
     document.getElementById("sbCalls").textContent = N;
     document.getElementById("sbErr").textContent = result ? result.err.toFixed(3) : "-";
     document.getElementById("sbSpread").textContent = result ? (100 * result.spread).toFixed(0) + " %" : "-";
-    line.clear("noise level along the sampler's path (left: pure noise, right: clean); drag a marker to move a step");
+    line.clear(gate === null ? "noise level along the sampler's path (left: pure noise, right: clean); commit to a placement to unlock the markers" : "noise level along the sampler's path (left: pure noise, right: clean); drag a marker to move a step");
     const c = line.ctx; c.strokeStyle = css("--line"); c.lineWidth = 1; c.beginPath(); c.moveTo(L, AX); c.lineTo(R, AX); c.stroke();
     c.font = "12px " + css("--mono"); c.fillStyle = css("--muted"); c.textAlign = "center"; c.textBaseline = "top"; for (let k = 0; k <= 10; k++) c.fillText("t=" + (T - k * 100), tx(T - k * 100), AX + 8);
     // abar as a thin curve for orientation
     c.strokeStyle = css("--grey"); c.lineWidth = 1.2; c.beginPath(); for (let t2 = 0; t2 <= T; t2 += 5) { const x = tx(t2), y = AX - 60 * abar[t2]; if (t2 === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke(); line.label("abar", R + 4, AX - 58, css("--grey"), "left", 11);
     for (let j = 0; j < ts.length - 1; j++) { c.strokeStyle = css("--blue"); c.lineWidth = 2; c.beginPath(); c.moveTo(tx(ts[j]), AX - 20); c.lineTo(tx(ts[j + 1]), AX - 20); c.stroke(); const mx = (tx(ts[j]) + tx(ts[j + 1])) / 2; c.fillStyle = css("--blue"); c.beginPath(); c.moveTo(mx + 5, AX - 20); c.lineTo(mx - 3, AX - 25); c.lineTo(mx - 3, AX - 15); c.closePath(); c.fill(); }
-    ts.forEach((t, j) => { const fixed = j === 0 || j === ts.length - 1; c.fillStyle = fixed ? css("--grey") : css("--orange"); c.beginPath(); c.arc(tx(t), AX - 20, fixed ? 6 : 9, 0, 2 * Math.PI); c.fill(); });
-    strip.clear(result ? "what the sampler holds after each call" : "run the sampler to see the picture form call by call");
+    ts.forEach((t, j) => { const fixed = j === 0 || j === ts.length - 1; c.fillStyle = fixed ? css("--grey") : (gate === null ? css("--grey") : css("--orange")); c.beginPath(); c.arc(tx(t), AX - 20, fixed ? 6 : 9, 0, 2 * Math.PI); c.fill(); });
+    strip.clear(result ? "what the sampler holds after each call" : (gate === null ? "the picture forms call by call once you have committed and pressed Run" : "run the sampler to see the picture form call by call"));
     if (result) { const n = result.frames.length, sz = Math.min(120, (strip.W - 40) / n - 6); for (let j = 0; j < Math.min(shown, n); j++) { const x0 = 20 + j * (sz + 6); drawPatch(strip.ctx, result.frames[j], x0, 36, sz, -1.5, 1.5); strip.label("t=" + ts[j], x0, 36 + sz + 14, css("--muted"), "left", 11); } }
     out.clear(""); const sz = 260, gap = 60, x0 = (out.W - 3 * sz - 2 * gap) / 2;
     if (result && shown >= result.frames.length) { drawPatch(out.ctx, result.frames[result.frames.length - 1], x0, 40, sz, -1.5, 1.5); out.label("yours, " + N + " calls (error " + result.err.toFixed(3) + ")", x0, 30, css("--ink"), "left", 14); }
@@ -428,12 +626,12 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
     drawPatch(out.ctx, SITE, x0 + 2 * (sz + gap), 40, sz, -1.5, 1.5); out.label("the prior mean", x0 + 2 * (sz + gap), 30, css("--muted"), "left", 14);
     const ul = document.getElementById("sbBoard"); ul.innerHTML = "";
     board.slice(0, 8).forEach((b, i) => { const li = document.createElement("li"); li.className = (i === 0 ? "best " : "") + (b.last ? "last" : ""); li.innerHTML = "<span>" + (i + 1) + ". " + b.name + "</span><span>" + b.err.toFixed(3) + "</span>"; ul.appendChild(li); });
-    if (!board.length) ul.innerHTML = '<li><span>no runs yet</span><span></span></li>';
+    if (!board.length) ul.innerHTML = '<li><span>' + (gate === null ? 'the board fills after your first run' : 'no runs yet') + '</span><span></span></li>';
   }
-  line.c.addEventListener("mousedown", ev => { const [mx] = line.pos(ev); let bd = 1e9; dragIdx = -1; inner.forEach((t, j) => { const d = Math.abs(mx - tx(t)); if (d < bd) { bd = d; dragIdx = j; } }); if (bd > 14) dragIdx = -1; });
-  window.addEventListener("mousemove", ev => { if (dragIdx < 0) return; let t = xt(line.pos(ev)[0]); const hi = dragIdx === 0 ? T - 1 : inner[dragIdx - 1] - 1, lo = dragIdx === inner.length - 1 ? 1 : inner[dragIdx + 1] + 1; t = Math.max(lo, Math.min(hi, t)); inner[dragIdx] = t; label = "custom"; result = null; shown = 0; draw(); });
-  window.addEventListener("mouseup", () => { dragIdx = -1; });
-  [["sbN4", 4], ["sbN8", 8], ["sbN16", 16]].forEach(([id, n]) => document.getElementById(id).addEventListener("click", () => { N = n; ["sbN4", "sbN8", "sbN16"].forEach(j => document.getElementById(j).setAttribute("aria-pressed", j === id ? "true" : "false")); preset(1, "even"); }));
+  line.c.addEventListener("pointerdown", ev => { if (gate === null) return; const [mx] = line.pos(ev); let bd = 1e9; dragIdx = -1; inner.forEach((t, j) => { const d = Math.abs(mx - tx(t)); if (d < bd) { bd = d; dragIdx = j; } }); if (bd > 14) dragIdx = -1; });
+  window.addEventListener("pointermove", ev => { if (dragIdx < 0) return; let t = xt(line.pos(ev)[0]); const hi = dragIdx === 0 ? T - 1 : inner[dragIdx - 1] - 1, lo = dragIdx === inner.length - 1 ? 1 : inner[dragIdx + 1] + 1; t = Math.max(lo, Math.min(hi, t)); inner[dragIdx] = t; label = "custom"; result = null; shown = 0; draw(); });
+  window.addEventListener("pointerup", () => { dragIdx = -1; });
+  [["sbN4", 4], ["sbN8", 8], ["sbN16", 16]].forEach(([id, n]) => document.getElementById(id).addEventListener("click", () => { setN(n); preset(1, "even"); }));
   document.getElementById("sbEven").addEventListener("click", () => preset(1, "even"));
   document.getElementById("sbEarly").addEventListener("click", () => preset(3, "early-heavy"));
   document.getElementById("sbLate").addEventListener("click", () => preset(0.5, "late-heavy"));
@@ -441,20 +639,31 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   document.getElementById("sbNoise").addEventListener("click", newNoise);
   quiz(document.getElementById("sbQuiz"), { q: "You are allowed eight denoising calls. Where should most of them go?", options: ["At high noise, near t = 1000, where there is the most noise to remove", "Spread evenly over t", "At low noise, near t = 0, where the structure is being resolved"], answer: 2, why: "At high noise the denoiser can only return something close to the prior mean, so a few coarse jumps lose little. The fine structure is decided late, and a jump there skips detail that no later call can recover. Practical spacings (DDIM quadratic, Karras rho) crowd the steps at low noise for the same reason." });
   window.addEventListener("themechange", draw);
-  z = randn(mulberry32(seed), K); preset(1, "even");
+  z = randn(mulberry32(seed), K); setN(8); preset(1, "even"); enable(); text();
 })();
 
-/* ================= 3. GUESS THE GUIDANCE ================= */
+/* ================= 4. GUESS THE GUIDANCE ================= */
 (function guidance() {
   const U = [{ m: [-2, -1.5], s: 0.5, w: 0.35, name: "water" }, { m: [0.5, 1.5], s: 0.5, w: 0.35, name: "vegetation" }, { m: [2.5, -0.5], s: 0.6, w: 0.3, name: "roof" }], C = [{ m: [2.6, -0.4], s: 0.4, w: 1 }];
   function eps(x, y, a, mixc) { let nx = 0, ny = 0, den = 0; for (const c of mixc) { const v = a * c.s * c.s + 1 - a, dx = x - Math.sqrt(a) * c.m[0], dy = y - Math.sqrt(a) * c.m[1]; const p = c.w * Math.exp(-0.5 * (dx * dx + dy * dy) / v) / v; nx += p * (-dx / v); ny += p * (-dy / v); den += p; } return [-Math.sqrt(1 - a) * nx / den, -Math.sqrt(1 - a) * ny / den]; }
   function sample(w, n, seed) { const rng = mulberry32(seed), X = randn(rng, n), Y = randn(rng, n); for (let t = T; t >= 1; t--) { const a = abar[t], at = alpha[t], bt = beta[t], nz = t > 1 ? randn(rng, 2 * n) : null, sb = Math.sqrt(bt), c1 = 1 / Math.sqrt(at), c2 = bt / Math.sqrt(1 - a); for (let i = 0; i < n; i++) { const eu = eps(X[i], Y[i], a, U), ec = eps(X[i], Y[i], a, C); const ex = eu[0] + w * (ec[0] - eu[0]), ey = eu[1] + w * (ec[1] - eu[1]); X[i] = c1 * (X[i] - c2 * ex) + (nz ? sb * nz[2 * i] : 0); Y[i] = c1 * (Y[i] - c2 * ey) + (nz ? sb * nz[2 * i + 1] : 0); } } return [X, Y]; }
   const board = new Board(document.getElementById("ggPlot"));
   const ROUNDS = [3, 0, 10, 1, 3], NS = 300;
-  let round = 0, pts = null, shown = 0, answered = false, score = 0, played = 0, timer = null;
+  // two modes: "set" (the student picks w and watches; a gate guards the w = 10 cloud) and "ident" (hidden w, the original rounds)
+  let mode = "set", round = 0, pts = null, shown = 0, answered = false, score = 0, played = 0, timer = null;
+  let curW = null, setGate = null; const cache = {};
+  const SG = ["sharper", "it drifts"], SG_OK = 0;
   const px = v => 80 + (v + 4) / 9 * (board.W - 120), py = v => board.H - 50 - (v + 3.5) / 7 * (board.H - 90);
-  const stepEl = document.getElementById("ggStep");
-  function text() { stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>The sampler was asked for <b>roof</b> and run at a hidden guidance weight. The 300 samples are landing now.</p><p>Judge two things: did they all reach the roof cluster, and how wide is the cloud compared with the true roof class (the blue ring)?</p>'; }
+  const stepEl = document.getElementById("ggStep"), choiceBtns = Array.from(document.querySelectorAll("#ggChoice button")), flipBtn = document.getElementById("ggFlip"), nextBtn = document.getElementById("ggNext");
+  function cloud(w) { if (!cache[w]) cache[w] = sample(w, NS, 77 + w); return cache[w]; }
+  function text() {
+    if (mode === "ident") { stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>The sampler was asked for <b>roof</b> and run at a hidden guidance weight. The 300 samples are landing now.</p><p>Judge two things: did they all reach the roof cluster, and how wide is the cloud compared with the true roof class (the blue ring)? Then click the weight.</p>'; return; }
+    let html = '<p class="prompt">Set w to 10. Does the roof cluster get sharper or does it drift?</p><p>Click w = 0, 1 and 3 first and watch where the 300 samples land. Clicking w = 10 asks for your answer before that cloud is drawn.</p>';
+    if (curW === 10 && setGate === null) html += '<div class="gate">' + SG.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>';
+    else if (setGate !== null) { const st = stats(cloud(10)); html += '<div class="ask ' + (setGate === SG_OK ? 'ok' : 'no') + '">' + (setGate === SG_OK ? 'Right. ' : 'It gets sharper. ') + 'At w = 10 the spread is ' + (st.sd / 0.4).toFixed(2) + ' of the true class and the centre sits ' + st.off.toFixed(2) + ' class widths from the roof mean: the cloud collapses on the densest part of the class with almost no drift.</div><p>Press Flip to identification to play the hidden-w rounds.</p>'; }
+    stepEl.innerHTML = html;
+    stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { setGate = parseInt(b.dataset.g, 10); pts = cloud(10); readouts(); text(); land(); }));
+  }
   function ellipse(ctx, c, color, dash, lab) { ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.ellipse(px(c.m[0]), py(c.m[1]), 2 * c.s / 9 * (board.W - 120), 2 * c.s / 7 * (board.H - 90), 0, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]); if (lab) board.label(lab, px(c.m[0]), py(c.m[1] + 2 * c.s) - 8, color, "center", 13); }
   function draw() {
     board.clear(""); const ctx = board.ctx;
@@ -465,29 +674,123 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
     ellipse(ctx, C[0], css("--blue"), [], "");
     board.label("roof, the class requested", px(C[0].m[0]), py(C[0].m[1] - 2 * C[0].s) + 18, css("--blue"), "center", 13);
     if (pts) { ctx.fillStyle = css("--orange"); for (let i = 0; i < shown; i++) { ctx.globalAlpha = 0.75; ctx.beginPath(); ctx.arc(px(pts[0][i]), py(pts[1][i]), 4, 0, 2 * Math.PI); ctx.fill(); } ctx.globalAlpha = 1; }
-    board.label(answered ? "sampled at w = " + ROUNDS[round] : "sampled at a hidden w", px(-3.9), py(3.3), css("--orange"), "left", 14);
-    document.getElementById("ggScore").textContent = score + " / " + played;
+    let lab;
+    if (mode === "set") lab = curW === null ? "click a weight to sample 300 roofs" : (pts ? "sampled at w = " + curW : "w = 10: commit to an answer to draw this cloud");
+    else lab = answered ? "sampled at w = " + ROUNDS[round] : "sampled at a hidden w";
+    board.label(lab, px(-3.9), py(3.3), css("--orange"), "left", 14);
+    document.getElementById("ggScore").textContent = mode === "ident" ? score + " / " + played : "-";
   }
-  function stats() { let on = 0, mx = 0, my = 0; for (let i = 0; i < NS; i++) if (pts[0][i] > 1.4 && pts[1][i] < 0.8) { on++; mx += pts[0][i]; my += pts[1][i]; } mx /= Math.max(1, on); my /= Math.max(1, on); let v = 0; for (let i = 0; i < NS; i++) if (pts[0][i] > 1.4 && pts[1][i] < 0.8) v += (pts[0][i] - mx) ** 2 + (pts[1][i] - my) ** 2; return { on: on / NS, sd: Math.sqrt(v / Math.max(1, on) / 2) }; }
-  function land() { if (timer) clearTimeout(timer); shown = 0; (function f() { shown = Math.min(NS, shown + 6); draw(); if (shown < NS) timer = setTimeout(f, 24); })(); }
-  function start() { pts = sample(ROUNDS[round], NS, 40 + round + 11 * played); answered = false; Array.from(document.querySelectorAll("#ggChoice button")).forEach(b => { b.className = ""; b.disabled = false; }); document.getElementById("ggNext").disabled = true; document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; text(); land(); }
+  function stats(p) { let on = 0, mx = 0, my = 0; for (let i = 0; i < NS; i++) if (p[0][i] > 1.4 && p[1][i] < 0.8) { on++; mx += p[0][i]; my += p[1][i]; } mx /= Math.max(1, on); my /= Math.max(1, on); let v = 0; for (let i = 0; i < NS; i++) if (p[0][i] > 1.4 && p[1][i] < 0.8) v += (p[0][i] - mx) ** 2 + (p[1][i] - my) ** 2; return { on: on / NS, sd: Math.sqrt(v / Math.max(1, on) / 2), off: Math.hypot(mx - C[0].m[0], my - C[0].m[1]) / 0.4 }; }
+  function readouts() { if (pts) { const st = stats(pts); document.getElementById("ggOn").textContent = (100 * st.on).toFixed(0) + " %"; document.getElementById("ggSd").textContent = (st.sd / 0.4).toFixed(2) + " x"; } else { document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; } }
+  function land() { if (timer) clearTimeout(timer); shown = 0; if (!pts) { draw(); return; } (function f() { shown = Math.min(NS, shown + 6); draw(); if (shown < NS) timer = setTimeout(f, 24); })(); }
+  function setW(w) {
+    curW = w; choiceBtns.forEach(b => b.setAttribute("aria-pressed", +b.dataset.w === w ? "true" : "false"));
+    if (w === 10 && setGate === null) { if (timer) clearTimeout(timer); pts = null; readouts(); text(); draw(); return; }
+    pts = cloud(w); readouts(); text(); land();
+  }
+  function start() { pts = sample(ROUNDS[round], NS, 40 + round + 11 * played); answered = false; choiceBtns.forEach(b => { b.className = ""; b.disabled = false; b.removeAttribute("aria-pressed"); }); nextBtn.disabled = true; document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; text(); land(); }
   function answer(w) {
     if (answered) return; answered = true; played++; const truth = ROUNDS[round], ok = w === truth; if (ok) score++;
-    Array.from(document.querySelectorAll("#ggChoice button")).forEach(b => { const bw = +b.dataset.w; if (bw === truth) b.classList.add("right"); else if (bw === w) b.classList.add("wrong"); b.disabled = true; });
-    const st = stats(); document.getElementById("ggOn").textContent = (100 * st.on).toFixed(0) + " %"; document.getElementById("ggSd").textContent = (st.sd / 0.4).toFixed(2) + " x";
+    choiceBtns.forEach(b => { const bw = +b.dataset.w; if (bw === truth) b.classList.add("right"); else if (bw === w) b.classList.add("wrong"); b.disabled = true; });
+    readouts();
     const why = { 0: "At w = 0 the condition is ignored and the samples fall on all three clusters in their learned proportions, about a third on roof.", 1: "At w = 1 the samples are plain conditional draws: all on roof, with the spread of the true class, so the cloud fills the blue ring.", 3: "At w = 3 every sample is on roof but the cloud is clearly tighter than the blue ring, roughly 0.6 of the true spread. The sampler is pushed toward the densest part of the class.", 10: "At w = 10 the cloud has collapsed to a dot near the class mean, about a quarter of the true spread. Every sample is a roof, and they are nearly the same roof." }[truth];
     stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Correct, ' : 'No, ') + 'this cloud was sampled at w = ' + truth + '.</div><p>' + why + '</p>' + (round === ROUNDS.length - 1 ? '<p>Final score ' + score + ' of ' + ROUNDS.length + '. Next round starts the set again with new draws.</p>' : '');
-    document.getElementById("ggNext").disabled = false; draw();
+    nextBtn.disabled = false; draw();
   }
-  document.querySelectorAll("#ggChoice button").forEach(b => b.addEventListener("click", () => answer(+b.dataset.w)));
-  document.getElementById("ggNext").addEventListener("click", () => { round = (round + 1) % ROUNDS.length; if (round === 0) { score = 0; played = 0; } start(); });
+  function flip() {
+    if (timer) clearTimeout(timer);
+    if (mode === "set") { mode = "ident"; flipBtn.textContent = "Back to setting w"; flipBtn.classList.remove("primary"); round = 0; score = 0; played = 0; start(); }
+    else { mode = "set"; flipBtn.textContent = "Flip to identification"; flipBtn.classList.add("primary"); curW = null; setGate = null; pts = null; answered = false; choiceBtns.forEach(b => { b.className = ""; b.disabled = false; b.removeAttribute("aria-pressed"); }); nextBtn.disabled = true; readouts(); text(); draw(); }
+  }
+  choiceBtns.forEach(b => b.addEventListener("click", () => { if (mode === "set") setW(+b.dataset.w); else answer(+b.dataset.w); }));
+  flipBtn.addEventListener("click", flip);
+  nextBtn.addEventListener("click", () => { if (mode !== "ident") return; round = (round + 1) % ROUNDS.length; if (round === 0) { score = 0; played = 0; } start(); });
   document.getElementById("ggReplay").addEventListener("click", land);
   quiz(document.getElementById("ggQuiz"), { q: "At w = 10 every sample lands on the requested class and the cloud is far tighter than the class itself. What has been lost?", options: ["Nothing, every sample is correct", "Diversity: the sampler covers only the densest part of the class", "Accuracy: the samples drift away from the class"], answer: 1, why: "Guidance above one multiplies the conditional likelihood term, which sharpens the distribution around its mode. Image generators show this as saturated, repetitive outputs at high guidance scales; a map generator would produce one typical roof instead of the range of roofs in the data." });
   window.addEventListener("themechange", draw);
-  start();
+  text(); draw();
 })();
 
-/* ================= 4. REVEAL THE MAP ================= */
+/* ================= 5. THREE GAUGES PLUS AN EQUATION ================= */
+(function gauges() {
+  const PI = Math.PI;
+  // hidden profile in metres along u = x / 100 m, and its exact second derivative in u
+  function hTrue(u) { return 1.6 - 0.6 * u + 0.25 * Math.sin(2 * PI * u) + 0.10 * Math.sin(5 * PI * u); }
+  function sTrue(u) { return -0.25 * 4 * PI * PI * Math.sin(2 * PI * u) - 0.10 * 25 * PI * PI * Math.sin(5 * PI * u); }
+  const M = 24, centers = linspace(-0.05, 1.05, M), wid = 0.06, NB = M + 2;
+  function feats(u) { const r = new Float64Array(NB); r[0] = 1; r[1] = u; for (let j = 0; j < M; j++) r[2 + j] = Math.exp(-0.5 * ((u - centers[j]) / wid) ** 2); return r; }
+  function feats2(u) { const r = new Float64Array(NB); for (let j = 0; j < M; j++) { const d = (u - centers[j]) / wid; r[2 + j] = (d * d - 1) / (wid * wid) * Math.exp(-0.5 * d * d); } return r; }
+  function solveNormal(blocks, ridge) {
+    const n = NB, A = []; for (let i = 0; i < n; i++) A.push(new Float64Array(n + 1));
+    blocks.forEach(([rows, rhs, w]) => { for (let r = 0; r < rows.length; r++) { const row = rows[r]; for (let i = 0; i < n; i++) { if (row[i] === 0) continue; for (let j = 0; j < n; j++) A[i][j] += w * row[i] * row[j]; A[i][n] += w * row[i] * rhs[r]; } } });
+    for (let i = 0; i < n; i++) A[i][i] += ridge[i];
+    for (let p = 0; p < n; p++) { let best = p; for (let r = p + 1; r < n; r++) if (Math.abs(A[r][p]) > Math.abs(A[best][p])) best = r; const tmp = A[p]; A[p] = A[best]; A[best] = tmp; for (let r = p + 1; r < n; r++) { const f = A[r][p] / A[p][p]; if (f === 0) continue; for (let j = p; j <= n; j++) A[r][j] -= f * A[p][j]; } }
+    const a = new Float64Array(n); for (let p = n - 1; p >= 0; p--) { let s = A[p][n]; for (let j = p + 1; j < n; j++) s -= A[p][j] * a[j]; a[p] = s / A[p][p]; } return a;
+  }
+  const uc = linspace(0.02, 0.98, 30), fscale = Math.sqrt(Array.from(uc, sTrue).reduce((s, v) => s + v * v, 0) / uc.length);
+  const us = linspace(0, 1, 201), hT = Array.from(us, hTrue), gn = randn(mulberry32(9), 4);
+  const ridge = new Float64Array(NB).fill(1e-3); ridge[0] = 1e-8; ridge[1] = 1e-8;
+  const ROUNDS = [{ err: 0, name: "the source term is correct" }, { err: 0.2, name: "the source term handed to the fit is 20 % too large" }];
+  const GATE = ["data only", "data plus equation"];
+  let round = 0, xg = [15, 50, 85], gate = null, fitA = null, fitB = null, drag = -1;
+  const plot = new Board(document.getElementById("rgPlot")), src = new Board(document.getElementById("rgSrc"));
+  const L = 70, R = plot.W - 30, TOP = 40, BOT = plot.H - 70, X = x => L + (R - L) * x / 100, Y = h => BOT - (BOT - TOP) * (h - 0.6) / 1.4;
+  const stepEl = document.getElementById("rgStep");
+  function readings() { return xg.map((x, i) => hTrue(x / 100) + 0.02 * gn[i]); }
+  function evalFit(coefs) { const u = us.map(v => { const f = feats(v); let s = 0; for (let j = 0; j < NB; j++) s += coefs[j] * f[j]; return s; }); let d = 0; for (let i = 0; i < us.length; i++) d += (u[i] - hT[i]) ** 2; return { u: u, rmse: Math.sqrt(d / us.length) }; }
+  function compute() {
+    const yg = readings(), PHIg = xg.map(x => feats(x / 100)), PHIc = Array.from(uc, u => feats2(u).map(v => v / fscale)), rhs = Array.from(uc, u => (1 + ROUNDS[round].err) * sTrue(u) / fscale);
+    fitA = evalFit(solveNormal([[PHIg, yg, 1]], ridge));
+    fitB = evalFit(solveNormal([[PHIg, yg, 1], [PHIc, rhs, 1 / uc.length]], ridge));
+  }
+  function text() {
+    let html = '<p class="prompt">Which fit is closer to the hidden profile, data only or data plus equation?</p><span class="k">round ' + (round + 1) + ' of 2: ' + ROUNDS[round].name + '</span>';
+    if (gate === null) html += '<p>Drag the three gauges along the reach first. Both fits are drawn once you commit.</p><div class="gate">' + GATE.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>';
+    else {
+      const bWins = fitB.rmse < fitA.rmse, ok = bWins === (gate === 1);
+      html += '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'The closer fit is ' + GATE[bWins ? 1 : 0] + '. ') + 'Data only: ' + fitA.rmse.toFixed(3) + ' m RMS; data plus equation: ' + fitB.rmse.toFixed(3) + ' m.</div>';
+      html += round === 0 ? '<p>A second-order equation with a known right-hand side fixes the profile up to a + b x, and three readings fix those two constants with one to spare. Three readings alone leave every shape between the gauges open. Drag a gauge now; both fits follow it. Then press Next round.</p>' : '<p>With the source 20 % too large the equation pulls the fit toward bumps that are 20 % too big, so its error is several times the round 1 value: the price of a wrong model at a fixed lambda = 1. The Reveal the map tab asks what lambda should become as this source error grows.</p>';
+    }
+    stepEl.innerHTML = html;
+    stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { gate = parseInt(b.dataset.g, 10); compute(); text(); draw(); }));
+  }
+  function curve(ctx, arr, color, width, dash) { ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []); ctx.beginPath(); us.forEach((u, i) => { if (i === 0) ctx.moveTo(X(100 * u), Y(arr[i])); else ctx.lineTo(X(100 * u), Y(arr[i])); }); ctx.stroke(); ctx.setLineDash([]); }
+  function draw() {
+    plot.clear(gate === null ? "the reach: drag the gauges (orange) to choose where the readings are taken" : "both fits against the hidden profile; the gauges still drag"); const ctx = plot.ctx;
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L, TOP); ctx.lineTo(L, BOT); ctx.lineTo(R, BOT); ctx.stroke();
+    ctx.font = "12px " + css("--mono"); ctx.fillStyle = css("--muted"); ctx.textAlign = "center"; ctx.textBaseline = "top"; for (let k = 0; k <= 10; k++) ctx.fillText(String(k * 10), X(k * 10), BOT + 22);
+    ctx.textAlign = "right"; ctx.textBaseline = "middle"; for (let h = 0.6; h <= 2.01; h += 0.2) ctx.fillText(h.toFixed(1), L - 8, Y(h));
+    plot.label("distance along the reach, m", (L + R) / 2, plot.H - 8, css("--muted"), "center", 12);
+    ctx.save(); ctx.translate(16, (TOP + BOT) / 2); ctx.rotate(-Math.PI / 2); plot.label("water surface h, m", 0, 0, css("--muted"), "center", 12); ctx.restore();
+    if (gate !== null) { curve(ctx, hT, css("--grey"), 2, [6, 5]); curve(ctx, fitA.u, css("--red"), 2.4); curve(ctx, fitB.u, css("--blue"), 2.4); plot.label("dashed: hidden profile; red: data only (" + fitA.rmse.toFixed(3) + " m); blue: data plus equation (" + fitB.rmse.toFixed(3) + " m)", R - 6, TOP + 16, css("--muted"), "right", 12); }
+    else plot.label("the hidden profile and both fits appear after you commit", R - 6, TOP + 16, css("--muted"), "right", 12);
+    const yg = readings();
+    xg.forEach((x, i) => {
+      ctx.strokeStyle = css("--orange"); ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(X(x), BOT); ctx.lineTo(X(x), Y(yg[i])); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.moveTo(X(x), BOT - 2); ctx.lineTo(X(x) - 11, BOT + 18); ctx.lineTo(X(x) + 11, BOT + 18); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(X(x), Y(yg[i]), 6, 0, 2 * Math.PI); ctx.fill();
+      plot.label(yg[i].toFixed(2) + " m", X(x), Y(yg[i]) - 12, css("--blue"), "center", 12);
+    });
+    src.clear("the right-hand side s(x) handed to the equation fit" + (round === 1 ? " (round 2: 20 % too large)" : "")); const sc = src.ctx, T2 = 40, B2 = src.H - 30, Ys = v => (T2 + B2) / 2 - (B2 - T2) / 2 * v / 40;
+    sc.strokeStyle = css("--line"); sc.lineWidth = 1; sc.beginPath(); sc.moveTo(L, Ys(0)); sc.lineTo(R, Ys(0)); sc.stroke(); src.label("0", L - 8, Ys(0) + 4, css("--muted"), "right", 11); src.label("+40", L - 8, Ys(40) + 4, css("--muted"), "right", 11); src.label("-40", L - 8, Ys(-40) + 4, css("--muted"), "right", 11);
+    const f = 1 + ROUNDS[round].err; sc.strokeStyle = css("--blue"); sc.lineWidth = 2; sc.beginPath(); us.forEach((u, i) => { const x = X(100 * u), y = Ys(f * sTrue(u)); if (i === 0) sc.moveTo(x, y); else sc.lineTo(x, y); }); sc.stroke();
+    if (round === 1 && gate !== null) { sc.strokeStyle = css("--grey"); sc.lineWidth = 1.5; sc.setLineDash([6, 5]); sc.beginPath(); us.forEach((u, i) => { const x = X(100 * u), y = Ys(sTrue(u)); if (i === 0) sc.moveTo(x, y); else sc.lineTo(x, y); }); sc.stroke(); sc.setLineDash([]); src.label("dashed: the true source", R, T2 - 4, css("--muted"), "right", 12); }
+    document.getElementById("rgPos").textContent = xg.slice().sort((p, q) => p - q).join(", ") + " m";
+    document.getElementById("rgA").textContent = fitA ? fitA.rmse.toFixed(3) + " m" : "-";
+    document.getElementById("rgB").textContent = fitB ? fitB.rmse.toFixed(3) + " m" : "-";
+  }
+  plot.c.addEventListener("pointerdown", ev => { const [mx, my] = plot.pos(ev); if (my > BOT + 24) return; let bd = 1e9; drag = -1; xg.forEach((x, i) => { const d = Math.abs(mx - X(x)); if (d < bd) { bd = d; drag = i; } }); if (bd > 24) { drag = -1; return; } try { plot.c.setPointerCapture(ev.pointerId); } catch (e) {} ev.preventDefault(); });
+  plot.c.addEventListener("pointermove", ev => { if (drag < 0) return; const x = Math.round(Math.max(2, Math.min(98, (plot.pos(ev)[0] - L) / (R - L) * 100))); if (x === xg[drag]) return; xg[drag] = x; if (gate !== null) compute(); draw(); });
+  plot.c.addEventListener("pointerup", () => { drag = -1; });
+  plot.c.addEventListener("pointercancel", () => { drag = -1; });
+  document.getElementById("rgNext").addEventListener("click", () => { round = (round + 1) % 2; gate = null; fitA = null; fitB = null; text(); draw(); });
+  document.getElementById("rgReset").addEventListener("click", () => { xg = [15, 50, 85]; gate = null; fitA = null; fitB = null; text(); draw(); });
+  quiz(document.getElementById("rgQuiz"), { q: "Three gauges and the equation d2h/dx2 = s(x) with a correct s. How many numbers does the equation leave for the gauges to determine?", options: ["Two: the profile is fixed up to a + b x", "Three: one per gauge", "None: the equation alone determines the profile"], answer: 0, why: "Integrating a second-order equation twice introduces two constants. The gauges fix them, and the third reading becomes a check on the equation, which is why a wrong source term shows up as a misfit at the gauges." });
+  window.addEventListener("themechange", draw);
+  text(); draw();
+})();
+
+/* ================= 6. REVEAL THE MAP ================= */
 (function map() {
   const PI = Math.PI;
   function uTrue(x) { return 1.2 * Math.sin(PI * x) + 0.5 * Math.sin(4 * PI * x); }
@@ -517,7 +820,8 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   const ox = 90, oy = 50, cw = (mapB.W - ox - 20) / LG.length, ch = (mapB.H - oy - 60) / ERR.length;
   let revealed = [], sel = null, used = 0, answered = false, all = false;
   const stepEl = document.getElementById("pmStep");
-  function text() { stepEl.innerHTML = '<span class="k">the challenge</span><p>Click cells to reveal the error of that fit. You have ' + BUDGET + ' probes.</p><p>Your task: find the cell with the <b>lowest error in the 15 % row</b>, the source error you will actually face, and submit it. Think before each probe about which way the valley runs.</p>'; }
+  const PROMPT = '<p class="prompt">Six probes. Where is the best lambda at 15 percent source error?</p>';
+  function text() { stepEl.innerHTML = PROMPT + '<span class="k">the challenge</span><p>Click cells to reveal the error of that fit. You have ' + BUDGET + ' probes.</p><p>Find the cell with the <b>lowest error in the 15 % row</b>, the source error you will actually face, and submit it. Think before each probe about which way the valley runs. The whole map and the valley floor appear after you submit.</p>'; }
   function color(r) { return mix(css("--panel"), css("--blue"), Math.min(1, r / 0.7)); }
   function draw() {
     mapB.clear("error of the fit, by physics weight (columns) and source error (rows)"); const ctx = mapB.ctx;
@@ -529,6 +833,15 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
       if (all && rowBest[i] === j) { ctx.strokeStyle = "#2E7D5B"; ctx.lineWidth = 3; ctx.strokeRect(X + 2, Y + 2, cw - 4, ch - 4); }
       if (sel && sel[0] === i && sel[1] === j) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.strokeRect(X + 3, Y + 3, cw - 6, ch - 6); }
     }));
+    if (answered || all) {
+      // the valley floor: the best lambda in each source-error row, joined top to bottom
+      // routed along the left edge of each best cell and along row boundaries, so no number is covered
+      const vx = i => ox + rowBest[i] * cw + cw * 0.14, vy = i => oy + i * ch + ch / 2;
+      ctx.strokeStyle = css("--panel"); ctx.lineWidth = 6; ctx.lineJoin = "round"; ctx.beginPath(); ERR.forEach((e, i) => { if (i === 0) ctx.moveTo(vx(0), vy(0)); else { const yb = oy + i * ch; ctx.lineTo(vx(i - 1), yb); ctx.lineTo(vx(i), yb); ctx.lineTo(vx(i), vy(i)); } }); ctx.stroke();
+      ctx.strokeStyle = "#2E7D5B"; ctx.lineWidth = 3; ctx.stroke();
+      ERR.forEach((e, i) => { ctx.fillStyle = "#2E7D5B"; ctx.beginPath(); ctx.arc(vx(i), vy(i), 4.5, 0, 2 * Math.PI); ctx.fill(); });
+      mapB.label("green line: the valley floor, best lambda per row", ox + LG.length * cw, oy - 8, "#2E7D5B", "right", 12);
+    }
     ctx.fillStyle = css("--muted"); ctx.font = "12px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "top";
     LG.forEach((lg, j) => ctx.fillText("1e" + lg, ox + j * cw + cw / 2, oy + ERR.length * ch + 6));
     mapB.label("lambda, weight on the physics term", ox + LG.length * cw / 2, mapB.H - 12, css("--muted"), "center", 12);
@@ -546,19 +859,20 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
     document.getElementById("pmSel").textContent = sel ? "1e" + LG[sel[1]] + " at " + ERR[sel[0]] + " %" : "-";
     document.getElementById("pmRmse").textContent = sel ? cells[sel[0]][sel[1]].rmse.toFixed(3) : "-";
     document.getElementById("pmAnswer").disabled = !(sel && sel[0] === TARGET && !answered);
+    document.getElementById("pmAll").disabled = !answered;
   }
   mapB.c.addEventListener("click", ev => {
     const [mx, my] = mapB.pos(ev), j = Math.floor((mx - ox) / cw), i = Math.floor((my - oy) / ch); if (i < 0 || j < 0 || i >= ERR.length || j >= LG.length) return;
     const vis = all || revealed.some(r => r[0] === i && r[1] === j);
-    if (!vis) { if (used >= BUDGET) { stepEl.innerHTML = '<span class="k">out of probes</span><p>All ' + BUDGET + ' probes are spent. Select one of the revealed cells in the 15 % row and submit it, or press Reveal all.</p>'; return; } used++; revealed.push([i, j]); }
+    if (!vis) { if (used >= BUDGET) { stepEl.innerHTML = PROMPT + '<span class="k">out of probes</span><p>All ' + BUDGET + ' probes are spent. Select one of the revealed cells in the 15 % row and submit it; the map opens after that.</p>'; return; } used++; revealed.push([i, j]); }
     sel = [i, j]; draw();
   });
   document.getElementById("pmAnswer").addEventListener("click", () => {
     if (!sel || sel[0] !== TARGET) return; answered = true; const best = rowBest[TARGET], ok = sel[1] === best, near = Math.abs(sel[1] - best) === 1;
-    stepEl.innerHTML = '<span class="k">result</span><div class="ask ' + (ok ? 'ok' : (near ? '' : 'no')) + '">' + (ok ? 'Found it. ' : (near ? 'One cell off. ' : 'Not the valley floor. ')) + 'At 15 % source error the lowest error, ' + cells[TARGET][best].rmse.toFixed(3) + ', is at lambda = 1e' + LG[best] + '; your cell has ' + cells[TARGET][sel[1]].rmse.toFixed(3) + '.</div><p>Now press Reveal all and look at the green cells: the valley floor shifts to smaller lambda as the source error grows. The weight is not a property of the equation, it is a statement about how far you trust the equation against the gauges.</p>';
+    stepEl.innerHTML = PROMPT + '<span class="k">result</span><div class="ask ' + (ok ? 'ok' : (near ? '' : 'no')) + '">' + (ok ? 'Found it. ' : (near ? 'One cell off. ' : 'Not the valley floor. ')) + 'At 15 % source error the lowest error, ' + cells[TARGET][best].rmse.toFixed(3) + ', is at lambda = 1e' + LG[best] + '; your cell has ' + cells[TARGET][sel[1]].rmse.toFixed(3) + '.</div><p>The green line is the valley floor, the best lambda in each row: it sits at lambda = 100 while the source is nearly right and drops four orders of magnitude once the source error passes about 5 %. Press Reveal all to see every cell. The weight expresses how far you trust the equation against the gauges.</p>';
     draw();
   });
-  document.getElementById("pmAll").addEventListener("click", () => { all = true; draw(); if (!answered) stepEl.innerHTML = '<span class="k">the whole map</span><p>Green outlines mark the best lambda in each row. With a correct source term the physics can carry almost all the weight, lambda = 100. Once the source error passes about 5 % the valley floor jumps four orders of magnitude down to lambda = 0.01, and even there the error at 40 % is five times what a correct equation achieves.</p>'; });
+  document.getElementById("pmAll").addEventListener("click", () => { all = true; draw(); if (!answered) stepEl.innerHTML = PROMPT + '<span class="k">the whole map</span><p>Green outlines mark the best lambda in each row. With a correct source term the physics can carry almost all the weight, lambda = 100. Once the source error passes about 5 % the valley floor jumps four orders of magnitude down to lambda = 0.01, and even there the error at 40 % is five times what a correct equation achieves.</p>'; });
   document.getElementById("pmReset").addEventListener("click", () => { revealed = []; sel = null; used = 0; answered = false; all = false; text(); draw(); });
   quiz(document.getElementById("pmQuiz"), { q: "As the error in the source term grows, the best physics weight", options: ["Falls: trust the equation less when the equation is wrong", "Rises: more physics is needed to overcome the bad data", "Stays the same: the weight only depends on the units"], answer: 0, why: "The PDE residual is a model of the world, and its weight expresses the variance you assign to that model's error. A wrong source means a larger model error, hence a smaller weight, exactly as a noisier instrument gets a smaller weight in least squares." });
   window.addEventListener("themechange", draw);
@@ -580,6 +894,46 @@ show(location.hash.slice(1) || "forward", false);
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
 if (mq.addEventListener) mq.addEventListener("change", () => window.dispatchEvent(new Event("themechange")));
 new MutationObserver(() => window.dispatchEvent(new Event("themechange"))).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+
+<script>
+/* Classroom mode (shared patch): larger canvas text through the font setter, prose hidden, redraw via themechange. */
+(function () {
+  var desc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "font");
+  var on = false;
+  function scale(v) {
+    return String(v).replace(/(\d+(?:\.\d+)?)px/, function (m, n) {
+      var s = parseFloat(n); var t = s < 13 ? s + 5 : Math.round(s * 1.35);
+      return t + "px";
+    });
+  }
+  Object.defineProperty(CanvasRenderingContext2D.prototype, "font", {
+    configurable: true,
+    get: function () { return desc.get.call(this); },
+    set: function (v) { desc.set.call(this, on ? scale(v) : v); }
+  });
+  function apply(state) {
+    on = !!state;
+    document.body.classList.toggle("classroom", on);
+    var b = document.getElementById("classroomBtn");
+    if (b) { b.textContent = on ? "Classroom: on" : "Classroom"; b.setAttribute("aria-pressed", on ? "true" : "false"); }
+    try { localStorage.setItem("ce_classroom", on ? "1" : "0"); } catch (e) {}
+    window.dispatchEvent(new Event("themechange"));
+    window.dispatchEvent(new Event("resize"));
+  }
+  window.addEventListener("DOMContentLoaded", function () {
+    var b = document.createElement("button");
+    b.id = "classroomBtn"; b.type = "button"; b.title = "Large text for a projector; hides the explanatory prose (key: c)";
+    b.textContent = "Classroom";
+    b.addEventListener("click", function () { apply(!on); });
+    document.body.appendChild(b);
+    var saved = "0"; try { saved = localStorage.getItem("ce_classroom") || "0"; } catch (e) {}
+    if (saved === "1" || /[?&]classroom\b/.test(location.search)) apply(true);
+    window.addEventListener("keydown", function (ev) {
+      if (ev.key === "c" && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) apply(!on);
+    });
+  });
 })();
 </script>
 </body>
