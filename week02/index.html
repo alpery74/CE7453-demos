@@ -252,7 +252,8 @@ canvas.grab { cursor: grab; }
           <dt>precision / recall</dt><dd id="ldPR">-</dd>
           <dt>expected cost per weld</dt><dd id="ldCost">-</dd>
           <dt>cost per weld at the default 0.5</dt><dd id="ldDef">-</dd>
-          <dt>best threshold for these prices</dt><dd id="ldBest">-</dd>
+          <dt>c_FA / (c_FA + c_miss)</dt><dd id="ldBest">-</dd>
+          <dt>cheapest threshold on these scores</dt><dd id="ldArg">-</dd>
         </dl>
         <div class="btns" style="margin-top:10px"><button id="ldReset">Start over</button></div>
       </div>
@@ -260,7 +261,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>With two percent cracks, the detector that never flags anything scores 98 percent accuracy and finds nothing, which is slide 9. The expected cost per weld is p(miss) times its price plus p(false alarm) times its price; minimizing it puts the threshold on the posterior at c_FA / (c_FA + c_miss), which is 0.005 at the one-to-two-hundred ratio on slide 10. The grey marker at 0.5 shows what the default would have cost on the same welds. The ROC curve barely moves as the threshold crosses the rare class; the precision-recall curve shows the struggle, which is why it is the picture to use under imbalance.</p>
+    <p>With two percent cracks, the detector that never flags anything scores 98 percent accuracy and finds nothing, which is slide 9. The expected cost per weld is p(miss) times its price plus p(false alarm) times its price; minimizing it over a calibrated posterior puts the threshold at c_FA / (c_FA + c_miss), which is 0.005 at the one-to-two-hundred ratio on slide 10. The green line marks that value and the blue line marks where this detector's own cost curve bottoms out, and the two are far apart. The scores here are sigmoid of a detector output, an axis from 0 to 1 that ranks the welds, so 0.005 on this axis and a posterior probability of 0.005 are two different statements. The gap between the green and blue lines is the size of that difference in money per weld, and the next tab is where calibration gets measured. The grey marker at 0.5 shows what the default would have cost on the same welds. The ROC curve is fixed by the scores and the threshold selects an operating point on it; the false alarm rate divides by 1,960 sound welds, so the operating point barely moves along the ROC curve while precision falls away: AUC reads 0.90 against an average precision of 0.24, and the precision-recall panel is the one to show under imbalance.</p>
   </div>
 </section>
 
@@ -335,10 +336,11 @@ canvas.grab { cursor: grab; }
         <dl class="readout" style="margin-top:10px">
           <dt>commuters binned</dt><dd id="reN">300</dd>
           <dt>bins with at least five commuters</dt><dd id="reBins">-</dd>
-          <dt>commuters per bin, on average</dt><dd id="rePer">-</dd>
+          <dt>commuters per bin, fewest to most</dt><dd id="rePer">-</dd>
           <dt>sampling band, typical half width</dt><dd id="reBand">-</dd>
           <dt>bins outside their band</dt><dd id="reOut">-</dd>
           <dt>calibration gap, mean |share - p|</dt><dd id="reGap">-</dd>
+          <dt>resolution, of the spread available</dt><dd id="reRes">-</dd>
           <dt>your guesses, mean |guess - share|</dt><dd id="reGuess">-</dd>
           <dt>verdict</dt><dd id="reVerdict">-</dd>
         </dl>
@@ -347,7 +349,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>The reliability diagram is the check behind slide 18: among all commuters given 0.9, about 90 percent should have taken transit. A ramp that is too steep gives confident probabilities that come true less often than they claim, and the bars bow toward the middle; a ramp that is too shallow does the opposite. Only confidence is wrong in either case, the ranking of commuters is untouched, which is why temperature scaling, one constant dividing every score, is enough to repair it. Switch to the maximum likelihood fit to see a line whose steepness was chosen by the data. The bin count is a reporting choice, not a property of the model: twenty bins hold about fifteen commuters each, so a share of fifteen outcomes is noisy and the bars scatter around the diagonal even for a calibrated line; four bins average that noise away and flatter a line that is genuinely bowed. Read the mean gap as the bins change and treat any single number from a reliability diagram as a number with a bin count attached.</p>
+    <p>The reliability diagram is the check behind slide 18: among all commuters given 0.9, about 90 percent should have taken transit. A ramp that is too steep gives confident probabilities that come true less often than they claim, and the bars bow toward the middle; a ramp that is too shallow leaves them bowed away from it. The panel reports two numbers from the same bars. The calibration gap measures how far the bars sit from the diagonal, and a ramp of the wrong steepness is the part of that gap temperature scaling repairs: one constant dividing every score slides the bars along the axis and keeps every commuter in the same order. Resolution measures how far apart the bins' observed shares sit, and the direction of the line decides it: aim the line across the wrong pair of features and every bin comes back near the overall transit share, the diagram goes flat, and a rescaling has nothing to work on. Switch to the maximum likelihood fit to see a line whose direction and steepness were both chosen by the data. The bin count is a reporting choice: the readout prints the fewest and the most commuters any bin holds, and at twenty bins those two numbers are far apart, because this model's probabilities pile up at the two ends of the axis. Most bins then hold too few outcomes to pin a share down and the bars scatter around the diagonal even for a calibrated line, while four bins average that scatter away and flatter a line that is genuinely bowed. Read the gap and the resolution together as the bins change, and treat any single number from a reliability diagram as a number with a bin count attached.</p>
   </div>
 </section>
 
@@ -374,7 +376,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>There is no training step: the boreholes are the model and distance does all the work, so the coordinates must be in the same units. One neighbour reproduces every borehole, misread logs included, and scores 100 percent on the data it memorized while the map turns to patchwork; a large committee votes the misreads down and smooths the boundary, and at k equal to the sample size the whole site becomes the majority class. The kernel is the same idea with the hard cutoff replaced by a weight that fades with distance, so the prediction stops jumping as boreholes enter and leave the committee, and the bandwidth is the same bias and variance knob as k. Inverse distance weighting and kriging are this picture in geodesy.</p>
+    <p>There is no training step: the boreholes are the model and distance does all the work, so the coordinates must be in the same units. One neighbour reproduces every borehole, misread logs included, and scores 100 percent on the data it memorized while the map turns to patchwork; a large committee votes the misreads down and smooths the boundary, and at k equal to the sample size the whole site becomes the majority class. The kernel is the same idea with the hard cutoff replaced by a weight that fades with distance, so the prediction stops jumping as boreholes enter and leave the committee, and the bandwidth is the same bias and variance knob as k. Inverse distance weighting is this picture in geodesy with the weight fixed at one over distance to a power. Kriging solves a linear system for its weights, built from a fitted covariance model and from the positions of all the data at once, so a cluster of boreholes shares one cluster's worth of weight, a borehole screened behind a nearer one is discounted, and a weight can come out negative.</p>
   </div>
 </section>
 
@@ -383,15 +385,15 @@ canvas.grab { cursor: grab; }
   <h2>The widest street: find the margin by hand</h2>
   <p class="lead">Forty pavement sections, rehabilitate or not, by roughness and rut depth, separable. Drag the two handles to aim the street and the edge handle to widen it; the street is valid only while no section stands inside it. Build a clean street, then reveal the support vector machine's street and the sections that hold it up.</p>
   <div class="stage">
-    <div class="plot"><canvas id="mgPlane" class="grab" width="1200" height="540"></canvas></div>
+    <div class="plot"><canvas id="mgPlane" class="grab" width="1200" height="576"></canvas></div>
     <div class="side">
       <div class="panel step" id="mgStep"></div>
       <div class="panel">
         <div class="btns"><button class="primary" id="mgReveal" disabled>Reveal the SVM street</button><button id="mgReset">Start over</button></div>
         <dl class="readout" style="margin-top:10px">
-          <dt>your street width</dt><dd id="mgW">-</dd>
+          <dt>your street width, standardised</dt><dd id="mgW">-</dd>
           <dt>sections inside your street</dt><dd id="mgIn">-</dd>
-          <dt>widest possible street</dt><dd id="mgBest">-</dd>
+          <dt>widest possible street, standardised</dt><dd id="mgBest">-</dd>
           <dt>support vectors</dt><dd id="mgSV">-</dd>
         </dl>
       </div>
@@ -399,7 +401,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Among all separating lines the support vector machine keeps the one with the widest gap to the nearest point on each side, slide 21; only those nearest points, the support vectors, hold the street up, and every other section could be deleted without moving it. A margin is a robustness statement: it says how far the boundary could sit from where it does given the sample in hand. When the classes overlap, the soft margin trades width against violations through one constant C, hinge loss plus a squared norm penalty in Week 1's shape.</p>
+    <p>Among all separating lines the support vector machine keeps the one with the widest gap to the nearest point on each side, slide 21; only those nearest points, the support vectors, hold the street up, and every other section could be deleted without moving it. A margin is a statement about stability: it says how far the boundary could sit from where it does given the sample in hand. Width here is counted in standard deviations of each axis, because the widest street depends on the units the axes are measured in: one IRI unit of roughness and one millimetre of rut depth are not comparable lengths, and stretching one axis turns the street. Standardising both axes first fixes the units the margin is measured in, and it is the same preparation the nearest-neighbour map on the previous tab needs. When the classes overlap, the soft margin balances width and violations through one constant C, hinge loss plus a squared norm penalty in Week 1's shape.</p>
   </div>
 </section>
 
@@ -464,9 +466,9 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
 (function leak() {
   const NONE = -1;
   const PIPES = [
-    { title: "Pipeline 1: bridge deck condition rating from 2,400 inspection records", rep: "R^2 0.91", hon: "R^2 0.84", leak: 1,
+    { title: "Pipeline 1: bridge deck condition rating from 2,400 inspection records", rep: "R^2 0.91", hon: "R^2 0.90", leak: 1,
       boxes: ["load 2,400 deck records, 14 features", "standardize every feature: fit the scaler on all 2,400 rows", "random 80 / 20 split", "train gradient boosting on the 80 %", "tune depth on a validation fold", "score once on the 20 %: R^2 0.91"],
-      why: "The scaler was fit on all rows, so every training feature carries the test rows' mean and spread. A small leak, but a leak: the honest version fits the scaler inside the training fold only, and the score drops to 0.84." },
+      why: "The scaler was fit on all rows, so every training feature carries the test rows' mean and spread. Fitting the scaler inside the training fold only gives 0.90. Pre-split standardization leaks two numbers, a mean and a spread, and on 2,400 rows the optimism is usually too small to see, which is why this leak survives review and why the habit still has to go: the same code on 60 rows, or a scaler replaced by a target encoder, moves the score a long way." },
     { title: "Pipeline 2: scour risk at 1,500 culverts, inspected every year for four years", rep: "AUC 0.96", hon: "AUC 0.78", leak: 2,
       boxes: ["load 6,000 inspections: 1,500 culverts x 4 years", "features: hydraulics, age, last year's rating", "random split by inspection row", "train a random forest", "tune the number of trees by cross validation", "report test AUC 0.96"],
       why: "Splitting by row puts a culvert's 2022 inspection in training and its 2023 inspection in test; the two are near duplicates, so the model recognizes the culvert instead of predicting scour. Splitting by culvert, so a structure leaves training whole, gives 0.78. This is slide 6's address-and-date failure in tabular form." },
@@ -565,7 +567,7 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
     document.getElementById("feHeld").textContent = held; document.getElementById("feRand").textContent = randCV.toFixed(2); document.getElementById("feBlock").textContent = showYours && yours !== null ? yours.toFixed(2) : "-"; document.getElementById("feTruth").textContent = showTruth ? truth.toFixed(2) : "-";
     document.getElementById("feSubmit").disabled = randomMode || submitted || pred === null || painted === 0;
     let html = '<p class="prompt">Will your score be above or below the random-fold score?</p>';
-    if (randomMode) html += '<span class="k">random split</span><div class="ask no">Held-out samples sit a few metres from training samples, so the nearest neighbour already knows the answer: ' + yours.toFixed(2) + ' on a random 20 % hold-out, ' + randCV.toFixed(2) + ' over five folds' + (submitted ? ', against a truth of ' + truth.toFixed(2) : '') + '. This is the 0.49 of slide 8.</div><p>Click a cell to start painting blocks instead.</p>';
+    if (randomMode) html += '<span class="k">random split</span><div class="ask no">Held-out samples sit a few metres from training samples, so the nearest neighbour already knows the answer: ' + yours.toFixed(2) + ' on a random 20 % hold-out, ' + randCV.toFixed(2) + ' over five folds' + (submitted ? ', against a truth of ' + truth.toFixed(2) : '') + '. This is the flattering score on slide 8.</div><p>Click a cell to start painting blocks instead.</p>';
     else if (painted === 0) html += '<span class="k">nothing held out</span><p>Paint contiguous blocks of several cells, which is what slide 7 calls spatial block cross validation. The random five-fold score is ' + randCV.toFixed(2) + '; the painted score and the truth stay hidden until you submit.</p>';
     else if (!submitted) { html += '<span class="k">' + painted + (painted === 1 ? ' cell' : ' cells') + ' held out' + (bufs ? ', ' + bufs + ' with a buffer' : '') + ', ' + held + ' samples</span>';
       if (pred === null) html += '<div class="gate">' + PRED.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div><p>Commit, then press Submit. The three scores appear after that.</p>';
@@ -579,7 +581,7 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
   document.getElementById("feSubmit").addEventListener("click", () => { if (pred === null) return; submitted = true; draw(); });
   document.getElementById("feRandom").addEventListener("click", () => { randomMode = true; draw(); });
   document.getElementById("feClear").addEventListener("click", () => { randomMode = false; clearPaint(); draw(); });
-  quiz(document.getElementById("feQuiz"), { q: "Random cross validation reports RMSE 0.49, block cross validation 1.07, and a survey on new ground gives 0.81. Which number goes in the report, and why?", options: ["0.49: it is the lowest and uses all the data", "The block score: it answers the deployment question, predicting where there are no near neighbours, and errs on the safe side", "The average of the three"], answer: 1, why: "The random score measures memory of the neighbourhood rather than skill at the deployment task. The block score is a little pessimistic, which is the right direction for a number a client will act on. Slide 7's rule: ask where the model will be used, and hold exactly that out." });
+  quiz(document.getElementById("feQuiz"), { q: "A soil study on another site reports RMSE 0.49 under random cross validation, 1.07 under block cross validation, and 0.81 on a survey of new ground. Which number goes in the report, and why?", options: ["0.49: it is the lowest and uses all the data", "The block score: it answers the deployment question, predicting where there are no near neighbours, and errs on the safe side", "The average of the three"], answer: 1, why: "The random score measures memory of the neighbourhood rather than skill at the deployment task. The block score is a little pessimistic, which is the right direction for a number a client will act on. Slide 7's rule: ask where the model will be used, and hold exactly that out." });
   window.addEventListener("themechange", draw);
   draw();
 })();
@@ -587,7 +589,7 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
 /* ================= 3. PRICE THE THRESHOLD ================= */
 (function ledger() {
   const NW = 2000, NC = 40, rng = mulberry32(99), g = randn(rng, NW);
-  const W = []; for (let i = 0; i < NW; i++) { const crack = i < NC; W.push({ crack, z: crack ? 1.0 + 1.2 * g[i] : -4.0 + 1.2 * g[i] }); }
+  const W = []; for (let i = 0; i < NW; i++) { const crack = i < NC; W.push({ crack, z: crack ? 1.0 + 1.4 * g[i] : -1.6 + 1.4 * g[i] }); }
   W.forEach(w => w.p = sigmoid(w.z));
   const sorted = W.slice().sort((a, b) => a.z - b.z);
   let tau = 0.5, drag = false, gateAns = null;
@@ -595,6 +597,12 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
   const board = new Board(document.getElementById("ldStrip"));
   const ZL = -9, ZR = 6, HX0 = 60, HX1 = 760, HY0 = 60, HY1 = 250; const zx = z => HX0 + (z - ZL) / (ZR - ZL) * (HX1 - HX0);
   function counts(t) { let tp = 0, fn = 0, fp = 0, tn = 0; for (const w of W) { if (w.p >= t) { if (w.crack) tp++; else fp++; } else { if (w.crack) fn++; else tn++; } } return { tp, fn, fp, tn }; }
+  // the two curves and their summaries are fixed by the scores, so they are built once
+  const ROC = [], PR = []; (function () { let tp = 0, fp = 0; sorted.slice().reverse().forEach(w => { if (w.crack) tp++; else fp++; ROC.push([fp / (NW - NC), tp / NC]); PR.push([tp / NC, tp / (tp + fp)]); }); })();
+  const AUC = (function () { let a = 0, x = 0, y = 0; ROC.forEach(p => { a += (p[0] - x) * (p[1] + y) / 2; x = p[0]; y = p[1]; }); return a; })();
+  const AP = (function () { let a = 0, r = 0; PR.forEach(p => { if (p[0] > r) { a += (p[0] - r) * p[1]; r = p[0]; } }); return a; })();
+  // the cost curve on a fixed grid, with the threshold that is cheapest on it
+  function costCurve(cM, cF) { let cmax = 0, best = null; const pts = []; for (let k = 0; k <= 150; k++) { const z = ZL + (ZR - ZL) * k / 150, t = sigmoid(z), cc = counts(t), v = (cc.fn * cM + cc.fp * cF) / NW; pts.push([z, v]); if (v > cmax) cmax = v; if (!best || v < best.v) best = { v: v, z: z, t: t, c: cc }; } return { pts: pts, cmax: cmax || 1, best: best }; }
   const stepEl = document.getElementById("ldStep");
   const fmt = t => t < 0.01 ? t.toFixed(4) : t.toFixed(3);
   function draw() {
@@ -602,6 +610,7 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
     const c = counts(tau), acc = (c.tp + c.tn) / NW, prec = c.tp + c.fp ? c.tp / (c.tp + c.fp) : null, rec = c.tp / NC, cost = (c.fn * cM + c.fp * cF) / NW;
     const c5 = counts(0.5), cost5 = (c5.fn * cM + c5.fp * cF) / NW;
     const tStar = cM + cF > 0 ? cF / (cF + cM) : 0.5, band = tStar < 0.1 ? 0 : (tStar <= 0.5 ? 1 : 2);
+    const CC = costCurve(cM, cF), tArg = CC.best.t, costArg = CC.best.v, costStar = (counts(tStar).fn * cM + counts(tStar).fp * cF) / NW;
     board.clear("detector scores on a logit axis: grey bars sound welds, red marks cracks; drag the orange threshold"); const ctx = board.ctx;
     // histogram of sound welds
     const NB = 60, bins = new Array(NB).fill(0), cb = new Array(NB).fill(0); W.forEach(w => { const b = Math.max(0, Math.min(NB - 1, Math.floor((w.z - ZL) / (ZR - ZL) * NB))); if (w.crack) cb[b]++; else bins[b]++; }); const bmax = Math.max.apply(null, bins);
@@ -612,7 +621,8 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
     // the fixed default at 0.5, in grey, with its bill
     const tx = zx(logit(tau)); ctx.fillStyle = mix(css("--panel"), css("--orange"), 0.12); ctx.fillRect(tx, HY0 - 10, HX1 - tx, HY1 - HY0 + 10); board.line(tx, HY0 - 14, tx, HY1 + 6, css("--orange"), 3); board.label("threshold " + fmt(tau) + ": flag everything to the right", tx + 8, HY0 - 2, css("--orange"), "left", 12);
     const gx = zx(0); board.line(gx, HY0 - 14, gx, HY1 + 6, css("--grey"), 2, [2, 3]); board.label("default 0.5: " + cost5.toFixed(0) + " per weld", gx + 8, HY0 + 14, css("--grey"), "left", 12);
-    if (gateAns !== null) { const sx = zx(logit(Math.max(1e-5, Math.min(1 - 1e-5, tStar)))); board.line(sx, HY0 - 14, sx, HY1 + 6, GREEN, 2, [5, 4]); board.label("best for these prices: " + fmt(tStar), sx + 8, HY1 + 50, GREEN, "left", 12); }
+    if (gateAns !== null) { const sx = zx(logit(Math.max(1e-5, Math.min(1 - 1e-5, tStar)))); board.line(sx, HY0 - 14, sx, HY1 + 6, GREEN, 2, [5, 4]); board.label("c_FA / (c_FA + c_miss) = " + fmt(tStar) + ", the threshold for a calibrated posterior", sx + 8, HY1 + 50, GREEN, "left", 12);
+      const ax = zx(logit(tArg)); board.line(ax, HY0 - 14, ax, HY1 + 6, css("--blue"), 2, [5, 4]); board.label("cheapest on these scores: " + fmt(tArg) + ", at " + costArg.toFixed(0) + " per weld", ax + 8, HY1 + 68, css("--blue"), "left", 12); }
     // confusion tiles
     const TX = 820, TY = 60, TW = 170, TH = 80; const tiles = [["flagged, cracked (hit)", c.tp, GREEN, 0, 0], ["flagged, sound (false alarm)", c.fp, css("--orange"), 1, 0], ["passed, cracked (miss)", c.fn, css("--red"), 0, 1], ["passed, sound (correct pass)", c.tn, css("--grey"), 1, 1]];
     tiles.forEach(t => { const x = TX + t[3] * (TW + 10), y = TY + t[4] * (TH + 10); ctx.fillStyle = mix(css("--panel"), t[2], 0.18); ctx.fillRect(x, y, TW, TH); ctx.strokeStyle = t[2]; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, TW, TH); board.label(String(t[1]), x + 12, y + 36, css("--ink"), "left", 24, true); board.label(t[0], x + 12, y + 62, css("--muted"), "left", 12); });
@@ -623,24 +633,34 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
     [0.001, 0.01, 0.1, 0.5, 0.9].forEach(p => board.label(String(p), CX0 + (logit(p) - ZL) / (ZR - ZL) * (CX1 - CX0), CY1 + 16, css("--muted"), "center", 11, true));
     if (gateAns === null) board.label("answer the question in the panel and the curve is drawn", CX0 + 20, (CY0 + CY1) / 2, css("--muted"), "left", 13);
     else {
-      let cmax = 0; const curve = []; for (let k = 0; k <= 150; k++) { const z = ZL + (ZR - ZL) * k / 150, cc = counts(sigmoid(z)); const v = (cc.fn * cM + cc.fp * cF) / NW; curve.push([z, v]); cmax = Math.max(cmax, v); } cmax = cmax || 1;
+      const curve = CC.pts, cmax = CC.cmax;
       const cx = z => CX0 + (z - ZL) / (ZR - ZL) * (CX1 - CX0), cy = v => CY1 - v / cmax * (CY1 - CY0);
       ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2; ctx.beginPath(); curve.forEach((p, i) => { if (i === 0) ctx.moveTo(cx(p[0]), cy(p[1])); else ctx.lineTo(cx(p[0]), cy(p[1])); }); ctx.stroke();
+      const sz = logit(Math.max(1e-5, Math.min(1 - 1e-5, tStar))); board.line(cx(sz), CY0, cx(sz), CY1, GREEN, 2, [5, 4]); board.dot(cx(sz), cy(costStar), 6, GREEN, "#fff"); board.label("rule: " + costStar.toFixed(0), cx(sz) + 8, cy(costStar) - 10, GREEN, "left", 12, true);
+      board.line(cx(CC.best.z), CY0, cx(CC.best.z), CY1, css("--blue"), 2, [5, 4]); board.dot(cx(CC.best.z), cy(costArg), 6, css("--blue"), "#fff"); board.label("cheapest: " + costArg.toFixed(0), cx(CC.best.z) + 8, cy(costArg) + 20, css("--blue"), "left", 12, true);
       board.dot(cx(0), cy(cost5), 6, css("--grey"), "#fff"); board.label("default 0.5: " + cost5.toFixed(0), cx(0) - 10, cy(cost5) - 8, css("--grey"), "right", 12, true);
       board.dot(cx(logit(tau)), cy(cost), 7, css("--orange"), "#fff"); board.label(cost.toFixed(0) + " per weld", cx(logit(tau)) + 10, cy(cost) < CY1 - 30 ? cy(cost) + 16 : cy(cost) - 12, css("--orange"), "left", 12, true);
       board.label(cmax.toFixed(0), CX0 - 6, CY0 + 10, css("--muted"), "right", 11, true); board.label("0", CX0 - 6, CY1 + 4, css("--muted"), "right", 11, true);
       const allFlag = (NW - NC) * cF / NW, noneFlag = NC * cM / NW; board.label("flag every weld: " + allFlag.toFixed(0) + " per weld   flag none: " + noneFlag.toFixed(0) + " per weld", CX0, CY1 + 34, css("--muted"), "left", 12); }
     // ROC and PR
-    const roc = [], pr = []; let tp = 0, fp = 0; const rev = sorted.slice().reverse(); rev.forEach(w => { if (w.crack) tp++; else fp++; roc.push([fp / (NW - NC), tp / NC]); pr.push([tp / NC, tp / (tp + fp)]); });
-    const small = (x0, y0, w, h, pts, title, cur, xl, yl) => { board.label(title, x0, y0 - 8, css("--ink"), "left", 12); ctx.strokeStyle = css("--line"); ctx.strokeRect(x0, y0, w, h); ctx.strokeStyle = css("--blue"); ctx.lineWidth = 2; ctx.beginPath(); pts.forEach((p, i) => { const x = x0 + p[0] * w, y = y0 + h - p[1] * h; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.lineWidth = 1; board.dot(x0 + cur[0] * w, y0 + h - cur[1] * h, 6, css("--orange"), "#fff"); board.label(xl, x0 + w / 2, y0 + h + 14, css("--muted"), "center", 11); ctx.save(); ctx.translate(x0 - 8, y0 + h / 2); ctx.rotate(-Math.PI / 2); board.label(yl, 0, 0, css("--muted"), "center", 11); ctx.restore(); };
-    small(640, 340, 180, 180, roc, "ROC: flattering under imbalance", [c.fp / (NW - NC), rec], "false alarm rate", "recall");
-    small(900, 340, 180, 180, pr, "precision-recall: the struggle", [rec, prec === null ? 1 : prec], "recall", "precision");
-    document.getElementById("ldTau").textContent = fmt(tau); document.getElementById("ldAcc").textContent = (100 * acc).toFixed(1) + " %"; document.getElementById("ldPR").textContent = (prec === null ? "-" : (100 * prec).toFixed(0) + " %") + " / " + (100 * rec).toFixed(0) + " %"; document.getElementById("ldCost").textContent = cost.toFixed(1); document.getElementById("ldDef").textContent = cost5.toFixed(1); document.getElementById("ldBest").textContent = gateAns === null ? "-" : fmt(tStar);
-    let html = '<p class="prompt">Set the cost of a missed crack at 20,000. Where does the threshold land?</p>';
-    if (gateAns === null) html += '<span class="k">prices ' + cM.toLocaleString() + ' and ' + cF.toLocaleString() + '</span><p>Pick the range where the cost-minimizing threshold falls for a missed crack at ' + cM.toLocaleString() + ' and a false alarm at ' + cF.toLocaleString() + '. The cost curve is drawn after that.</p><div class="gate">' + GATE.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>';
-    else { const right = gateAns === band;
-      html += '<span class="k">' + (Math.abs(logit(tau) - logit(Math.max(1e-5, Math.min(1 - 1e-5, tStar)))) < 0.5 ? 'at the priced threshold' : (tau > tStar ? 'threshold too high for these prices' : 'threshold too low for these prices')) + '</span><div class="ask ' + (right ? 'ok' : 'no') + '">' + (right ? 'Right. ' : 'The answer is: ' + GATE[band] + '. ') + 'The bill is lowest at c_FA / (c_FA + c_miss) = ' + cF.toLocaleString() + ' / ' + (cF + cM).toLocaleString() + ' = ' + fmt(tStar) + '. The default 0.5 costs ' + cost5.toFixed(0) + ' per weld on these welds; the priced threshold costs ' + ((counts(tStar).fn * cM + counts(tStar).fp * cF) / NW).toFixed(0) + '.</div>';
-      html += '<p>At ' + fmt(tau) + ' the detector flags ' + (c.tp + c.fp) + ' welds, catches ' + c.tp + ' of 40 cracks and misses ' + c.fn + '. Accuracy reads ' + (100 * acc).toFixed(1) + ' %' + (acc > 0.97 && rec < 0.5 ? ', which is the trap on slide 9: a high number that hides the misses' : '') + '. Change the prices and the green line moves; nothing about 0.5 was ever sacred.</p>'; }
+    const small = (x0, y0, w, h, pts, title, sub, cur, xl, yl, diag) => {
+      board.label(title, x0, y0 - 24, css("--ink"), "left", 12); board.label(sub, x0, y0 - 8, css("--blue"), "left", 12, true);
+      ctx.strokeStyle = css("--line"); ctx.strokeRect(x0, y0, w, h);
+      [0, 0.5, 1].forEach(v => { const x = x0 + v * w, y = y0 + h - v * h; board.line(x, y0 + h, x, y0 + h + 4, css("--line"), 1); board.label(v === 0.5 ? "0.5" : String(v), x, y0 + h + 16, css("--muted"), "center", 10, true); board.line(x0 - 4, y, x0, y, css("--line"), 1); board.label(v === 0.5 ? "0.5" : String(v), x0 - 7, y + 3, css("--muted"), "right", 10, true); });
+      if (diag) board.line(x0, y0 + h, x0 + w, y0, css("--grey"), 1, [4, 3]);
+      ctx.strokeStyle = css("--blue"); ctx.lineWidth = 2; ctx.beginPath(); pts.forEach((p, i) => { const x = x0 + p[0] * w, y = y0 + h - p[1] * h; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.lineWidth = 1;
+      board.dot(x0 + cur[0] * w, y0 + h - cur[1] * h, 6, css("--orange"), "#fff");
+      board.label(xl, x0 + w / 2, y0 + h + 32, css("--muted"), "center", 11); ctx.save(); ctx.translate(x0 - 30, y0 + h / 2); ctx.rotate(-Math.PI / 2); board.label(yl, 0, 0, css("--muted"), "center", 11); ctx.restore(); };
+    small(660, 362, 170, 170, ROC, "ROC: flattering under imbalance", "AUC " + AUC.toFixed(2), [c.fp / (NW - NC), rec], "false alarm rate", "recall", true);
+    small(920, 362, 170, 170, PR, "precision-recall: the struggle", "average precision " + AP.toFixed(2), [rec, prec === null ? 1 : prec], "recall", "precision", false);
+    board.label("2 % of the welds crack, so a random ranking scores 0.02 on the right-hand panel and 0.50 on the left", 660, 584, css("--muted"), "left", 12);
+    document.getElementById("ldTau").textContent = fmt(tau); document.getElementById("ldAcc").textContent = (100 * acc).toFixed(1) + " %"; document.getElementById("ldPR").textContent = (prec === null ? "-" : (100 * prec).toFixed(0) + " %") + " / " + (100 * rec).toFixed(0) + " %"; document.getElementById("ldCost").textContent = cost.toFixed(1); document.getElementById("ldDef").textContent = cost5.toFixed(1); document.getElementById("ldBest").textContent = gateAns === null ? "-" : fmt(tStar); document.getElementById("ldArg").textContent = gateAns === null ? "-" : fmt(tArg);
+    let html = '<p class="prompt">Set the cost of a missed crack at 20,000. Where does the cost rule put the threshold?</p>';
+    if (gateAns === null) html += '<span class="k">prices ' + cM.toLocaleString() + ' and ' + cF.toLocaleString() + '</span><p>The cost rule of slide 10 puts the threshold on a calibrated posterior at c_FA / (c_FA + c_miss). Pick the range it lands in for a missed crack at ' + cM.toLocaleString() + ' and a false alarm at ' + cF.toLocaleString() + '. The cost curve is drawn after that.</p><div class="gate">' + GATE.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>';
+    else { const right = gateAns === band, near = Math.abs(logit(tau) - logit(tArg)) < 0.3;
+      html += '<span class="k">' + (near ? 'at the cheapest threshold on these scores' : (tau > tArg ? 'threshold above the cheapest on these scores' : 'threshold below the cheapest on these scores')) + '</span><div class="ask ' + (right ? 'ok' : 'no') + '">' + (right ? 'Right. ' : 'The answer is: ' + GATE[band] + '. ') + 'The rule gives c_FA / (c_FA + c_miss) = ' + cF.toLocaleString() + ' / ' + (cF + cM).toLocaleString() + ' = ' + fmt(tStar) + ', the green line. The curve bottoms out somewhere else, at ' + fmt(tArg) + ', the blue line. At ' + fmt(tStar) + ' the detector flags ' + (counts(tStar).tp + counts(tStar).fp) + ' of the 2,000 welds and the bill is ' + costStar.toFixed(0) + ' per weld; at ' + fmt(tArg) + ' it is ' + costArg.toFixed(0) + ', and at the default 0.5 it is ' + cost5.toFixed(0) + '.</div>';
+      html += '<p>The rule is derived for a posterior probability: 0.005 has to be the probability that this weld cracks before it can be set against a cost ratio. These scores are sigmoid of a detector output, an axis from 0 to 1 that ranks the welds, so the number the rule returns and the number the curve prefers are two different thresholds. The next tab measures that gap on a reliability diagram; calibrate the score first and the two lines come together.</p>';
+      html += '<p>At ' + fmt(tau) + ' the detector flags ' + (c.tp + c.fp) + ' welds, catches ' + c.tp + ' of 40 cracks and misses ' + c.fn + '. Accuracy reads ' + (100 * acc).toFixed(1) + ' %' + (acc > 0.97 && rec < 0.5 ? ', which is the trap on slide 9: a high number that hides the misses' : '') + '. Change the prices and both lines move.</p>'; }
     stepEl.innerHTML = html;
     stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { gateAns = parseInt(b.dataset.g, 10); draw(); }));
   }
@@ -650,7 +670,7 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
   window.addEventListener("pointerup", () => { drag = false; });
   ["ldMiss", "ldFA"].forEach(id => document.getElementById(id).addEventListener("input", draw));
   document.getElementById("ldReset").addEventListener("click", () => { tau = 0.5; gateAns = null; document.getElementById("ldMiss").value = 20000; document.getElementById("ldFA").value = 100; draw(); });
-  quiz(document.getElementById("ldQuiz"), { q: "A missed crack costs 200 times a false alarm. The threshold that minimizes expected cost is", options: ["0.5, because that is where the posterior favours a crack", "About 0.005: flag any weld whose crack probability exceeds c_FA / (c_FA + c_miss)", "0.995, to keep false alarms rare"], answer: 1, why: "Flag when p x c_miss exceeds (1 - p) x c_FA, which solves to p above c_FA / (c_FA + c_miss) = 1 / 201. A cheap alarm and an expensive miss push the threshold toward raising alarms, which is slide 10's point." });
+  quiz(document.getElementById("ldQuiz"), { q: "A missed crack costs 200 times a false alarm, and the model returns a calibrated posterior probability. The threshold that minimizes expected cost is", options: ["0.5, because that is where the posterior favours a crack", "About 0.005: flag any weld whose crack probability exceeds c_FA / (c_FA + c_miss)", "0.995, to keep false alarms rare"], answer: 1, why: "Flag when p x c_miss exceeds (1 - p) x c_FA, which solves to p above c_FA / (c_FA + c_miss) = 1 / 201. A cheap alarm and an expensive miss push the threshold toward raising alarms, which is slide 10's point. The word calibrated carries the derivation: on the uncalibrated scores drawn above, the same prices put the cheapest threshold near 0.31." });
   window.addEventListener("themechange", draw);
   draw();
 })();
@@ -798,7 +818,9 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
   let src = "yours", guess = new Array(NG).fill(null), revealed = false, B = NG;
   const X0 = 90, X1 = 690, Y0 = 60, Y1 = 470; const bx = i => X0 + i / B * (X1 - X0), bwOf = () => (X1 - X0) / B, yOf = s => Y1 - s * (Y1 - Y0);
   const stepEl = document.getElementById("reStep"), binRow = document.getElementById("reBinRow");
-  function data() { const pts = (src === "yours" ? shared.modeProbs : shared.mlProbs)(); const bins = []; for (let b = 0; b < B; b++) bins.push({ n: 0, pos: 0, psum: 0 }); pts.forEach(q => { const b = Math.min(B - 1, Math.floor(q.p * B)); bins[b].n++; bins[b].pos += q.y; bins[b].psum += q.p; }); return bins; }
+  function data(which) { const pts = ((which || src) === "yours" ? shared.modeProbs : shared.mlProbs)(); const bins = []; for (let b = 0; b < B; b++) bins.push({ n: 0, pos: 0, psum: 0 }); pts.forEach(q => { const b = Math.min(B - 1, Math.floor(q.p * B)); bins[b].n++; bins[b].pos += q.y; bins[b].psum += q.p; }); return bins; }
+  // the Brier split: calibration is the distance from the diagonal, resolution is how far apart the bins' outcomes sit
+  function decomp(bins) { let nTot = 0, posTot = 0, cal = 0, res = 0; const live = bins.map(b => b.n >= 5); bins.forEach((b, i) => { if (!live[i]) return; nTot += b.n; posTot += b.pos; }); const obar = nTot ? posTot / nTot : 0; bins.forEach((b, i) => { if (!live[i]) return; const obs = b.pos / b.n, p = b.psum / b.n; cal += b.n * (obs - p) * (obs - p); res += b.n * (obs - obar) * (obs - obar); }); return { cal: cal / (nTot || 1), res: res / (nTot || 1), unc: obar * (1 - obar) }; }
   function draw() {
     const bins = data(), live = bins.map(b => b.n >= 5), nLive = live.filter(Boolean).length;
     const tight = B > 12, bw = bwOf(), showGuess = B === NG;
@@ -835,20 +857,27 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
     let gap = 0, gerr = 0, sxy = 0, sxx = 0; bins.forEach((b, i) => { if (!live[i]) return; const obs = b.pos / b.n, p = b.psum / b.n; gap += Math.abs(obs - p); sxy += b.n * (p - 0.5) * (obs - 0.5); sxx += b.n * (p - 0.5) * (p - 0.5); }); gap /= nLive || 1;
     if (showGuess) { let n = 0; bins.forEach((b, i) => { if (!live[i]) return; n++; gerr += Math.abs((guess[i] === null ? 0.5 : guess[i]) - b.pos / b.n); }); gerr /= n || 1; }
     const slope = sxx > 0 ? sxy / sxx : 1;
-    const verdict = slope < 0.85 ? "overconfident" : (slope > 1.15 ? "underconfident" : "calibrated");
+    // calibration and resolution are separate failures, and the fit at the same bin count is the reference for resolution
+    const D = decomp(bins), res = D.res, unc = D.unc, resRef = decomp(data("ml")).res;
+    const resPct = resRef > 0 ? 100 * res / resRef : 100, sharp = resPct >= 90;
+    const conf = slope < 0.85 ? "overconfident" : (slope > 1.15 ? "underconfident" : "calibrated");
+    const verdict = conf + ", resolution " + (src === "ml" ? "the fit's own" : resPct.toFixed(0) + " % of the fit's");
+    const refTxt = src === "ml" ? "" : ", which is " + resPct.toFixed(0) + " % of what the maximum likelihood fit reaches on the same bins";
+    const occ = bins.map(b => b.n), occLo = Math.min.apply(null, occ), occHi = Math.max.apply(null, occ);
     document.getElementById("reBins").textContent = nLive + " of " + B;
-    document.getElementById("rePer").textContent = (300 / B).toFixed(0);
+    document.getElementById("rePer").textContent = occLo + " to " + occHi;
     document.getElementById("reBand").textContent = revealed ? "+/- " + band.toFixed(3) : "-";
     document.getElementById("reOut").textContent = revealed ? outside + " of " + nLive : "-";
     document.getElementById("reGap").textContent = revealed ? gap.toFixed(3) : "-";
+    document.getElementById("reRes").textContent = revealed ? res.toFixed(3) + " of " + unc.toFixed(3) : "-";
     document.getElementById("reGuess").textContent = revealed && showGuess ? gerr.toFixed(3) : "-";
     document.getElementById("reVerdict").textContent = revealed ? verdict : "-";
     document.getElementById("reReveal").disabled = revealed || !showGuess || guessed < nLive;
     binRow.querySelectorAll("button").forEach(b => { b.disabled = !revealed; b.setAttribute("aria-pressed", +b.dataset.b === B ? "true" : "false"); });
     let html = '<p class="prompt">Is a 0.9 from your line really a 0.9?</p>';
     if (!revealed) html += '<span class="k">' + guessed + ' of ' + nLive + ' bins guessed</span><p>Each box holds the commuters whose predicted probability falls in that range. Click the height you expect for the share of them who actually took transit. Bins with fewer than five commuters are skipped. Reveal unlocks when every populated bin has a guess, and the bin count unlocks with it.</p>';
-    else if (showGuess) html += '<span class="k">revealed</span><div class="ask ' + (gerr < 0.1 ? 'ok' : 'no') + '">' + (gerr < 0.1 ? 'Your guesses sit within ' + gerr.toFixed(2) + ' of the observed shares on average. ' : 'Your guesses miss the observed shares by ' + gerr.toFixed(2) + ' on average. ') + 'The ' + (src === "yours" ? 'line' : 'maximum likelihood fit') + ' is ' + verdict + ': ' + (slope < 0.85 ? 'its ramp is too steep, its confident probabilities come true less often than they claim, and the bars bow toward the middle.' : (slope > 1.15 ? 'its ramp is too shallow, its probabilities are more cautious than the outcomes warrant, and the bars bow away from the middle.' : 'the bars follow the diagonal within the noise of 300 commuters, and a 0.9 is a 0.9.')) + ' Mean gap between predicted and observed: ' + gap.toFixed(3) + ', against a sampling band of ' + band.toFixed(3) + ' at this width: ' + (gap > band ? 'the gap is larger than the band, so this is real miscalibration and not the noise of 300 commuters.' : 'the gap is inside the band, so these bars are what a calibrated model scatters like on 300 commuters.') + ' ' + outside + ' of ' + nLive + ' bins fall outside their own band.</div><p>Now change the bin count. Nothing about the model or the commuters changes, only how the same outcomes are grouped. Watch the grey band breathe as the bins narrow, and watch whether the gap keeps up with it.</p>';
-    else html += '<span class="k">' + B + ' bins, about ' + (300 / B).toFixed(0) + ' commuters each</span><div class="ask ' + (gap > band ? 'no' : 'ok') + '">Mean gap ' + gap.toFixed(3) + ' against a sampling band of ' + band.toFixed(3) + '. ' + (gap > band ? 'The gap is larger than the band: this line really is miscalibrated, and no bin width hides it.' : 'The gap is inside the band: at this width the bars are indistinguishable from a calibrated model.') + ' ' + outside + ' of ' + nLive + ' bins fall outside their own band, and ' + nLive + ' of ' + B + ' bins hold at least five commuters.</div><p>' + (B > NG ? 'Each bin now holds about ' + (300 / B).toFixed(0) + ' commuters, so for a given predicted probability the band on a bin is wider than it was at ten. The average band printed on the right can still fall, because bins under five commuters drop out of it and the survivors cluster near 0 and 1, where a share scatters least. A bar that leaves the diagonal at this width has to leave its band too before it means anything.' : 'Each bin now holds about ' + (300 / B).toFixed(0) + ' commuters, so for a given predicted probability the band on a bin is tighter than at ten, and wide bins are a sharper test of calibration. They are also a blunter picture: a bow that shows across ten bins can average out inside four.') + '</p><p>Compare the gap with the band, not with zero. A calibration number means nothing without the bin width beside it.</p>';
+    else if (showGuess) html += '<span class="k">revealed</span><div class="ask ' + (gerr < 0.1 ? 'ok' : 'no') + '">' + (gerr < 0.1 ? 'Your guesses sit within ' + gerr.toFixed(2) + ' of the observed shares on average. ' : 'Your guesses miss the observed shares by ' + gerr.toFixed(2) + ' on average. ') + 'This diagram carries two separate numbers. Calibration: the mean gap between predicted and observed is ' + gap.toFixed(3) + ' against a sampling band of ' + band.toFixed(3) + ' at this width, with ' + outside + ' of ' + nLive + ' bins outside their own band, so ' + (gap > band ? 'this is real miscalibration and not the noise of 300 commuters' : 'these bars are what a calibrated model scatters like on 300 commuters') + '. The ' + (src === "yours" ? 'line' : 'maximum likelihood fit') + ' reads ' + conf + (slope < 0.85 ? ': the ramp is too steep, its confident probabilities come true less often than they claim, and the bars bow toward the middle' : (slope > 1.15 ? ': the ramp is too shallow, its probabilities are more cautious than the outcomes warrant, and the bars bow away from the middle' : ': the bars follow the diagonal within the noise of 300 commuters, and a 0.9 is a 0.9')) + '. Resolution: the observed shares spread across the bins by ' + res.toFixed(3) + ' of the ' + unc.toFixed(3) + ' available' + refTxt + ', so this ' + (src === "yours" ? 'line' : 'fit') + ' ' + (sharp ? 'sorts the commuters about as sharply as these two features allow' : 'drops commuters with different outcomes into the same bin') + '. Temperature scaling, one constant dividing every score, slides the bars toward the diagonal and leaves their spread where it is: it is the repair for the calibration number' + (sharp ? '.' : ', and resolution is the number that is low here, which comes from where the line is aimed and survives any rescaling of the scores. Drag the line on the previous tab onto the fit and watch this number climb.') + '</div><p>Now change the bin count. Nothing about the model or the commuters changes, only how the same outcomes are grouped. Watch the grey band breathe as the bins narrow, and watch whether the gap keeps up with it.</p>';
+    else html += '<span class="k">' + B + ' bins, from ' + occLo + ' to ' + occHi + ' commuters each</span><div class="ask ' + (gap > band ? 'no' : 'ok') + '">Mean gap ' + gap.toFixed(3) + ' against a sampling band of ' + band.toFixed(3) + '. ' + (gap > band ? 'The gap is larger than the band: this line really is miscalibrated, and no bin width hides it.' : 'The gap is inside the band: at this width the bars are indistinguishable from a calibrated model.') + ' Resolution holds at ' + res.toFixed(3) + ' of ' + unc.toFixed(3) + (src === "ml" ? '' : ', ' + resPct.toFixed(0) + ' % of the fit\'s') + '. ' + outside + ' of ' + nLive + ' bins fall outside their own band, and ' + nLive + ' of ' + B + ' bins hold at least five commuters.</div><p>' + (B > NG ? 'The bins now run from ' + occLo + ' to ' + occHi + ' commuters: the model piles its probabilities up at the two ends of the axis, so the middle bins are nearly empty and most of them drop below five. For a given predicted probability the band on a bin is wider than it was at ten. The average band printed on the right can still fall, because the surviving bins are the crowded ones near 0 and 1, where a share scatters least. A bar that leaves the diagonal at this width has to leave its band too before it means anything.' : 'The bins now run from ' + occLo + ' to ' + occHi + ' commuters, so for a given predicted probability the band on a bin is tighter than at ten, and wide bins are a sharper test of calibration. They are also a blunter picture: a bow that shows across ten bins can average out inside four.') + '</p><p>Compare the gap with the band, not with zero. A calibration number means nothing without the bin width beside it.</p>';
     stepEl.innerHTML = html;
   }
   board.c.addEventListener("pointerdown", ev => { if (revealed || B !== NG) return; const [mx, my] = board.pos(ev); if (mx < X0 || mx > X1 || my < Y0 - 10 || my > Y1 + 10) return; const i = Math.min(B - 1, Math.floor((mx - X0) / (X1 - X0) * B)); if (data()[i].n < 5) return; guess[i] = Math.max(0, Math.min(1, (Y1 - my) / (Y1 - Y0))); draw(); });
@@ -928,12 +957,20 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
   const rng = mulberry32(21), P = [];
   while (P.length < 40) { const iri = 1 + 4 * rng(), rut = 2 + 18 * rng(); const s = (iri - 2.7) * 1.0 + (rut - 9.5) * 0.12; if (s > 0.45) P.push({ x: iri, y: rut, c: 1 }); else if (s < -0.45) P.push({ x: iri, y: rut, c: 0 }); }
   const plane = new Board(document.getElementById("mgPlane"));
-  const L = 60, R = plane.W - 30, TOP = 40, BOT = plane.H - 50; const px = x => L + (x - 1) / 4 * (R - L), py = y => BOT - (y - 2) / 18 * (BOT - TOP);
-  const PP = P.map(p => ({ x: px(p.x), y: py(p.y), c: p.c }));
-  let A = [px(1.6), py(16)], B = [px(4.2), py(4)], hw = 14, drag = null, revealed = false;
-  // exact maximum margin in pixel space by candidate directions
+  const L = 60, R = plane.W - 30, TOP = 40, BOT = plane.H - 86; const px = x => L + (x - 1) / 4 * (R - L), py = y => BOT - (y - 2) / 18 * (BOT - TOP);
+  const xOf = mx => 1 + (mx - L) / (R - L) * 4, yOf = my => 2 + (BOT - my) / (BOT - TOP) * 18;
+  // the maximum-margin solution is not scale invariant, so the street is solved and reported in standardised units
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  const sdOf = a => { const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) * (v - m), 0) / a.length); };
+  const MX = mean(P.map(p => p.x)), SX = sdOf(P.map(p => p.x)), MY = mean(P.map(p => p.y)), SY = sdOf(P.map(p => p.y));
+  const stdX = x => (x - MX) / SX, stdY = y => (y - MY) / SY;
+  const pu = u => px(MX + u * SX), pv = v => py(MY + v * SY); // a standardised point to canvas pixels
+  const PP = P.map(p => ({ x: stdX(p.x), y: stdY(p.y), c: p.c }));
+  const A0 = [2.086, 16.52], B0 = [2.97, 5.01]; // a street that separates the classes at well under the widest possible width
+  let A = [stdX(A0[0]), stdY(A0[1])], B = [stdX(B0[0]), stdY(B0[1])], hw = 0.06, drag = null, revealed = false;
+  // exact maximum margin in standardised space by candidate directions
   function hull(pts) { const s = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y); const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); const lo = [], up = []; for (const p of s) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); } for (let i = s.length - 1; i >= 0; i--) { const p = s[i]; while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); } return lo.slice(0, -1).concat(up.slice(0, -1)); }
-  const SVM = (function () { const A0 = PP.filter(p => p.c === 0), A1 = PP.filter(p => p.c === 1), h0 = hull(A0), h1 = hull(A1); const cands = []; h0.forEach(p => h1.forEach(q => cands.push([q.x - p.x, q.y - p.y]))); const edges = (h) => h.map((p, i) => { const q = h[(i + 1) % h.length]; return [-(q.y - p.y), q.x - p.x]; }); edges(h0).concat(edges(h1)).forEach(e => cands.push(e)); let best = null; cands.forEach(d => { const nrm = Math.hypot(d[0], d[1]); if (nrm < 1e-9) return; const n = [d[0] / nrm, d[1] / nrm]; const s0 = A0.map(p => p.x * n[0] + p.y * n[1]), s1 = A1.map(p => p.x * n[0] + p.y * n[1]); let m = (Math.min.apply(null, s1) - Math.max.apply(null, s0)) / 2, c = (Math.min.apply(null, s1) + Math.max.apply(null, s0)) / 2, nn = n; if (m < 0) { m = (Math.min.apply(null, s0) - Math.max.apply(null, s1)) / 2; c = (Math.min.apply(null, s0) + Math.max.apply(null, s1)) / 2; nn = [-n[0], -n[1]]; c = -c; } if (m > 0 && (!best || m > best.m)) best = { m, c, n: nn }; }); const sv = PP.filter(p => Math.abs(Math.abs(p.x * best.n[0] + p.y * best.n[1] - best.c) - best.m) < 0.5); return Object.assign(best, { sv }); })();
+  const SVM = (function () { const A0 = PP.filter(p => p.c === 0), A1 = PP.filter(p => p.c === 1), h0 = hull(A0), h1 = hull(A1); const cands = []; h0.forEach(p => h1.forEach(q => cands.push([q.x - p.x, q.y - p.y]))); const edges = (h) => h.map((p, i) => { const q = h[(i + 1) % h.length]; return [-(q.y - p.y), q.x - p.x]; }); edges(h0).concat(edges(h1)).forEach(e => cands.push(e)); let best = null; cands.forEach(d => { const nrm = Math.hypot(d[0], d[1]); if (nrm < 1e-9) return; const n = [d[0] / nrm, d[1] / nrm]; const s0 = A0.map(p => p.x * n[0] + p.y * n[1]), s1 = A1.map(p => p.x * n[0] + p.y * n[1]); let m = (Math.min.apply(null, s1) - Math.max.apply(null, s0)) / 2, c = (Math.min.apply(null, s1) + Math.max.apply(null, s0)) / 2, nn = n; if (m < 0) { m = (Math.min.apply(null, s0) - Math.max.apply(null, s1)) / 2; c = (Math.min.apply(null, s0) + Math.max.apply(null, s1)) / 2; nn = [-n[0], -n[1]]; c = -c; } if (m > 0 && (!best || m > best.m)) best = { m, c, n: nn }; }); const sv = PP.filter(p => Math.abs(Math.abs(p.x * best.n[0] + p.y * best.n[1] - best.c) - best.m) < 0.002); return Object.assign(best, { sv }); })();
   const stepEl = document.getElementById("mgStep");
   function street() { const vx = B[0] - A[0], vy = B[1] - A[1], nrm = Math.hypot(vx, vy) || 1; const n = [-vy / nrm, vx / nrm]; const c = A[0] * n[0] + A[1] * n[1]; let inside = 0, s0 = [], s1 = []; PP.forEach(p => { const d = p.x * n[0] + p.y * n[1] - c; if (Math.abs(d) < hw) inside++; (p.c ? s1 : s0).push(d); }); const sep = (Math.min.apply(null, s1) > 0 && Math.max.apply(null, s0) < 0) || (Math.min.apply(null, s0) > 0 && Math.max.apply(null, s1) < 0); return { n, c, inside, sep, mid: [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2] }; }
   function draw() {
@@ -941,25 +978,32 @@ const shared = {}; // models handed from one tab to another (the mode tab's line
     plane.clear("pavement sections: roughness across, rut depth up; blue keep, red rehabilitate; drag the handles to aim the street and the edge handle to widen it"); const ctx = plane.ctx;
     plane.line(L, BOT, R, BOT, css("--line"), 1); plane.line(L, TOP, L, BOT, css("--line"), 1);
     for (let x = 1; x <= 5; x++) plane.label("IRI " + x, px(x), BOT + 16, css("--muted"), "center", 11, true); for (let y = 2; y <= 20; y += 6) plane.label(y + " mm", L - 8, py(y) + 4, css("--muted"), "right", 11, true);
-    const drawStreet = (n, c, w, color, alpha, dash) => { const t = [-n[1], n[0]]; const p0 = [n[0] * c, n[1] * c]; ctx.save(); ctx.beginPath(); ctx.rect(L, TOP, R - L, BOT - TOP); ctx.clip(); ctx.globalAlpha = alpha; ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(p0[0] + n[0] * w - t[0] * 3000, p0[1] + n[1] * w - t[1] * 3000); ctx.lineTo(p0[0] + n[0] * w + t[0] * 3000, p0[1] + n[1] * w + t[1] * 3000); ctx.lineTo(p0[0] - n[0] * w + t[0] * 3000, p0[1] - n[1] * w + t[1] * 3000); ctx.lineTo(p0[0] - n[0] * w - t[0] * 3000, p0[1] - n[1] * w - t[1] * 3000); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; plane.line(p0[0] - t[0] * 3000, p0[1] - t[1] * 3000, p0[0] + t[0] * 3000, p0[1] + t[1] * 3000, color, 2, dash); ctx.restore(); };
+    plane.label("widths are measured in standard deviations of each axis, the units the street is solved in", L, plane.H - 14, css("--muted"), "left", 12);
+    // a band in standardised space maps to a band in pixels: the two edge lines are carried over point by point
+    const drawStreet = (n, c, w, color, alpha, dash) => { const t = [-n[1], n[0]], K = 40;
+      const edge = off => [[pu(n[0] * (c + off) - t[0] * K), pv(n[1] * (c + off) - t[1] * K)], [pu(n[0] * (c + off) + t[0] * K), pv(n[1] * (c + off) + t[1] * K)]];
+      const e1 = edge(w), e2 = edge(-w), e0 = edge(0);
+      ctx.save(); ctx.beginPath(); ctx.rect(L, TOP, R - L, BOT - TOP); ctx.clip(); ctx.globalAlpha = alpha; ctx.fillStyle = color;
+      ctx.beginPath(); ctx.moveTo(e1[0][0], e1[0][1]); ctx.lineTo(e1[1][0], e1[1][1]); ctx.lineTo(e2[1][0], e2[1][1]); ctx.lineTo(e2[0][0], e2[0][1]); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+      plane.line(e0[0][0], e0[0][1], e0[1][0], e0[1][1], color, 2, dash); ctx.restore(); };
     if (revealed) drawStreet(SVM.n, SVM.c, SVM.m, GREEN, 0.18, [6, 4]);
-    drawStreet(s.n, s.c, hw, valid ? css("--orange") : css("--red"), 0.22);
-    PP.forEach(p => plane.dot(p.x, p.y, 5, p.c ? css("--red") : css("--blue")));
-    if (revealed) SVM.sv.forEach(p => { ctx.strokeStyle = GREEN; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, 2 * Math.PI); ctx.stroke(); });
-    plane.dot(A[0], A[1], 8, css("--ink"), "#fff"); plane.dot(B[0], B[1], 8, css("--ink"), "#fff");
-    const eh = [s.mid[0] + s.n[0] * hw, s.mid[1] + s.n[1] * hw]; plane.dot(eh[0], eh[1], 7, css("--orange"), "#fff"); plane.label("edge (drag to widen)", eh[0] + 10, eh[1] - 6, css("--orange"), "left", 12);
-    plane.label(valid ? "a clean street, " + (2 * hw).toFixed(0) + " px wide" : (s.sep ? s.inside + " section" + (s.inside > 1 ? "s" : "") + " standing in the street" : "the street does not separate the classes"), L, plane.H - 14, valid ? css("--orange") : css("--red"), "left", 13);
-    if (revealed) plane.label("green dashed: the support vector machine's street, " + (2 * SVM.m).toFixed(0) + " px wide; ringed sections are its support vectors", L + 260, plane.H - 14, GREEN, "left", 13);
-    document.getElementById("mgW").textContent = valid ? (2 * hw).toFixed(0) + " px" : "not valid"; document.getElementById("mgIn").textContent = s.inside; document.getElementById("mgBest").textContent = revealed ? (2 * SVM.m).toFixed(0) + " px" : "-"; document.getElementById("mgSV").textContent = revealed ? SVM.sv.length + " of 40" : "-";
+    drawStreet(s.n, s.c, hw, valid ? css("--orange") : css("--grey"), valid ? 0.22 : 0.16, valid ? [] : [6, 4]);
+    PP.forEach(p => plane.dot(pu(p.x), pv(p.y), 5, p.c ? css("--red") : css("--blue")));
+    if (revealed) SVM.sv.forEach(p => { ctx.strokeStyle = GREEN; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(pu(p.x), pv(p.y), 10, 0, 2 * Math.PI); ctx.stroke(); });
+    plane.dot(pu(A[0]), pv(A[1]), 8, css("--ink"), "#fff"); plane.dot(pu(B[0]), pv(B[1]), 8, css("--ink"), "#fff");
+    const eh = [pu(s.mid[0] + s.n[0] * hw), pv(s.mid[1] + s.n[1] * hw)]; plane.dot(eh[0], eh[1], 7, css("--orange"), "#fff"); plane.label("edge (drag to widen)", eh[0] + 10, eh[1] - 6, css("--orange"), "left", 12);
+    plane.label(valid ? "a clean street, " + (2 * hw).toFixed(2) + " standard deviations wide" : (s.sep ? s.inside + " section" + (s.inside > 1 ? "s" : "") + " standing in the street" : "the street does not separate the classes"), L, BOT + 36, valid ? css("--orange") : css("--grey"), "left", 13);
+    if (revealed) plane.label("green dashed: the support vector machine's street, " + (2 * SVM.m).toFixed(2) + " wide; ringed sections are its support vectors", L + 330, BOT + 36, GREEN, "left", 13);
+    document.getElementById("mgW").textContent = valid ? (2 * hw).toFixed(2) + " sd" : "not valid"; document.getElementById("mgIn").textContent = s.inside; document.getElementById("mgBest").textContent = revealed ? (2 * SVM.m).toFixed(2) + " sd" : "-"; document.getElementById("mgSV").textContent = revealed ? SVM.sv.length + " of 40" : "-";
     document.getElementById("mgReveal").disabled = revealed || !valid;
     const ratio = valid ? 2 * hw / (2 * SVM.m) : 0;
-    stepEl.innerHTML = '<p class="prompt">How wide can the street get before a section stands in it?</p><span class="k">' + (revealed ? 'the support vector machine' : 'your street') + '</span>' + (valid ? '<div class="ask ' + (revealed ? (ratio >= 0.95 ? 'ok' : 'no') : '') + '">A clean street ' + (2 * hw).toFixed(0) + ' px wide' + (revealed ? ', which is ' + (100 * ratio).toFixed(0) + ' % of the widest possible, ' + (2 * SVM.m).toFixed(0) + ' px. ' + SVM.sv.length + ' sections hold the SVM street up; the other ' + (40 - SVM.sv.length) + ' could be deleted without moving it.' : '. Widen it until a section touches each edge, then reveal.') + '</div>' : '<div class="ask no">' + (s.sep ? 'The street runs through ' + s.inside + ' section' + (s.inside > 1 ? 's' : '') + '. Narrow it or turn it.' : 'Both classes are on the same side somewhere. Turn the street until blue and red are apart.') + '</div>') + '<p>Only the sections touching the edges decide the street. The reveal unlocks once your street is clean.</p>';
+    stepEl.innerHTML = '<p class="prompt">How wide can the street get before a section stands in it?</p><span class="k">' + (revealed ? 'the support vector machine' : 'your street') + '</span>' + (valid ? '<div class="ask ' + (revealed ? (ratio >= 0.95 ? 'ok' : 'no') : '') + '">A clean street ' + (2 * hw).toFixed(2) + ' standard deviations wide' + (revealed ? ', which is ' + (100 * ratio).toFixed(0) + ' % of the widest possible, ' + (2 * SVM.m).toFixed(2) + '. ' + SVM.sv.length + ' sections hold the SVM street up; the other ' + (40 - SVM.sv.length) + ' could be deleted without moving it.' : '. Widen it until a section touches each edge, then reveal.') + '</div>' : '<div class="ask no">' + (s.sep ? 'The street runs through ' + s.inside + ' section' + (s.inside > 1 ? 's' : '') + '. Narrow it or turn it.' : 'Both classes are on the same side somewhere. Turn the street until blue and red are apart.') + '</div>') + '<p>Only the sections touching the edges decide the street. The reveal unlocks once your street is clean. Width is counted in standard deviations of each axis: on the raw axes, one IRI unit and one millimetre of rut are different sizes, and the street that looks widest on the canvas is a different street from the one the margin problem picks.</p>';
   }
-  plane.c.addEventListener("pointerdown", ev => { const [mx, my] = plane.pos(ev); const s = street(); const eh = [s.mid[0] + s.n[0] * hw, s.mid[1] + s.n[1] * hw]; if (Math.hypot(mx - eh[0], my - eh[1]) < 14) { drag = "w"; return; } if (Math.hypot(mx - A[0], my - A[1]) < 14) drag = "A"; else if (Math.hypot(mx - B[0], my - B[1]) < 14) drag = "B"; });
-  window.addEventListener("pointermove", ev => { if (!drag) return; const [mx, my] = plane.pos(ev); const cx = Math.max(L, Math.min(R, mx)), cy = Math.max(TOP, Math.min(BOT, my)); if (drag === "A") A = [cx, cy]; else if (drag === "B") B = [cx, cy]; else { const s = street(); hw = Math.max(2, Math.min(260, Math.abs((mx - s.mid[0]) * s.n[0] + (my - s.mid[1]) * s.n[1]))); } draw(); });
+  plane.c.addEventListener("pointerdown", ev => { const [mx, my] = plane.pos(ev); const s = street(); const eh = [pu(s.mid[0] + s.n[0] * hw), pv(s.mid[1] + s.n[1] * hw)]; if (Math.hypot(mx - eh[0], my - eh[1]) < 14) { drag = "w"; return; } if (Math.hypot(mx - pu(A[0]), my - pv(A[1])) < 14) drag = "A"; else if (Math.hypot(mx - pu(B[0]), my - pv(B[1])) < 14) drag = "B"; });
+  window.addEventListener("pointermove", ev => { if (!drag) return; const [mx, my] = plane.pos(ev); const cx = Math.max(L, Math.min(R, mx)), cy = Math.max(TOP, Math.min(BOT, my)); if (drag === "A") A = [stdX(xOf(cx)), stdY(yOf(cy))]; else if (drag === "B") B = [stdX(xOf(cx)), stdY(yOf(cy))]; else { const s = street(), u = stdX(xOf(mx)), v = stdY(yOf(my)); hw = Math.max(0.01, Math.min(3, Math.abs((u - s.mid[0]) * s.n[0] + (v - s.mid[1]) * s.n[1]))); } draw(); });
   window.addEventListener("pointerup", () => { drag = null; });
   document.getElementById("mgReveal").addEventListener("click", () => { revealed = true; draw(); });
-  document.getElementById("mgReset").addEventListener("click", () => { A = [px(1.6), py(16)]; B = [px(4.2), py(4)]; hw = 14; revealed = false; draw(); });
+  document.getElementById("mgReset").addEventListener("click", () => { A = [stdX(A0[0]), stdY(A0[1])]; B = [stdX(B0[0]), stdY(B0[1])]; hw = 0.06; revealed = false; draw(); });
   quiz(document.getElementById("mgQuiz"), { q: "Two sections far from the boundary are deleted from the training set. The support vector machine's street", options: ["Narrows, because there is less data", "Does not move: only the support vectors on the edges of the street define it", "Widens, because the deleted sections were in the way"], answer: 1, why: "The solution depends only on the points that touch the margin. Everything else has zero weight in the dual, which is why the method is named after the support vectors and why it holds up well with many features and few samples, slide 21." });
   window.addEventListener("themechange", draw);
   draw();
