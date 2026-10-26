@@ -232,7 +232,7 @@ canvas.hit, canvas.grab { touch-action: none; }
     </div>
   </div>
   <div class="caption">
-    <p>The training objective on slide 6 scores the network on the noise itself, L = E || eps - eps_theta(x_t, t) ||^2. A student with both pictures reads eps off the difference, which is exactly the information the data set supplies during training. The denoiser on the right has only x_t and a Gaussian prior over smooth 8 by 8 patches (the cosine-basis prior of the Spend the budget tab, scaled to 0.24 per pixel), and its estimate is the exact posterior mean of eps, the function a well-trained network converges to. At t = 250 about half the signal variance remains, which is where the prior still helps to tell terrain from noise.</p>
+    <p>The training objective on slide 6 scores the network on the noise itself, L = E || eps - eps_theta(x_t, t) ||^2. A student with both pictures reads eps off the difference, which is exactly the information the data set supplies during training. The denoiser on the right has only x_t and a Gaussian prior over smooth 8 by 8 patches (the cosine-basis prior of the Spend the budget tab, scaled to 0.24 per pixel), and its estimate is the exact posterior mean of eps, the function a well-trained network converges to. The clean patch on the left is the coarse site, which is also the mean of that prior, so the denoiser's estimate here is the best case for it. At t = 250 about half the signal variance remains, which is where the prior still helps to tell terrain from noise.</p>
   </div>
 </section>
 
@@ -275,7 +275,7 @@ canvas.hit, canvas.grab { touch-action: none; }
 <!-- ============ 3. GUIDANCE: guess the weight ============ -->
 <section class="demo" id="guidance" role="tabpanel">
   <h2>Guess the guidance weight from the samples</h2>
-  <p class="lead">A model has learned three land-cover clusters in a two-band reflectance space. It is asked for one class, roof, and sampled with classifier-free guidance at weight w. Drag w and watch the 300 samples land; every weight you stop at is plotted on the curve at the top left, so the tradeoff draws itself. Then flip to identification, where w is hidden and you name it from the cloud.</p>
+  <p class="lead">A model has learned three land-cover clusters in a two-band reflectance space. It is asked for one class, roof, and sampled with classifier-free guidance at weight w. Drag w and watch the 300 samples land. Every weight you stop at adds a point to the two curves at the top left. Then flip to identification, where w is hidden and you name it from the cloud.</p>
   <div class="stage">
     <div class="plot"><canvas id="ggPlot" width="1200" height="560"></canvas></div>
     <div class="side">
@@ -288,6 +288,7 @@ canvas.hit, canvas.grab { touch-action: none; }
         <dl class="readout" style="margin-top:10px">
           <dt>samples on the roof cluster</dt><dd id="ggOn">-</dd>
           <dt>spread, relative to the true class</dt><dd id="ggSd">-</dd>
+          <dt>centre offset, in class widths</dt><dd id="ggOff">-</dd>
           <dt>weights you have sampled</dt><dd id="ggSeen">0</dd>
           <dt>score so far</dt><dd id="ggScore">0 / 0</dd>
         </dl>
@@ -296,7 +297,7 @@ canvas.hit, canvas.grab { touch-action: none; }
     </div>
   </div>
   <div class="caption">
-    <p>Every sample follows eps_hat = eps_u + w (eps_c - eps_u), the line on slide 9, through 1000 ancestral steps, with exact noise predictions for the two Gaussian mixtures so that nothing is trained. w = 0 ignores the request, w = 1 is plain conditional sampling, and w above one sharpens the class at the price of diversity. The curve at the top left is built from the weights you stop at: the share landing on roof climbs steeply and is essentially finished by w = 2, while the spread keeps falling for every weight after that, which is the whole tradeoff in one picture. Both predictions are needed per step, so guidance doubles the cost of every sample.</p>
+    <p>Every sample follows eps_hat = eps_u + w (eps_c - eps_u), the line on slide 9, through 1000 ancestral steps, with exact noise predictions for the two Gaussian mixtures so that nothing is trained. In classifier-free guidance the unconditional model is the marginal of the conditionals, so the roof component of the three-class mixture is the requested class itself. w = 0 draws from that marginal, w = 1 is plain conditional sampling, and w above one draws from the tilted density p(x|c)^w p(x)^(1 - w), which has its own mean and its own width. The readout reports both: the spread relative to the class, and how far the cloud centre has moved from the class mean, in class widths. The roof and vegetation classes overlap here, which is what gives guidance something to suppress: raising w cuts the vegetation side of the roof cloud, so the width falls from about 0.93 of the class at w = 1 to about 0.85, and the centre walks away from the class mean, reaching about one class width at w = 10. Sharpening and displacement are the same operation seen from two sides. Where two classes are far apart the ratio p(x|c) / p(x) is nearly flat across the class, guidance has nothing to cut, and the width holds while the samples still move. Both predictions are needed per step, so guidance doubles the cost of every sample.</p>
   </div>
 </section>
 
@@ -323,7 +324,7 @@ canvas.hit, canvas.grab { touch-action: none; }
     </div>
   </div>
   <div class="caption">
-    <p>Both fits use 24 Gaussian radial basis functions plus a linear term. The data-only fit is a ridge least-squares solution through the three readings, each with 2 cm of noise. The second fit adds the residual of d2h/dx2 = s(x) at 30 collocation points with a fixed weight lambda = 1, the loss L_data + lambda L_pde on slide 15. In round 2 the source handed to the fit is 20 % too large while the hidden profile stays the same, so the equation fit carries a model error. The Reveal the map tab turns lambda into the quantity to choose once s(x) cannot be trusted.</p>
+    <p>Both fits use 24 Gaussian radial basis functions plus a linear term. The data-only fit is a ridge least-squares solution through the three readings, each with 2 cm of noise. The second fit adds the residual of d2h/dx2 = s(x) at 30 collocation points with a fixed weight lambda = 1, the loss L_data + lambda L_pde on slide 15. The source panel is drawn in units of 1e-4 per metre, the scale d2h/dx2 takes with h and x in metres: the curvature of the hidden profile peaks at about 3.4e-3 per metre. In round 2 the source handed to the fit is 20 % too large while the hidden profile stays the same, so the equation fit carries a model error. The Reveal the map tab turns lambda into the quantity to choose once s(x) cannot be trusted.</p>
   </div>
 </section>
 
@@ -350,7 +351,7 @@ canvas.hit, canvas.grab { touch-action: none; }
     </div>
   </div>
   <div class="caption">
-    <p>Each fit minimizes L = L_data + lambda L_pde + w_bc L_bc, slide 14, over 40 radial basis functions with w_bc fixed and the PDE residual normalized by the size of the source. Small lambda ignores the equation and interpolates three noisy points; large lambda ignores the gauges and solves an equation whose source is wrong. The valley between them moves as the source error grows, which is the stochastic model decision on slide 16.</p>
+    <p>Each fit minimizes L = L_data + lambda L_pde + w_bc L_bc, slide 14, over 40 radial basis functions with w_bc fixed and the PDE residual normalized by the size of the source. Small lambda ignores the equation and interpolates three noisy points; large lambda ignores the gauges and solves an equation whose source is wrong. The beam panel carries the same quantity as the error figures in the map: the true field runs from -0.12 to 1.62 in temperature rise, so an error of 0.065 is about 4 % of its range. The valley between them moves as the source error grows, which is the stochastic model decision on slide 16.</p>
   </div>
 </section>
 
@@ -492,8 +493,9 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   function rms(arr) { let d = 0; for (let i = 0; i < NG; i++) d += (arr[i] - eps[i]) ** 2; return Math.sqrt(d / NG); }
   function painted() { let n = 0; for (let i = 0; i < NG; i++) if (paint[i] !== 2) n++; return n; }
   function newRound() {
-    seed += 1; const rng = mulberry32(seed), zk = randn(rng, NG);
-    x0 = synth(mu.map((m, k) => m + Math.sqrt(lam[k]) * zk[k])); eps = randn(rng, NG); xt = x0.map((v, i) => sa * v + sn * eps[i]);
+    // x_0 is the coarse site itself, which is also the mean of the denoiser's prior
+    seed += 1; const rng = mulberry32(seed);
+    x0 = synth(mu); eps = randn(rng, NG); xt = x0.map((v, i) => sa * v + sn * eps[i]);
     paint.fill(2); scored = false; denoised = false; mine = null; theirs = null; epsHat = null; text(); draw();
   }
   function denoise() {
@@ -506,7 +508,7 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
     else {
       const zero = rms(new Float64Array(NG));
       if (!denoised) html += '<div class="ask">Your painting is ' + mine.toFixed(2) + ' RMS from the true noise, in units of its standard deviation. Painting nothing would score ' + zero.toFixed(2) + '.</div><p>Press Let the denoiser do it. The denoiser never sees the clean patch; it works from the noised patch and a prior over smooth terrain.</p>';
-      else html += '<div class="ask ' + (mine <= theirs ? 'ok' : 'no') + '">' + (mine <= theirs ? 'You are closer. ' : 'The denoiser is closer. ') + 'Your RMS ' + mine.toFixed(2) + ', the denoiser ' + theirs.toFixed(2) + ', painting nothing ' + zero.toFixed(2) + '.</div><p>You had both pictures, which is the situation of the training set: the target eps is known. The denoiser had only x_t and the prior, which is the situation at sampling time, and its answer is the posterior mean of eps. A network trained on the slide 6 objective learns to produce that estimate.</p>';
+      else html += '<div class="ask ' + (mine <= theirs ? 'ok' : 'no') + '">' + (mine <= theirs ? 'You are closer. ' : 'The denoiser is closer. ') + 'Your RMS ' + mine.toFixed(2) + ', the denoiser ' + theirs.toFixed(2) + ', painting nothing ' + zero.toFixed(2) + '.</div><p>You had both pictures, which is the situation of the training set: the target eps is known. The denoiser had only x_t and the prior, which is the situation at sampling time, and its answer is the posterior mean of eps. The clean patch here is the mean of that prior, so its estimate is the best case for it. A network trained on the slide 6 objective learns to produce that estimate.</p>';
     }
     stepEl.innerHTML = html;
   }
@@ -646,7 +648,9 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
 
 /* ================= 4. GUESS THE GUIDANCE ================= */
 (function guidance() {
-  const U = [{ m: [-2, -1.5], s: 0.5, w: 0.35, name: "water" }, { m: [0.5, 1.5], s: 0.5, w: 0.35, name: "vegetation" }, { m: [2.5, -0.5], s: 0.6, w: 0.3, name: "roof" }], C = [{ m: [2.6, -0.4], s: 0.4, w: 1 }];
+  // the unconditional model is the marginal of the conditionals, so its roof component is the requested class itself
+  const C = [{ m: [2.6, -0.4], s: 0.4, w: 1 }];
+  const U = [{ m: [-2, -1.5], s: 0.5, w: 0.35, name: "water" }, { m: [1.62, 0.62], s: 0.45, w: 0.35, name: "vegetation" }, { m: C[0].m.slice(), s: C[0].s, w: 0.3, name: "roof" }];
   function eps(x, y, a, mixc) { let nx = 0, ny = 0, den = 0; for (const c of mixc) { const v = a * c.s * c.s + 1 - a, dx = x - Math.sqrt(a) * c.m[0], dy = y - Math.sqrt(a) * c.m[1]; const p = c.w * Math.exp(-0.5 * (dx * dx + dy * dy) / v) / v; nx += p * (-dx / v); ny += p * (-dy / v); den += p; } return [-Math.sqrt(1 - a) * nx / den, -Math.sqrt(1 - a) * ny / den]; }
   function sample(w, n, seed) { const rng = mulberry32(seed), X = randn(rng, n), Y = randn(rng, n); for (let t = T; t >= 1; t--) { const a = abar[t], at = alpha[t], bt = beta[t], nz = t > 1 ? randn(rng, 2 * n) : null, sb = Math.sqrt(bt), c1 = 1 / Math.sqrt(at), c2 = bt / Math.sqrt(1 - a); for (let i = 0; i < n; i++) { const eu = eps(X[i], Y[i], a, U), ec = eps(X[i], Y[i], a, C); const ex = eu[0] + w * (ec[0] - eu[0]), ey = eu[1] + w * (ec[1] - eu[1]); X[i] = c1 * (X[i] - c2 * ex) + (nz ? sb * nz[2 * i] : 0); Y[i] = c1 * (Y[i] - c2 * ey) + (nz ? sb * nz[2 * i + 1] : 0); } } return [X, Y]; }
   const board = new Board(document.getElementById("ggPlot"));
@@ -656,21 +660,21 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   let curW = null, setGate = null, dragging = false; const cache = {};
   const GATE_CAP = 4, WMAX = 10;
   const slider = document.getElementById("ggW"), wlab = document.getElementById("ggWLab"), dialBox = document.getElementById("ggDial");
-  const SG = ["sharper", "it drifts"], SG_OK = 0;
+  const SG = ["it gets sharper", "its centre drifts off the class"], SG_OK = 1;
   const px = v => 80 + (v + 4) / 9 * (board.W - 120), py = v => board.H - 50 - (v + 3.5) / 7 * (board.H - 90);
   const stepEl = document.getElementById("ggStep"), choiceBtns = Array.from(document.querySelectorAll("#ggChoice button")), flipBtn = document.getElementById("ggFlip"), nextBtn = document.getElementById("ggNext");
   function cloud(w) { if (!cache[w]) cache[w] = sample(w, NS, 77 + w); return cache[w]; }
   function text() {
-    if (mode === "ident") { stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>The sampler was asked for <b>roof</b> and run at a hidden guidance weight. The 300 samples are landing now.</p><p>Judge two things: did they all reach the roof cluster, and how wide is the cloud compared with the true roof class (the blue ring)? Then click the weight.</p>'; return; }
+    if (mode === "ident") { stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><p>The sampler was asked for <b>roof</b> and run at a hidden guidance weight. The 300 samples are landing now.</p><p>Judge two things: did they all reach the roof cluster, and does the cloud sit on the centre of the true roof class (the blue ring) or off to one side of it? Then click the weight.</p>'; return; }
     let html = '<p class="prompt">Past w = 4, does the roof cluster get sharper or does it drift off the class?</p>';
     if (setGate === null) {
       html += '<p>The dial stops at 4 until you answer. Sweep it from 0 to 4 first: watch the orange cloud pull onto the roof ring, and watch the two curves at the top left fill in as you stop at each weight.</p><div class="gate">' + SG.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>';
       if (curW !== null) { const st = stats(cloud(curW)); html += '<p>At w = ' + curW + ': ' + (100 * st.on).toFixed(0) + ' percent of the 300 samples land on roof, at ' + (st.sd / 0.4).toFixed(2) + ' of the true class spread, with the centre ' + st.off.toFixed(2) + ' class widths off the class mean.</p>'; }
     } else {
       const st = stats(cloud(10)), s1 = stats(cloud(1));
-      html += '<div class="ask ' + (setGate === SG_OK ? 'ok' : 'no') + '">' + (setGate === SG_OK ? 'Right. ' : 'It gets sharper. ') + 'At w = 10 the spread is ' + (st.sd / 0.4).toFixed(2) + ' of the true class and the centre sits ' + st.off.toFixed(2) + ' class widths from the roof mean: the cloud collapses on the densest part of the class with almost no drift. The dial now runs to 10.</div>';
-      if (curW !== null) { const c = stats(cloud(curW)); html += '<p><b>w = ' + curW + ':</b> ' + (100 * c.on).toFixed(0) + ' percent on roof, spread ' + (c.sd / 0.4).toFixed(2) + ' of the class. Plain conditional sampling, w = 1, gives ' + (100 * s1.on).toFixed(0) + ' percent at spread ' + (s1.sd / 0.4).toFixed(2) + '.</p>'; }
-      html += '<p>Sweep the whole range and read the two curves. The green one is finished early; the orange one keeps falling. Everything above the knee buys obedience you already had and pays for it in diversity. Then press Flip to identification.</p>';
+      html += '<div class="ask ' + (setGate === SG_OK ? 'ok' : 'no') + '">' + (setGate === SG_OK ? 'Right. ' : 'The centre drifts. ') + 'At w = 10 the spread is ' + (st.sd / 0.4).toFixed(2) + ' of the true class and the centre sits ' + st.off.toFixed(2) + ' class widths from the roof mean, against ' + s1.off.toFixed(2) + ' at w = 1. Above w = 1 the samples come from the tilted density p(x|c)^w p(x)^(1 - w), whose mean is pushed away from the other two classes, so the sampler is biased with respect to p(x|c). The dial now runs to 10.</div>';
+      if (curW !== null) { const c = stats(cloud(curW)); html += '<p><b>w = ' + curW + ':</b> ' + (100 * c.on).toFixed(0) + ' percent on roof, spread ' + (c.sd / 0.4).toFixed(2) + ' of the class, centre ' + c.off.toFixed(2) + ' class widths off the class mean. Plain conditional sampling, w = 1, gives ' + (100 * s1.on).toFixed(0) + ' percent at spread ' + (s1.sd / 0.4).toFixed(2) + ' and offset ' + s1.off.toFixed(2) + '.</p>'; }
+      html += '<p>Sweep the whole range and read the two curves. The share on roof is finished by about w = 1, and the centre offset keeps growing with every weight after that. The spread here stays near the class width, because the three classes barely overlap in two bands. A high-dimensional model has classes that overlap heavily, and there the same tilt also narrows the samples within the class. Then press Flip to identification.</p>';
     }
     stepEl.innerHTML = html;
     stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { setGate = parseInt(b.dataset.g, 10); slider.max = String(WMAX); setW(10, true); }));
@@ -681,9 +685,9 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
     ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(px(-4), py(-3.5)); ctx.lineTo(px(-4), py(3.5)); ctx.lineTo(px(5), py(3.5)); ctx.moveTo(px(-4), py(-3.5)); ctx.lineTo(px(5), py(-3.5)); ctx.stroke();
     board.label("band 1 reflectance (standardized)", (px(-4) + px(5)) / 2, board.H - 12, css("--muted"), "center", 13);
     ctx.save(); ctx.translate(26, (py(-3.5) + py(3.5)) / 2); ctx.rotate(-Math.PI / 2); board.label("band 2 reflectance", 0, 0, css("--muted"), "center", 13); ctx.restore();
-    U.forEach(c => ellipse(ctx, c, css("--grey"), [5, 4], c.name + " (what the model learned)"));
+    U.forEach(c => { if (c.name !== "roof") ellipse(ctx, c, css("--grey"), [5, 4], c.name + " (what the model learned)"); });
     ellipse(ctx, C[0], css("--blue"), [], "");
-    board.label("roof, the class requested", px(C[0].m[0]), py(C[0].m[1] - 2 * C[0].s) + 18, css("--blue"), "center", 13);
+    board.label("roof, the requested class and the model's roof component", px(C[0].m[0]), py(C[0].m[1] - 2 * C[0].s) + 18, css("--blue"), "center", 13);
     if (pts) { ctx.fillStyle = css("--orange"); for (let i = 0; i < shown; i++) { ctx.globalAlpha = dragging && !cache[curW] ? 0.18 : 0.75; ctx.beginPath(); ctx.arc(px(pts[0][i]), py(pts[1][i]), 4, 0, 2 * Math.PI); ctx.fill(); } ctx.globalAlpha = 1; }
     if (mode === "set") curve(ctx);
     let lab;
@@ -695,23 +699,26 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   function curve(ctx) {
     const ws = Object.keys(cache).map(Number).sort((a, b) => a - b);
     const CX0 = 110, CX1 = 330, CY0 = 120, CY1 = 250;
-    const cx = w => CX0 + w / WMAX * (CX1 - CX0), cy = v => CY1 - v * (CY1 - CY0);
+    const S = ws.map(w => ({ w: w, st: stats(cache[w]) }));
+    // the vertical axis is ranged to the data, so every sampled weight lands inside the frame
+    let vmax = 1; S.forEach(p => { vmax = Math.max(vmax, p.st.on, p.st.off); });
+    vmax = Math.ceil(vmax * 10 + 0.5) / 10;
+    const cx = w => CX0 + w / WMAX * (CX1 - CX0), cy = v => CY1 - v / vmax * (CY1 - CY0);
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(CX0, CY0); ctx.lineTo(CX0, CY1); ctx.lineTo(CX1, CY1); ctx.stroke();
-    board.label("what each weight costs and buys", CX0, CY0 - 26, css("--ink"), "left", 12);
+    board.label("obedience and displacement", CX0, CY0 - 26, css("--ink"), "left", 12);
     board.label("drag w; every stop adds a point", CX0, CY0 - 12, css("--muted"), "left", 11);
     [0, 5, 10].forEach(w => board.label(String(w), cx(w), CY1 + 14, css("--muted"), "center", 10, true));
     board.label("w", (CX0 + CX1) / 2, CY1 + 28, css("--muted"), "center", 11);
-    board.label("1", CX0 - 6, CY0 + 4, css("--muted"), "right", 10, true); board.label("0", CX0 - 6, CY1 + 4, css("--muted"), "right", 10, true);
+    board.label(vmax.toFixed(1), CX0 - 6, CY0 + 4, css("--muted"), "right", 10, true); board.label("0", CX0 - 6, CY1 + 4, css("--muted"), "right", 10, true);
     if (!ws.length) { board.label("no weights sampled yet", CX0 + 10, (CY0 + CY1) / 2, css("--muted"), "left", 11); return; }
-    const S = ws.map(w => ({ w: w, st: stats(cache[w]) }));
-    const line = (sel, color) => { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); S.forEach((p, i) => { const x = cx(p.w), y = cy(Math.min(1.2, sel(p.st))); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); ctx.fillStyle = color; S.forEach(p => { ctx.beginPath(); ctx.arc(cx(p.w), cy(Math.min(1.2, sel(p.st))), 3, 0, 2 * Math.PI); ctx.fill(); }); };
-    line(st => st.on, "#2E7D5B"); line(st => st.sd / 0.4, css("--orange"));
+    const line = (sel, color) => { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); S.forEach((p, i) => { const x = cx(p.w), y = cy(sel(p.st)); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); ctx.fillStyle = color; S.forEach(p => { ctx.beginPath(); ctx.arc(cx(p.w), cy(sel(p.st)), 3, 0, 2 * Math.PI); ctx.fill(); }); };
+    line(st => st.on, "#2E7D5B"); line(st => st.off, css("--orange"));
     board.label("share on roof", CX1 + 8, cy(S[S.length - 1].st.on) + 4, "#2E7D5B", "left", 11);
-    board.label("spread", CX1 + 8, cy(Math.min(1.2, S[S.length - 1].st.sd / 0.4)) + 4, css("--orange"), "left", 11);
+    board.label("centre offset", CX1 + 8, cy(S[S.length - 1].st.off) + 4, css("--orange"), "left", 11);
     if (curW !== null) { ctx.strokeStyle = css("--blue"); ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(cx(curW), CY0); ctx.lineTo(cx(curW), CY1); ctx.stroke(); ctx.setLineDash([]); }
   }
-  function stats(p) { let on = 0, mx = 0, my = 0; for (let i = 0; i < NS; i++) if (p[0][i] > 1.4 && p[1][i] < 0.8) { on++; mx += p[0][i]; my += p[1][i]; } mx /= Math.max(1, on); my /= Math.max(1, on); let v = 0; for (let i = 0; i < NS; i++) if (p[0][i] > 1.4 && p[1][i] < 0.8) v += (p[0][i] - mx) ** 2 + (p[1][i] - my) ** 2; return { on: on / NS, sd: Math.sqrt(v / Math.max(1, on) / 2), off: Math.hypot(mx - C[0].m[0], my - C[0].m[1]) / 0.4 }; }
-  function readouts() { document.getElementById("ggSeen").textContent = String(Object.keys(cache).length); if (pts && !(dragging && !cache[curW])) { const st = stats(pts); document.getElementById("ggOn").textContent = (100 * st.on).toFixed(0) + " %"; document.getElementById("ggSd").textContent = (st.sd / 0.4).toFixed(2) + " x"; } else { document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; } }
+  function stats(p) { let on = 0, mx = 0, my = 0; for (let i = 0; i < NS; i++) if (Math.hypot(p[0][i] - C[0].m[0], p[1][i] - C[0].m[1]) < 2.5 * C[0].s) { on++; mx += p[0][i]; my += p[1][i]; } mx /= Math.max(1, on); my /= Math.max(1, on); let v = 0; for (let i = 0; i < NS; i++) if (Math.hypot(p[0][i] - C[0].m[0], p[1][i] - C[0].m[1]) < 2.5 * C[0].s) v += (p[0][i] - mx) ** 2 + (p[1][i] - my) ** 2; return { on: on / NS, sd: Math.sqrt(v / Math.max(1, on) / 2), off: Math.hypot(mx - C[0].m[0], my - C[0].m[1]) / 0.4 }; }
+  function readouts() { document.getElementById("ggSeen").textContent = String(Object.keys(cache).length); if (pts && !(dragging && !cache[curW])) { const st = stats(pts); document.getElementById("ggOn").textContent = (100 * st.on).toFixed(0) + " %"; document.getElementById("ggSd").textContent = (st.sd / 0.4).toFixed(2) + " x"; document.getElementById("ggOff").textContent = st.off.toFixed(2); } else { document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; document.getElementById("ggOff").textContent = "-"; } }
   function land() { if (timer) clearTimeout(timer); shown = 0; if (!pts) { draw(); return; } (function f() { shown = Math.min(NS, shown + 6); draw(); if (shown < NS) timer = setTimeout(f, 24); })(); }
   function setW(w, animate) {
     curW = w; choiceBtns.forEach(b => b.setAttribute("aria-pressed", +b.dataset.w === w ? "true" : "false"));
@@ -719,13 +726,14 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
     pts = cloud(w); readouts(); text();
     if (animate) land(); else { if (timer) clearTimeout(timer); shown = NS; draw(); }
   }
-  function unlock() { setGate = 0; slider.max = String(WMAX); text(); draw(); }
-  function start() { pts = sample(ROUNDS[round], NS, 40 + round + 11 * played); answered = false; choiceBtns.forEach(b => { b.className = ""; b.disabled = false; b.removeAttribute("aria-pressed"); }); nextBtn.disabled = true; document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; text(); land(); }
+  function unlock() { setGate = SG_OK; slider.max = String(WMAX); text(); draw(); }
+  function start() { pts = sample(ROUNDS[round], NS, 40 + round + 11 * played); answered = false; choiceBtns.forEach(b => { b.className = ""; b.disabled = false; b.removeAttribute("aria-pressed"); }); nextBtn.disabled = true; document.getElementById("ggOn").textContent = "-"; document.getElementById("ggSd").textContent = "-"; document.getElementById("ggOff").textContent = "-"; text(); land(); }
   function answer(w) {
     if (answered) return; answered = true; played++; const truth = ROUNDS[round], ok = w === truth; if (ok) score++;
     choiceBtns.forEach(b => { const bw = +b.dataset.w; if (bw === truth) b.classList.add("right"); else if (bw === w) b.classList.add("wrong"); b.disabled = true; });
     readouts();
-    const why = { 0: "At w = 0 the condition is ignored and the samples fall on all three clusters in their learned proportions, about a third on roof.", 1: "At w = 1 the samples are plain conditional draws: all on roof, with the spread of the true class, so the cloud fills the blue ring.", 3: "At w = 3 every sample is on roof but the cloud is clearly tighter than the blue ring, roughly 0.6 of the true spread. The sampler is pushed toward the densest part of the class.", 10: "At w = 10 the cloud has collapsed to a dot near the class mean, about a quarter of the true spread. Every sample is a roof, and they are nearly the same roof." }[truth];
+    const st = stats(pts), nums = "This cloud: " + (100 * st.on).toFixed(0) + " percent on roof, spread " + (st.sd / 0.4).toFixed(2) + " of the class, centre " + st.off.toFixed(2) + " class widths off the class mean. ";
+    const why = nums + { 0: "At w = 0 the condition is ignored and the samples fall on all three clusters in their learned proportions, about a third on roof.", 1: "At w = 1 the samples are plain conditional draws: they fill the blue ring and sit centred on it.", 3: "At w = 3 the vegetation side of the cloud has been cut away, so it is narrower than the class and its centre has moved off the class mean. The density it comes from is p(x|c)^3 p(x)^(-2), with a mean and a width of its own.", 10: "At w = 10 the displacement is at its largest, around one class width, and a tenth of the samples have left the class altogether. The samples come from p(x|c)^10 p(x)^(-9), a density whose mean and width are its own." }[truth];
     stepEl.innerHTML = '<span class="k">round ' + (round + 1) + ' of ' + ROUNDS.length + '</span><div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Correct, ' : 'No, ') + 'this cloud was sampled at w = ' + truth + '.</div><p>' + why + '</p>' + (round === ROUNDS.length - 1 ? '<p>Final score ' + score + ' of ' + ROUNDS.length + '. Next round starts the set again with new draws.</p>' : '');
     nextBtn.disabled = false; draw();
   }
@@ -741,7 +749,7 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   flipBtn.addEventListener("click", flip);
   nextBtn.addEventListener("click", () => { if (mode !== "ident") return; round = (round + 1) % ROUNDS.length; if (round === 0) { score = 0; played = 0; } start(); });
   document.getElementById("ggReplay").addEventListener("click", land);
-  quiz(document.getElementById("ggQuiz"), { q: "At w = 10 every sample lands on the requested class and the cloud is far tighter than the class itself. What has been lost?", options: ["Nothing, every sample is correct", "Diversity: the sampler covers only the densest part of the class", "Accuracy: the samples drift away from the class"], answer: 1, why: "Guidance above one multiplies the conditional likelihood term, which sharpens the distribution around its mode. Image generators show this as saturated, repetitive outputs at high guidance scales; a map generator would produce one typical roof instead of the range of roofs in the data." });
+  quiz(document.getElementById("ggQuiz"), { q: "At w = 10 every sample lands on the requested class and the cloud centre has moved off the class mean. Which distribution do those samples come from?", options: ["p(x|c), the conditional the model was trained on", "p(x|c)^w p(x)^(1 - w), a tilted density with a mean and a width of its own", "p(x), the marginal over the three classes"], answer: 1, why: "The guided prediction eps_u + w (eps_c - eps_u) corresponds to the score of p(x|c)^w p(x)^(1 - w) at each noise level, so above w = 1 the sampler is biased with respect to p(x|c): the location and the width of what it draws are both those of the tilted density. Here the three classes barely overlap, so the width stays near the class width and the measured bias is the displacement in the readout. Image generators have classes that overlap heavily, and there the same tilt also narrows the samples within the class, which appears as saturated, repetitive outputs at high guidance scales." });
   window.addEventListener("themechange", draw);
   // warm the cache for the integers in the background so the first sweep is smooth
   (function warm(list) { if (!list.length) return; const w = list.shift(); cloud(w); readouts(); if (mode === "set") draw(); setTimeout(() => warm(list), 30); })([0, 1, 10]);
@@ -810,6 +818,8 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
     });
     src.clear("the right-hand side s(x) handed to the equation fit" + (round === 1 ? " (round 2: 20 % too large)" : "")); const sc = src.ctx, T2 = 40, B2 = src.H - 30, Ys = v => (T2 + B2) / 2 - (B2 - T2) / 2 * v / 40;
     sc.strokeStyle = css("--line"); sc.lineWidth = 1; sc.beginPath(); sc.moveTo(L, Ys(0)); sc.lineTo(R, Ys(0)); sc.stroke(); src.label("0", L - 8, Ys(0) + 4, css("--muted"), "right", 11); src.label("+40", L - 8, Ys(40) + 4, css("--muted"), "right", 11); src.label("-40", L - 8, Ys(-40) + 4, css("--muted"), "right", 11);
+    // s = d2h/dx2 with h and x in metres: the plotted numbers are in units of 1e-4 per metre
+    sc.save(); sc.translate(16, (T2 + B2) / 2); sc.rotate(-Math.PI / 2); src.label("s(x), 1e-4 m^-1", 0, 0, css("--muted"), "center", 12); sc.restore();
     const f = 1 + ROUNDS[round].err; sc.strokeStyle = css("--blue"); sc.lineWidth = 2; sc.beginPath(); us.forEach((u, i) => { const x = X(100 * u), y = Ys(f * sTrue(u)); if (i === 0) sc.moveTo(x, y); else sc.lineTo(x, y); }); sc.stroke();
     if (round === 1 && gate !== null) { sc.strokeStyle = css("--grey"); sc.lineWidth = 1.5; sc.setLineDash([6, 5]); sc.beginPath(); us.forEach((u, i) => { const x = X(100 * u), y = Ys(sTrue(u)); if (i === 0) sc.moveTo(x, y); else sc.lineTo(x, y); }); sc.stroke(); sc.setLineDash([]); src.label("dashed: the true source", R, T2 - 4, css("--muted"), "right", 12); }
     document.getElementById("rgPos").textContent = xg.slice().sort((p, q) => p - q).join(", ") + " m";
@@ -853,12 +863,14 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   const LG = [-6, -5, -4, -3, -2, -1, 0, 1, 2], ERR = [0, 5, 10, 15, 20, 30, 40], TARGET = 3, BUDGET = 6;
   const cells = ERR.map(e => LG.map(lg => solve(Math.pow(10, lg), e / 100)));
   const rowBest = cells.map(r => r.reduce((b, c, i) => c.rmse < r[b].rmse ? i : b, 0));
+  // a row holds more than one local low: one where the gauges lead the fit and one where the equation leads it
+  function dipList(i) { const r = cells[i], out = []; for (let j = 0; j < r.length; j++) { const lo = j > 0 ? r[j - 1].rmse : Infinity, hi = j < r.length - 1 ? r[j + 1].rmse : Infinity; if (r[j].rmse < lo && r[j].rmse < hi) out.push(j); } return out; }
   const mapB = new Board(document.getElementById("pmMap")), beam = new Board(document.getElementById("pmBeam"));
   const ox = 90, oy = 50, cw = (mapB.W - ox - 20) / LG.length, ch = (mapB.H - oy - 60) / ERR.length;
   let revealed = [], sel = null, used = 0, answered = false, all = false;
   const stepEl = document.getElementById("pmStep");
   const PROMPT = '<p class="prompt">Six probes. Where is the best lambda at 15 percent source error?</p>';
-  function text() { stepEl.innerHTML = PROMPT + '<span class="k">the challenge</span><p>Click cells to reveal the error of that fit. You have ' + BUDGET + ' probes.</p><p>Find the cell with the <b>lowest error in the 15 % row</b>, the source error you will actually face, and submit it. Think before each probe about which way the valley runs. The whole map and the valley floor appear after you submit.</p>'; }
+  function text() { stepEl.innerHTML = PROMPT + '<span class="k">the challenge</span><p>Click cells to reveal the error of that fit. You have ' + BUDGET + ' probes.</p><p>Find the cell with the <b>lowest error in the 15 % row</b>, the source error you will actually face, and submit it. A row can fall to a low, rise, and fall again. Spread the probes across the row before you settle on a neighbourhood. The whole map and the valley floor appear after you submit.</p>'; }
   function color(r) { return mix(css("--panel"), css("--blue"), Math.min(1, r / 0.7)); }
   function draw() {
     mapB.clear("error of the fit, by physics weight (columns) and source error (rows)"); const ctx = mapB.ctx;
@@ -887,6 +899,11 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
     beam.clear(sel ? "the fit at lambda = 1e" + LG[sel[1]] + ", source error " + ERR[sel[0]] + " %" : "probe a cell to see its fit");
     const bc = beam.ctx, L = 50, R = beam.W - 16, Tp = 40, B = beam.H - 40, X = v => L + (R - L) * v, Y = v => B - (B - Tp) * (v + 1) / 3;
     bc.strokeStyle = css("--line"); bc.beginPath(); bc.moveTo(L, Tp); bc.lineTo(L, B); bc.lineTo(R, B); bc.stroke();
+    // ticks on both axes, so the error figures in the map can be read against the size of the field
+    bc.font = "12px " + css("--mono"); bc.textAlign = "right"; bc.textBaseline = "middle";
+    for (let v = -1; v <= 2.01; v += 1) { bc.strokeStyle = css("--line"); bc.beginPath(); bc.moveTo(L - 5, Y(v)); bc.lineTo(L, Y(v)); bc.stroke(); bc.fillStyle = css("--muted"); bc.fillText(v.toFixed(0), L - 9, Y(v)); }
+    bc.textAlign = "center"; bc.textBaseline = "top"; [0, 1].forEach(v => { bc.strokeStyle = css("--line"); bc.beginPath(); bc.moveTo(X(v), B); bc.lineTo(X(v), B + 5); bc.stroke(); bc.fillStyle = css("--muted"); bc.fillText(v.toFixed(0), X(v), B + 9); });
+    bc.save(); bc.translate(14, (Tp + B) / 2); bc.rotate(-Math.PI / 2); beam.label("temperature rise", 0, 0, css("--muted"), "center", 12); bc.restore();
     beam.label("position along the member", (L + R) / 2, beam.H - 10, css("--muted"), "center", 12);
     bc.strokeStyle = css("--grey"); bc.lineWidth = 2; bc.setLineDash([6, 5]); bc.beginPath(); xs.forEach((x, i) => { if (i === 0) bc.moveTo(X(x), Y(uT[i])); else bc.lineTo(X(x), Y(uT[i])); }); bc.stroke(); bc.setLineDash([]);
     if (sel) { const u = cells[sel[0]][sel[1]].u; bc.strokeStyle = css("--red"); bc.lineWidth = 2.4; bc.beginPath(); xs.forEach((x, i) => { if (i === 0) bc.moveTo(X(x), Y(u[i])); else bc.lineTo(X(x), Y(u[i])); }); bc.stroke(); }
@@ -906,10 +923,12 @@ function drawPatch(ctx, img, x0, y0, size, lo, hi) {
   });
   document.getElementById("pmAnswer").addEventListener("click", () => {
     if (!sel || sel[0] !== TARGET) return; answered = true; const best = rowBest[TARGET], ok = sel[1] === best, near = Math.abs(sel[1] - best) === 1;
-    stepEl.innerHTML = PROMPT + '<span class="k">result</span><div class="ask ' + (ok ? 'ok' : (near ? '' : 'no')) + '">' + (ok ? 'Found it. ' : (near ? 'One cell off. ' : 'Not the valley floor. ')) + 'At 15 % source error the lowest error, ' + cells[TARGET][best].rmse.toFixed(3) + ', is at lambda = 1e' + LG[best] + '; your cell has ' + cells[TARGET][sel[1]].rmse.toFixed(3) + '.</div><p>The green line is the valley floor, the best lambda in each row: it sits at lambda = 100 while the source is nearly right and drops four orders of magnitude once the source error passes about 5 %. Press Reveal all to see every cell. The weight expresses how far you trust the equation against the gauges.</p>';
+    const dl = dipList(TARGET), onDip = dl.indexOf(sel[1]) >= 0;
+    const dipNote = dl.length > 1 ? ' The 15 % row holds ' + dl.length + ' local lows, at lambda = ' + dl.map(j => "1e" + LG[j]).join(" and ") + ': the first is where the three gauges lead the fit, the second is where the equation leads it, and the floor is the lower of the two.' : '';
+    stepEl.innerHTML = PROMPT + '<span class="k">result</span><div class="ask ' + (ok ? 'ok' : (near ? '' : 'no')) + '">' + (ok ? 'Found it. ' : (near ? 'One cell off. ' : (onDip ? 'That is the other low in this row. ' : 'Not the valley floor. '))) + 'At 15 % source error the lowest error, ' + cells[TARGET][best].rmse.toFixed(3) + ', is at lambda = 1e' + LG[best] + '; your cell has ' + cells[TARGET][sel[1]].rmse.toFixed(3) + '.</div><p>The green line is the valley floor, the best lambda in each row: it sits at lambda = 100 while the source is nearly right and drops four orders of magnitude once the source error passes about 5 %.' + dipNote + ' Press Reveal all to see every cell. The weight expresses how far you trust the equation against the gauges.</p>';
     draw();
   });
-  document.getElementById("pmAll").addEventListener("click", () => { all = true; draw(); if (!answered) stepEl.innerHTML = PROMPT + '<span class="k">the whole map</span><p>Green outlines mark the best lambda in each row. With a correct source term the physics can carry almost all the weight, lambda = 100. Once the source error passes about 5 % the valley floor jumps four orders of magnitude down to lambda = 0.01, and even there the error at 40 % is five times what a correct equation achieves.</p>'; });
+  document.getElementById("pmAll").addEventListener("click", () => { all = true; draw(); if (!answered) stepEl.innerHTML = PROMPT + '<span class="k">the whole map</span><p>Green outlines mark the best lambda in each row. With a correct source term the physics can carry almost all the weight, lambda = 100. Once the source error passes about 5 % the valley floor jumps four orders of magnitude down to lambda = 0.01, and even there the error at 40 % is five times what a correct equation achieves. Every row holds two local lows, one led by the gauges near lambda = 0.01 and one led by the equation at the right-hand end, and the jump is the moment the gauge-led low becomes the lower of the two.</p>'; });
   document.getElementById("pmReset").addEventListener("click", () => { revealed = []; sel = null; used = 0; answered = false; all = false; text(); draw(); });
   quiz(document.getElementById("pmQuiz"), { q: "As the error in the source term grows, the best physics weight", options: ["Falls: trust the equation less when the equation is wrong", "Rises: more physics is needed to overcome the bad data", "Stays the same: the weight only depends on the units"], answer: 0, why: "The PDE residual is a model of the world, and its weight expresses the variance you assign to that model's error. A wrong source means a larger model error, hence a smaller weight, exactly as a noisier instrument gets a smaller weight in least squares." });
   window.addEventListener("themechange", draw);
