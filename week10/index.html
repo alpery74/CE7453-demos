@@ -223,6 +223,7 @@ canvas.hit { cursor: pointer; }
   </div>
   <div class="caption">
     <p>The red model multiplies the 16 concatenated coordinates by a fixed matrix, so it reads the order you typed the points in. The blue model applies one shared encoder to every point and takes the maximum over points. Order is bookkeeping and geometry is data; a model for scans and graphs must answer to the second and ignore the first, which is the constraint on slides 6 and 10.</p>
+    <p>Two properties carry that constraint. A per-point or per-node output is equivariant: renumber the input and the same values come back in the new numbering. An answer about the whole set is invariant, and a sum, mean or max over the points is the step that makes it so. The blue model's eight per-point encodings are equivariant, and the max pool is where equivariance becomes invariance. A message passing layer is equivariant in the same way, so a per-junction head reading its output is legitimate; invariance is required once the question is about the whole network.</p>
   </div>
 </section>
 
@@ -257,7 +258,7 @@ canvas.hit { cursor: pointer; }
     </div>
   </div>
   <div class="caption">
-    <p>Evaluating a fixed policy solves V = r + gamma P V, one linear system. The reveal runs value iteration, V(s) = max over actions of expected reward plus gamma V(next), one sweep at a time, and the right panel shows the largest change per sweep shrinking at rate gamma. Reading the policy off the values is the last line of slide 16.</p>
+    <p>Evaluating a fixed policy solves V = r + gamma P V, one linear system. The reveal runs value iteration, V(s) = max over actions of the expected value of r(s') + gamma V(s') over the successor cells s', one sweep at a time. The expectation covers the reward and the successor value together, across the three outcomes a move has under the 10 percent slip, and V is zero at the pump station and at the spillway cells. The right panel shows the largest change per sweep shrinking at rate gamma. Reading the policy off the values is the last line of slide 16.</p>
   </div>
 </section>
 
@@ -269,7 +270,7 @@ canvas.hit { cursor: pointer; }
     <div class="plot"><canvas id="qlRace" class="hit" width="1200" height="560"></canvas></div>
     <div class="side">
       <div class="panel step" id="qlStep">
-        <p><b id="qlPrompt">Epsilon 0.30 against 0: which crew's greedy return is higher after 150 episodes?</b></p>
+        <p><b id="qlPrompt">Epsilon 0.30 against 0: which crew's greedy return is higher after the same number of learning steps?</b></p>
         <p>Place the bet by clicking a crew's grid, or the tie flag under the coin. Start unlocks after the bet.</p>
         <dl class="readout">
           <dt>your bet</dt><dd id="qlBet">-</dd>
@@ -279,7 +280,7 @@ canvas.hit { cursor: pointer; }
       </div>
       <div class="panel">
         <dl class="readout">
-          <dt>episodes run</dt><dd id="qlN">0 / 150</dd>
+          <dt>learning steps run, each crew</dt><dd id="qlN">0 / 3600</dd>
           <dt>left, greedy policy return</dt><dd id="qlL">-</dd>
           <dt>right, greedy policy return</dt><dd id="qlR">-</dd>
           <dt>cells visited, left / right</dt><dd id="qlV">-</dd>
@@ -290,7 +291,7 @@ canvas.hit { cursor: pointer; }
     </div>
   </div>
   <div class="caption">
-    <p>Both crews use Q(s, a) += alpha (r + gamma max Q(s', .) - Q(s, a)), the one line on slide 17, with the same learning rate and discount. The only difference is how they behave while learning. The return quoted is for the greedy policy each crew would follow if learning stopped now, averaged over 100 runs.</p>
+    <p>Both crews use Q(s, a) += alpha (r + gamma max Q(s', .) - Q(s, a)), the one line on slide 17, with the same learning rate and discount. The max over next actions in that target makes Q-learning off-policy: a crew behaves one way and learns the values of the greedy policy. That is what lets the right crew take random moves a fraction of the time and still come away with the greedy policy for the site. The two crews differ in how they behave while learning. The return quoted is for the greedy policy each crew would follow if learning stopped now, averaged over 100 runs. Each crew is advanced the same number of learning steps, 3600, and a crew starts a fresh episode whenever it reaches the pump station, enters a spillway cell or runs 100 steps.</p>
   </div>
 </section>
 
@@ -329,6 +330,11 @@ function quiz(el, spec) {
   let source = 0, K = 0, xs = [], anim = null, phase = 1, highlight = null, picked = null, free = false, stepIdx = 0, answered = false;
   function series() { let x = new Float64Array(N); x[source] = 1; xs = [x]; for (let k = 1; k <= 12; k++) { x = hop(x); xs.push(x); } }
   function std(x) { const m = x.reduce((s, v) => s + v, 0) / N; return Math.sqrt(x.reduce((s, v) => s + (v - m) ** 2, 0) / N); }
+  function argmaxOf(v) { let b = 0; for (let i = 1; i < v.length; i++) if (v[i] > v[b]) b = i; return b; }
+  // the hop at which some other junction overtakes the source, and the profile the hops converge to
+  function leadSwitch() { for (let k = 1; k <= 12; k++) if (argmaxOf(xs[k]) !== source) return k; return null; }
+  const sdeg = deg.map(d => Math.sqrt(d)), snorm = Math.sqrt(sdeg.reduce((s, v) => s + v * v, 0)), unit = sdeg.map(v => v / snorm);
+  function limitProfile() { return unit.map(v => unit[source] * v); }
   function draw() {
     const x = xs[K], prev = xs[Math.max(0, K - 1)], vmax = Math.max.apply(null, x);
     document.getElementById("mpK").textContent = K;
@@ -354,10 +360,10 @@ function quiz(el, spec) {
   const stepEl = document.getElementById("mpStep");
   const steps = [
     { html: '<span class="k">step 1 of 5</span><p>A reading of 1 appears at junction J1. Every other junction reads 0. Nothing has been passed yet; this is the input to the first layer.</p><p>Press Next to apply one layer.</p>', enter: () => { highlight = null; animateTo(0); } },
-    { html: '<span class="k">step 2 of 5</span><p>One layer. Every junction replaces its value with a weighted sum over itself and the junctions it shares a pipe with. J1 has two pipes, so after one hop only J2 and J6 hear it, and J1 itself keeps part of the reading.</p><p>Notice that J2 and J6 received different amounts: the weights divide by the square root of each junction\'s degree.</p>', enter: () => { highlight = null; animateTo(1); } },
+    { html: '<span class="k">step 2 of 5</span><p>One layer. Every junction replaces its value with a weighted sum over itself and the junctions it shares a pipe with. J1 has two pipes, so after one hop only J2 and J6 hear it, and J1 itself keeps part of the reading.</p><p>J2 and J6 receive the same amount, 0.29, because both have three pipes. The weight on a pipe divides by the square root of the degree at each end. A neighbour with more pipes takes a smaller share of the reading.</p>', enter: () => { highlight = null; animateTo(1); } },
     { html: '<span class="k">step 3 of 5</span><p><b>After three hops, which junction holds the largest value? Click it.</b></p><p>Two layers reach the neighbours of neighbours. The receptive field is a graph distance. Next stays locked until you have picked a junction; your pick is outlined in orange.</p>', enter: () => { highlight = null; picked = null; answered = false; animateTo(2); } },
-    { html: '', enter: () => { animateTo(3, () => { const x = xs[3]; let best = 0; for (let i = 1; i < N; i++) if (x[i] > x[best]) best = i; highlight = best; const ok = picked === best; stepEl.innerHTML = '<span class="k">step 4 of 5</span><div class="ask ' + (picked === null ? '' : (ok ? 'ok' : 'no')) + '">' + (picked === null ? 'You did not pick a junction. ' : (ok ? 'Correct: ' : 'Not quite: ')) + 'after three hops the largest value sits at <b>J' + (best + 1) + '</b> (outlined in green), with ' + x[best].toFixed(2) + '.' + (picked !== null && !ok ? ' You picked J' + (picked + 1) + ', which holds ' + x[picked].toFixed(2) + '.' : '') + '</div><p>The source keeps part of its own reading at every hop, and junctions with few pipes dilute less, so the largest value after a few hops is usually the source or a low-degree neighbour, and never the far junction with the most pipes.</p>'; draw(); }); } },
-    { html: '<span class="k">step 5 of 5</span><p>Twelve layers. Watch the fills converge: every junction drifts toward the same value and the spread readout falls toward zero. That is oversmoothing, slide 8.</p><p id="mpOverTxt" class="ask" hidden></p><p>Two or three layers is usually what a utility network needs. The number of layers is a statement about how far a cause is allowed to travel.</p>', enter: () => { highlight = null; animateTo(12, () => { const el = document.getElementById("mpOverTxt"); if (!el) return; const s3 = std(xs[3]), s12 = std(xs[12]), lo = Math.min.apply(null, xs[12]), hi = Math.max.apply(null, xs[12]); el.hidden = false; el.innerHTML = 'Spread of the junction values: <b>' + s3.toFixed(3) + '</b> after three hops, <b>' + s12.toFixed(3) + '</b> after twelve. All twelve values now sit between ' + lo.toFixed(2) + ' and ' + hi.toFixed(2) + ', so a reader of the final layer can barely tell which junction the reading came from.'; }); } },
+    { html: '', enter: () => { animateTo(3, () => { const x = xs[3]; const best = argmaxOf(x); highlight = best; const ok = picked === best; const sw = leadSwitch(), fin = argmaxOf(xs[12]); const tail = sw === null ? '<p>The source keeps part of its own reading at every hop, and junctions with few pipes dilute less, so the largest value stays at the source for all twelve hops.</p>' : '<p>The source keeps part of its own reading at every hop, and junctions with few pipes dilute less, so the largest value stays at the source through hop ' + (sw - 1) + '. From hop ' + sw + ' the lead moves outward, and after twelve hops it sits at J' + (fin + 1) + ', the junction with ' + (deg[fin] - 1) + ' pipes.</p>'; stepEl.innerHTML = '<span class="k">step 4 of 5</span><div class="ask ' + (picked === null ? '' : (ok ? 'ok' : 'no')) + '">' + (picked === null ? 'You did not pick a junction. ' : (ok ? 'Correct: ' : 'Not quite: ')) + 'after three hops the largest value sits at <b>J' + (best + 1) + '</b> (outlined in green), with ' + x[best].toFixed(2) + '.' + (picked !== null && !ok ? ' You picked J' + (picked + 1) + ', which holds ' + x[picked].toFixed(2) + '.' : '') + '</div>' + tail; draw(); }); } },
+    { html: '<span class="k">step 5 of 5</span><p>Twelve layers. Watch the fills settle: the junction values stop depending on where the reading came from, and what is left is a profile set by the pipe counts. That is oversmoothing, slide 8.</p><p id="mpOverTxt" class="ask" hidden></p><p>Two or three layers is usually what a utility network needs. The number of layers is a statement about how far a cause is allowed to travel.</p>', enter: () => { highlight = null; animateTo(12, () => { const el = document.getElementById("mpOverTxt"); if (!el) return; const s3 = std(xs[3]), s12 = std(xs[12]), lo = Math.min.apply(null, xs[12]), hi = Math.max.apply(null, xs[12]), fin = argmaxOf(xs[12]), sLim = std(limitProfile()); el.hidden = false; el.innerHTML = 'Spread of the junction values: <b>' + s3.toFixed(3) + '</b> after three hops, <b>' + s12.toFixed(3) + '</b> after twelve. All twelve values now sit between ' + lo.toFixed(2) + ' and ' + hi.toFixed(2) + ', and the largest is at J' + (fin + 1) + ', the junction with ' + (deg[fin] - 1) + ' pipes. Further hops drive the values toward a profile proportional to the square root of each junction\'s degree, where the spread holds at ' + sLim.toFixed(3) + '. Every starting junction gives that same shape, so a reader of the final layer can recover the pipe counts alone.'; }); } },
   ];
   function showStep(i) { stepIdx = Math.max(0, Math.min(steps.length - 1, i)); free = false; if (steps[stepIdx].html) stepEl.innerHTML = steps[stepIdx].html; steps[stepIdx].enter(); document.getElementById("mpNext").disabled = stepIdx === steps.length - 1 || (stepIdx === 2 && picked === null); document.getElementById("mpBack").disabled = stepIdx === 0; }
   board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); let best = -1, bd = 1e9; for (let i = 0; i < N; i++) { const d = Math.hypot(mx - X(i), my - Y(i)); if (d < bd) { bd = d; best = i; } } if (bd > 30) return; if (free) { source = best; series(); K = 0; highlight = null; draw(); } else if (stepIdx === 2) { picked = best; document.getElementById("mpNext").disabled = false; draw(); } });
@@ -414,30 +420,47 @@ function quiz(el, spec) {
     const done2 = dP >= 0.05; let t2, cls2 = "ask", note = "";
     if (done2) { t2 = "done, change " + dP.toFixed(3) + (moved ? ", after a point moved" : ""); cls2 += " ok"; }
     else if (!c1Ever || attempts < 2) { t2 = "not yet"; }
-    else { t2 = "change " + dP.toFixed(3) + " after " + attempts + " reorderings"; cls2 += " no"; note = "No ordering can. The blue model takes a maximum over the set of points, and a maximum has no memory of which point came first. Drag a point in the plot instead; geometry is the only thing it answers to."; }
+    else { t2 = "change " + dP.toFixed(3) + " after " + attempts + " reorderings"; cls2 += " no"; note = "No ordering can. The blue model takes a maximum over the set of points, and a maximum has no memory of which point came first. Drag a point in the plot instead; geometry is the only thing it answers to. The three pooled numbers are invariant to the ordering; the eight per-point encodings under them are equivariant, carrying the renumbering through to their own order."; }
     b2.textContent = t2; b2.className = "badge" + (done2 ? " done" : ""); c2.className = cls2;
     const noteEl = c2.querySelector("small"); if (note && !noteEl) { const sm = document.createElement("small"); sm.textContent = note; c2.appendChild(document.createElement("br")); c2.appendChild(sm); } else if (!note && noteEl) { noteEl.previousSibling.remove(); noteEl.remove(); }
     board.clear("the scan, numbered in file order (drag a point to move it)");
     const ctx = board.ctx; ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(PX(0), PY(1), PX(1) - PX(0), PY(0) - PY(1));
     order.forEach((i, rank) => { ctx.beginPath(); ctx.arc(PX(pts[i][0]), PY(pts[i][1]), 10, 0, 2 * Math.PI); ctx.fillStyle = PAL[i]; ctx.fill(); ctx.fillStyle = css("--ink"); ctx.font = "13px " + css("--mono"); ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText("line " + (rank + 1), PX(pts[i][0]) + 15, PY(pts[i][1]) - 2); });
-    bars.clear("the two outputs");
-    const bx = bars.ctx, y0 = bars.H / 2 + 20, sc = 90;
-    bx.strokeStyle = css("--line"); bx.beginPath(); bx.moveTo(30, y0); bx.lineTo(bars.W - 20, y0); bx.stroke();
-    for (let k = 0; k < 3; k++) {
-      bx.fillStyle = css("--red"); bx.fillRect(50 + k * 40, Math.min(y0, y0 - c[k] * sc), 28, Math.abs(c[k] * sc));
-      bx.fillStyle = css("--blue"); bx.fillRect(230 + k * 40, Math.min(y0, y0 - p[k] * sc), 28, Math.abs(p[k] * sc));
-      bx.strokeStyle = css("--grey"); bx.setLineDash([3, 3]); bx.beginPath(); bx.moveTo(50 + k * 40, y0 - c0[k] * sc); bx.lineTo(78 + k * 40, y0 - c0[k] * sc); bx.moveTo(230 + k * 40, y0 - p0[k] * sc); bx.lineTo(258 + k * 40, y0 - p0[k] * sc); bx.stroke(); bx.setLineDash([]);
+    bars.clear("the two outputs, each on its own scale");
+    const bx = bars.ctx;
+    // one stacked panel per model, each scaled to its own range, with the value axis labelled
+    function outPanel(title, color, vals, refs, top, bot) {
+      let m = 0; for (let k = 0; k < 3; k++) m = Math.max(m, Math.abs(vals[k]), Math.abs(refs[k]));
+      m = Math.max(m, 0.01) * 1.08;
+      const mid = (top + bot) / 2, half = (bot - top) / 2 - 22, AX = 58;
+      bars.label(title, 14, top - 10, color, "left", 13);
+      bx.strokeStyle = css("--line"); bx.lineWidth = 1;
+      bx.beginPath(); bx.moveTo(AX, mid - half); bx.lineTo(AX, mid + half); bx.stroke();
+      bx.beginPath(); bx.moveTo(AX, mid); bx.lineTo(bars.W - 12, mid); bx.stroke();
+      bars.label("+" + m.toFixed(2), AX - 6, mid - half + 4, css("--muted"), "right", 11, true);
+      bars.label("0", AX - 6, mid + 4, css("--muted"), "right", 11, true);
+      bars.label("-" + m.toFixed(2), AX - 6, mid + half + 4, css("--muted"), "right", 11, true);
+      for (let k = 0; k < 3; k++) {
+        const x = 80 + k * 90, w = 54, hv = vals[k] / m * half, hr = refs[k] / m * half;
+        bx.fillStyle = color; bx.fillRect(x, Math.min(mid, mid - hv), w, Math.abs(hv));
+        bx.strokeStyle = css("--grey"); bx.setLineDash([3, 3]); bx.beginPath(); bx.moveTo(x - 4, mid - hr); bx.lineTo(x + w + 4, mid - hr); bx.stroke(); bx.setLineDash([]);
+        // the value sits beyond the bar tip, clear of the dashed original
+        let ly = hv >= 0 ? mid - hv - 6 : mid - hv + 16;
+        if (Math.abs(ly - (mid - hr)) < 11) ly += hv >= 0 ? -12 : 12;
+        ly = Math.max(top + 11, Math.min(bot - 2, ly));
+        bars.label(vals[k].toFixed(2), x + w / 2, ly, css("--ink"), "center", 12, true);
+      }
     }
-    bx.fillStyle = css("--red"); bx.font = "13px " + css("--sans"); bx.textAlign = "left"; bx.textBaseline = "alphabetic"; bx.fillText("concatenate, then linear", 50, 50);
-    bx.fillStyle = css("--blue"); bx.fillText("shared encoder, max pool", 230, 50);
-    bx.fillStyle = css("--muted"); bx.fillText("dashes: the original outputs", 50, 70);
+    outPanel("concatenate, then linear", css("--red"), c, c0, 54, 250);
+    outPanel("shared encoder, max pool", css("--blue"), p, p0, 300, 470);
+    bars.label("dashes: the original outputs", 14, 492, css("--muted"), "left", 11);
   }
   let dragIdx = -1;
   board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); dragIdx = -1; let bd = 1e9; pts.forEach((p, i) => { const d = Math.hypot(mx - PX(p[0]), my - PY(p[1])); if (d < bd) { bd = d; dragIdx = i; } }); if (bd > 18) dragIdx = -1; });
   window.addEventListener("pointermove", ev => { if (dragIdx < 0) return; const [mx, my] = board.pos(ev); pts[dragIdx] = [Math.min(1, Math.max(0, (mx - 50) / (board.W - 100))), Math.min(1, Math.max(0, (board.H - 40 - my) / (board.H - 90)))]; moved = true; render(); });
   window.addEventListener("pointerup", () => { dragIdx = -1; });
   document.getElementById("pmReset").addEventListener("click", reset);
-  quiz(document.getElementById("pmQuiz"), { q: "Which of these makes a model blind to the order of its inputs?", options: ["Concatenate the inputs and apply a matrix", "Sum, mean, or max over the inputs after a shared encoder", "Sort the inputs by their first coordinate, then concatenate"], answer: 1, why: "A symmetric function over the set gives the same answer for every ordering. Sorting is a trick that breaks when two points tie or move past each other, and concatenation keeps the order as a feature." });
+  quiz(document.getElementById("pmQuiz"), { q: "Which of these gives an output that is invariant to the order of the inputs and continuous in the point positions?", options: ["Concatenate the inputs and apply a matrix", "Sum, mean, or max over the inputs after a shared encoder", "Sort the inputs by their first coordinate, then concatenate"], answer: 1, why: "A symmetric function over the set gives the same answer for every ordering, and it moves continuously as a point moves. Sorting is also invariant to the ordering, and its output jumps the moment two points swap rank, so what it costs is continuity. Concatenation with a fixed matrix keeps the ordering as a feature." });
   window.addEventListener("themechange", render);
   reset();
 })();
@@ -559,9 +582,9 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
 (function qlearn() {
   const board = new Board(document.getElementById("qlRace"));
   const s = Math.min((board.W / 2 - 60) / G, (board.H - 110) / G), oy = 50, oxL = board.W / 4 - s * G / 2, oxR = 3 * board.W / 4 - s * G / 2;
-  const ALPHA = 0.1, GAMMA = 0.95, EPIS = 150;
+  const ALPHA = 0.1, GAMMA = 0.95, STEPS = 3600;
   let epsV = 0.3, dragCoin = false; const se = { get value() { return epsV; } }, COIN = [600, 250, 52];
-  let seed = 1, agents = [], running = false, bet = null, timer = null, episodes = 0;
+  let seed = 1, agents = [], running = false, bet = null, timer = null, stepsRun = 0;
   // replay of each crew's final greedy path: a dot walks the grid after the race, one cell per frame
   let replay = null, replayTimer = null;
   function greedyPath(ag) { const path = [[START[0], START[1]]], seen = new Set([START[1] * G + START[0]]); let x = START[0], y = START[1], end = "loops"; for (let t = 0; t < 40; t++) { const q = ag.Q[y][x], a = q.indexOf(Math.max.apply(null, q)); const [nx, ny] = move(x, y, a); path.push([nx, ny]); x = nx; y = ny; if (isGoal(x, y)) { end = "pump in " + (path.length - 1) + " moves"; break; } if (isHaz(x, y)) { end = "spillway"; break; } const key = y * G + x, prev = path[path.length - 2], wall = nx === prev[0] && ny === prev[1]; if (wall || seen.has(key)) { end = wall ? "stuck at a wall" : "loops"; break; } seen.add(key); } return { cells: path, end }; }
@@ -571,11 +594,13 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
   function envStep(x, y, a, rng) { const u = rng(), o = outcomes(x, y, a); let acc = 0; for (const [p, nxy] of o) { acc += p; if (u < acc) return nxy; } return o[0][1]; }
   function oneStep(ag) { const a = ag.rng() < ag.eps ? Math.floor(ag.rng() * 4) : argmax(ag.Q[ag.y][ag.x], ag.rng); const [nx, ny] = envStep(ag.x, ag.y, a, ag.rng), r = reward(nx, ny), done = terminal(nx, ny); ag.visits[ag.y][ag.x]++; const target = r + (done ? 0 : GAMMA * Math.max.apply(null, ag.Q[ny][nx])); ag.Q[ag.y][ag.x][a] += ALPHA * (target - ag.Q[ag.y][ag.x][a]); ag.trail.push([ag.x, ag.y]); if (ag.trail.length > 12) ag.trail.shift(); ag.x = nx; ag.y = ny; ag.steps++; if (done || ag.steps >= 100) { ag.x = START[0]; ag.y = START[1]; ag.steps = 0; ag.trail = []; return true; } return false; }
   function greedyReturn(ag) { const rng = mulberry32(777); let tot = 0; for (let k = 0; k < 100; k++) { let x = START[0], y = START[1], ret = 0, d = 1; for (let t = 0; t < 100; t++) { const a = argmax(ag.Q[y][x], rng); const [nx, ny] = envStep(x, y, a, rng); ret += d * reward(nx, ny); d *= GAMMA; x = nx; y = ny; if (terminal(x, y)) break; } tot += ret; } return tot / 100; }
-  function reset() { if (timer) clearTimeout(timer); if (replayTimer) clearTimeout(replayTimer); replay = null; running = false; episodes = 0; agents = [mkAgent(0, 0), mkAgent(+se.value, 1000)]; document.getElementById("qlVerdict").hidden = true; document.getElementById("qlStart").textContent = "Start the race"; document.getElementById("qlReplay").disabled = true; draw(); }
+  function reset() { if (timer) clearTimeout(timer); if (replayTimer) clearTimeout(replayTimer); replay = null; running = false; stepsRun = 0; agents = [mkAgent(0, 0), mkAgent(+se.value, 1000)]; document.getElementById("qlVerdict").hidden = true; document.getElementById("qlStart").textContent = "Start the race"; document.getElementById("qlReplay").disabled = true; draw(); }
   function draw() {
     board.clear(""); const ctx = board.ctx;
+    // one visit scale across both crews, so the two grids can be read against each other
+    let vmax = 1; agents.forEach(ag => { for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) vmax = Math.max(vmax, ag.visits[y][x]); });
     agents.forEach((ag, i) => {
-      const ox = i === 0 ? oxL : oxR; let vmax = 1; for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) vmax = Math.max(vmax, ag.visits[y][x]);
+      const ox = i === 0 ? oxL : oxR;
       ctx.fillStyle = css("--ink"); ctx.font = "500 14px " + css("--sans"); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(i === 0 ? "left crew: always greedy (epsilon 0)" : "right crew: explores (epsilon " + ag.eps.toFixed(2) + ")", ox, oy - 24);
       drawGrid(ctx, ox, oy, s, (x, y) => isHaz(x, y) ? mix(css("--panel"), css("--red"), 0.18) : isGoal(x, y) ? mix(css("--panel"), css("--blue"), 0.25) : mix(css("--panel"), css("--orange"), 0.75 * Math.log1p(ag.visits[y][x]) / Math.log1p(vmax)),
         (x, y) => (terminal(x, y) || ag.visits[y][x] === 0) ? null : { dir: ag.Q[y][x].indexOf(Math.max.apply(null, ag.Q[y][x])), color: css("--ink"), thin: true }, null, null);
@@ -598,10 +623,20 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
     ctx.font = "500 12px " + css("--sans"); ctx.fillStyle = bet === "T" ? css("--blue") : css("--muted"); ctx.fillText(bet === "T" ? "your bet: a tie" : "click here to bet on a tie", cxC, cyC + rC + 100);
     ctx.fillStyle = bet === "L" ? css("--blue") : css("--muted"); ctx.fillText(bet === "L" ? "your bet: the greedy crew" : "click this grid to bet on it", oxL + s * G / 2, oy + s * G + 22);
     ctx.fillStyle = bet === "R" ? css("--blue") : css("--muted"); ctx.fillText(bet === "R" ? "your bet: the exploring crew" : "click this grid to bet on it", oxR + s * G / 2, oy + s * G + 22);
+    // key for the cell fill, shared by both grids
+    const kx = cxC - 62, kw = 124, ky = cyC + rC + 168;
+    ctx.fillStyle = css("--muted"); ctx.font = "11px " + css("--sans"); ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.fillText("fill: visits", cxC, ky - 18); ctx.fillText("per cell", cxC, ky - 4);
+    for (let i = 0; i < kw; i++) { const v = vmax * i / (kw - 1); ctx.fillStyle = mix(css("--panel"), css("--orange"), 0.75 * Math.log1p(v) / Math.log1p(vmax)); ctx.fillRect(kx + i, ky + 4, 1, 14); }
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.strokeRect(kx, ky + 4, kw, 14);
+    ctx.fillStyle = css("--muted"); ctx.font = "10px " + css("--mono");
+    ctx.textAlign = "left"; ctx.fillText("0", kx, ky + 32);
+    ctx.textAlign = "right"; ctx.fillText(String(vmax), kx + kw, ky + 32);
+    ctx.textAlign = "center"; ctx.font = "11px " + css("--sans"); ctx.fillText("same scale", cxC, ky + 50); ctx.fillText("on both grids", cxC, ky + 64);
     document.getElementById("qlBet").textContent = bet === null ? "-" : (bet === "L" ? "left, greedy" : (bet === "R" ? "right, exploring" : "about the same"));
-    document.getElementById("qlPrompt").textContent = "Epsilon " + epsV.toFixed(2) + " against 0: which crew's greedy return is higher after 150 episodes?";
+    document.getElementById("qlPrompt").textContent = "Epsilon " + epsV.toFixed(2) + " against 0: which crew's greedy return is higher after the same number of learning steps?";
     document.getElementById("qlStart").disabled = bet === null || running;
-    document.getElementById("qlN").textContent = episodes + " / " + EPIS;
+    document.getElementById("qlN").textContent = stepsRun + " / " + STEPS;
     document.getElementById("qlL").textContent = agents[0].greedy === null ? "-" : agents[0].greedy.toFixed(3);
     document.getElementById("qlR").textContent = agents[1].greedy === null ? "-" : agents[1].greedy.toFixed(3);
     const cnt = ag => { let n = 0; for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) if (ag.visits[y][x] > 0) n++; return n; };
@@ -609,12 +644,12 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
   }
   function tick() {
     if (!running) return;
-    let finished = 0;
-    for (let k = 0; k < 24; k++) { agents.forEach((ag, i) => { if (oneStep(ag) && i === 0) finished++; }); }
-    episodes += finished; // count the left crew's episodes as the clock; the right crew runs the same number of steps
-    if (episodes % 10 < finished || episodes >= EPIS) agents.forEach(ag => ag.greedy = greedyReturn(ag));
+    // the clock is the learning steps each crew takes; both crews are advanced together, 24 steps per frame
+    for (let k = 0; k < 24; k++) { agents.forEach(ag => oneStep(ag)); }
+    stepsRun += 24;
+    if (stepsRun % 240 === 0 || stepsRun >= STEPS) agents.forEach(ag => ag.greedy = greedyReturn(ag));
     draw();
-    if (episodes >= EPIS) { running = false; verdict(); return; }
+    if (stepsRun >= STEPS) { running = false; verdict(); return; }
     timer = setTimeout(tick, 30);
   }
   function verdict() {
@@ -624,7 +659,7 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
     const text = winner === "T" ? "A near tie this time (" + l.toFixed(2) + " against " + r.toFixed(2) + ")." : (winner === "L" ? "The greedy crew won this run (" + l.toFixed(2) + " against " + r.toFixed(2) + ")." : "The exploring crew won (" + r.toFixed(2) + " against " + l.toFixed(2) + ").");
     const ok = bet === null ? null : bet === winner;
     v.className = "ask " + (ok === null ? "" : (ok ? "ok" : "no"));
-    v.innerHTML = (bet === null ? "You did not place a bet. " : (ok ? "Your bet was right. " : "Your bet was wrong. ")) + text + " The green dot now walks each crew's final greedy path. Run it again with New site: the greedy crew locks onto whichever route it found first, so over many sites it loses on average and wins on the lucky ones. Exploration pays in return during learning for a better policy afterwards, which is the trade on slide 17.";
+    v.innerHTML = (bet === null ? "You did not place a bet. " : (ok ? "Your bet was right. " : "Your bet was wrong. ")) + text + " The green dot now walks each crew's final greedy path. Run it again with New site: the greedy crew locks onto whichever route it found first, so over many sites it loses on average and wins on the lucky ones. Q-learning is off-policy, which is what allows the right crew's random moves: the target takes the max over next actions, so the crew explores and the values it learns are those of the greedy policy. Exploration pays in return during learning for a better policy afterwards, which is the trade on slide 17.";
     document.getElementById("qlStart").textContent = "Race again";
     document.getElementById("qlReplay").disabled = false;
     startReplay();
@@ -633,8 +668,8 @@ function greedyFrom(V, gamma) { const pol = []; for (let y = 0; y < G; y++) { po
   function moveCoin(mx, my) { const [cxC, cyC] = COIN; let a = Math.atan2(my - cyC, mx - cxC) + Math.PI / 2; if (a < 0) a += 2 * Math.PI; epsV = Math.max(0.02, Math.min(0.5, a / (2 * Math.PI))); document.getElementById("qlEpsOut").textContent = epsV.toFixed(2); if (!running) { agents[1].eps = epsV; } draw(); }
   window.addEventListener("pointermove", ev => { if (!dragCoin) return; const [mx, my] = board.pos(ev); moveCoin(mx, my); });
   window.addEventListener("pointerup", () => { dragCoin = false; });
-  document.getElementById("qlStart").addEventListener("click", () => { if (running || bet === null) return; if (episodes >= EPIS) { seed += 1; reset(); } running = true; agents[1].eps = +se.value; document.getElementById("qlStart").textContent = "Racing..."; tick(); });
-  document.getElementById("qlReplay").addEventListener("click", () => { if (!running && episodes >= EPIS) startReplay(); });
+  document.getElementById("qlStart").addEventListener("click", () => { if (running || bet === null) return; if (stepsRun >= STEPS) { seed += 1; reset(); } running = true; agents[1].eps = +se.value; document.getElementById("qlStart").textContent = "Racing..."; tick(); });
+  document.getElementById("qlReplay").addEventListener("click", () => { if (!running && stepsRun >= STEPS) startReplay(); });
   // New site clears the bet as well, so the gate has to be passed again
   document.getElementById("qlReset").addEventListener("click", () => { seed += 1; bet = null; reset(); });
   quiz(document.getElementById("qlQuiz"), { q: "Q-learning is called off-policy because", options: ["It never explores", "Its update target uses the best next action, whatever action the crew actually took", "It needs a model of the transitions"], answer: 1, why: "The target r + gamma max Q(s', .) scores the greedy continuation, so the crew can behave with exploration and still learn the greedy policy. Convergence needs every state and action to keep being visited, which is what the exploration buys." });
