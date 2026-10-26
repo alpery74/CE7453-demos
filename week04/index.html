@@ -221,9 +221,9 @@ canvas.grab { cursor: grab; }
         <h3>activation</h3>
         <div class="btns"><button id="rlSig" aria-pressed="true">sigmoid</button><button id="rlTanh" aria-pressed="false">tanh</button><button id="rlRelu" aria-pressed="false">ReLU</button><button id="rlLeaky" aria-pressed="false">leaky ReLU</button></div>
         <div class="opt" style="margin-top:10px">
-          <label>initial weight gain, as a multiple of the Xavier spread<output id="rlGainOut">1.00</output></label>
+          <label>initial weight gain, as a multiple of the 1/n spread<output id="rlGainOut">1.00</output></label>
           <input type="range" id="rlGain" min="-1" max="0.7" step="0.01" value="0">
-          <span style="font-size:12.5px;color:var(--muted)">0 is all zeros; 1 is Xavier, 1/n; 1.41 is He, 2/n</span>
+          <span style="font-size:12.5px;color:var(--muted)">0 is all zeros; 1 is variance 1/n, the LeCun rule, which here is also Glorot's 2/(n_in + n_out) because every station is 64 wide; 1.41 is He, 2/n</span>
         </div>
         <div class="btns" style="margin-top:10px"><button id="rlSkip" aria-pressed="false">skip connections</button><button id="rlZero">all zeros</button><button id="rlRedraw">redraw weights</button></div>
         <dl class="readout" style="margin-top:10px">
@@ -237,7 +237,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Each station multiplies the spread by a factor and depth compounds it, the same bookkeeping as error propagation along a traverse. A sigmoid's derivative peaks at a quarter, so the gradient loses most of its spread at every station on the way back, slide 5; no gain fixes that, because a large gain saturates the units and the derivative goes to zero anyway. With ReLU, half the units are off, so Xavier's 1/n halves the signal spread at every station and He's 2/n restores it, slide 6. At gain zero every unit in a station computes the same thing and the gradients are identical, the symmetry that never breaks. A skip connection adds the station's input to its output, so the gradient has an identity path home whatever the activation does, slide 17.</p>
+    <p>Each station multiplies the spread by a factor and depth compounds it, the same bookkeeping as error propagation along a traverse. A sigmoid's derivative peaks at a quarter, so the gradient loses most of its spread at every station on the way back, slide 5; no gain fixes that, because a large gain saturates the units and the derivative goes to zero anyway. With ReLU, half the units are off, so a weight variance of 1/n halves the signal variance at every station and the spread arriving falls by the square root of two; He's 2/n restores both, slide 6. At gain zero every unit in a station computes the same thing and the gradients are identical, the symmetry that never breaks. A skip connection adds the station's input to its output, so the gradient has an identity path home whatever the activation does, slide 17.</p>
     <p>This relay cannot show an exploding gradient with tanh or sigmoid: a large gain drives the state into saturation, where the derivative is near zero, so the spread falls instead of growing. The linear mode of the Week 5 reach tab shows the exploding case: <a href="../week05/#reach">../week05/#reach</a>.</p>
     <p>Slide 17 names the residual block. The skip button here is the residual connection; a full block is a convolution, a normalization layer, an activation and a second convolution, with the block's input added to its output. The addition is what gives the gradient its identity path, and stacking such blocks is how networks of a hundred layers train at all.</p>
   </div>
@@ -299,7 +299,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Slide 11 gives the four shapes. Both curves stalled high and close together is underfitting: more capacity, longer training, or a larger step. Training still falling while validation turns back up is overfitting: decay, dropout, an earlier stop, or more data. A loss that thrashes or climbs is a step too large; an endless slow creep is a step too small. Early stopping, slide 10, keeps the weights from the epoch where validation was lowest, and because that epoch was chosen by looking at the validation curve, the validation number at that epoch is no longer an honest estimate; the third split is. Weight decay and early stopping fail differently, so the clinic lets you combine them by applying one prescription after another.</p>
+    <p>Slide 11 gives the four shapes. Both curves stalled high and close together is underfitting, and the cure depends on what the run ran out of: capacity when the curves have gone flat, epochs when they were still falling at the last one on the axis. Training still falling while validation turns back up is overfitting: decay, dropout, an earlier stop, or more data. A loss that thrashes or climbs is a step too large; a creep that continues to the end of a long run is a step too small, and there the cure is a larger step. Early stopping, slide 10, keeps the weights from the epoch where validation was lowest, and because that epoch was chosen by looking at the validation curve, the validation number at that epoch is no longer an honest estimate; the third split is. Weight decay and early stopping fail differently, so the clinic lets you combine them by applying one prescription after another.</p>
   </div>
 </section>
 
@@ -338,7 +338,7 @@ canvas.grab { cursor: grab; }
 <!-- ============ 5. STACK: receptive field ============ -->
 <section class="demo" id="stack" role="tabpanel">
   <h2>Stack for reach: build a layer stack whose top unit can see the whole spall</h2>
-  <p class="lead">A deck photo with a spall about sixty pixels across and a crack a few pixels wide. Add layers from the palette; the square on the image is what one unit at the top of your stack can see, centred where you last clicked. Reach a receptive field that covers the spall while keeping the output map at least eight by eight, and do it with the fewest parameters. Click a layer in the stack to remove it.</p>
+  <p class="lead">A deck photo with a spall about sixty pixels across and a crack a few pixels wide. Add layers from the palette; the square on the image is what one unit at the top of your stack can see, centred where you last clicked. Reach a receptive field that covers the spall with the fewest parameters, under two rules: the bottom layer is a convolution, and the strides below the top multiply to at most 8, which leaves a 16 by 16 output map. Click a layer in the stack to remove it.</p>
   <div class="stage">
     <div class="plot"><canvas id="stPlot" class="hit" width="1200" height="520"></canvas></div>
     <div class="side">
@@ -360,7 +360,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Each layer adds its kernel size minus one, times the product of every stride below it, slide 16. Three by three kernels add two pixels of reach each and cost nine weights per channel pair; a stride of two or a pooling layer doubles the increment of everything above it for nothing, which is why the field grows geometrically and the map shrinks. Seven by seven kernels reach fast but cost five times the weights of three by three, and two stacked three by threes reach as far as one five by five with fewer weights and a nonlinearity between them. A unit whose field never reaches across the spall cannot tell a spall from a stain, however many channels it has.</p>
+    <p>Each layer adds its kernel size minus one, times the product of every stride below it, slide 16. Three by three kernels add two pixels of reach each and cost nine weights per channel pair; a stride of two or a pooling layer doubles the increment of everything above it for nothing, which is why the field grows geometrically and the map shrinks. Seven by seven kernels reach fast but cost five times the weights of three by three, and two stacked three by threes reach as far as one five by five with fewer weights and a nonlinearity between them. A unit whose field never reaches across the spall cannot tell a spall from a stain, however many channels it has. The two build rules carry the rest of the argument: a pool on the raw image is the cheapest way to reach further and it discards the two-pixel crack before any filter has looked at it, and a total stride past 8 leaves a map too coarse to say where on the deck the spall is. Reach obtained by discarding resolution is reach a segmentation head cannot use.</p>
   </div>
 </section>
 
@@ -377,7 +377,7 @@ canvas.grab { cursor: grab; }
           <label>domain gap, degrees of rotation<output id="lbGapOut">0</output></label>
           <input type="range" id="lbGap" min="0" max="90" step="5" value="0">
         </div>
-        <div class="btns" style="margin-top:10px"><button class="small" data-gap="0">photographs of cracks</button><button class="small" data-gap="40">satellite tiles</button><button class="small" data-gap="80">seismograms</button><button class="small" data-gap="0">your own archive, self-supervised</button></div>
+        <div class="btns" style="margin-top:10px"><button class="small" data-gap="0">photographs of cracks</button><button class="small" data-gap="40">satellite tiles</button><button class="small" data-gap="80">seismograms</button><button class="small" data-gap="0" data-settrunk="self">your own archive, self-supervised</button></div>
         <h3 style="margin-top:12px">trunk origin, slide 22</h3>
         <div class="btns"><button class="small" id="lbSup" data-trunk="sup" aria-pressed="true">supervised trunk</button><button class="small" id="lbSelf" data-trunk="self" aria-pressed="false">self-supervised trunk</button><button class="small" id="lbRand" data-trunk="rand" aria-pressed="false">random trunk</button></div>
         <div class="btns" style="margin-top:8px"><button id="lbReset">Reset</button></div>
@@ -551,7 +551,7 @@ function solve(A, b) { const n = b.length; const M = A.map((r, i) => Array.from(
   document.getElementById("rlZero").addEventListener("click", () => { zeros = true; draw(); });
   // redraw weights is the next round: with sigmoid showing, the question is asked again for the new weights
   document.getElementById("rlRedraw").addEventListener("click", () => { seed++; zeros = false; if (act === "sig") guess = null; draw(); });
-  quiz(document.getElementById("rlQuiz"), { q: "He initialization uses variance 2/n where Xavier uses 1/n. Where does the factor of two come from?", options: ["ReLU doubles the gradient", "ReLU sets half of its inputs to zero, so the output variance of a station is half what it would be with a linear unit, and the weights must make up for it", "Deeper networks need larger weights"], answer: 1, why: "Variance bookkeeping: a ReLU station passes on average half the squared signal. Doubling the weight variance restores the spread so that it neither shrinks nor grows across twelve stations, slide 6." });
+  quiz(document.getElementById("rlQuiz"), { q: "He initialization uses variance 2/n where the LeCun rule uses 1/n. Where does the factor of two come from?", options: ["ReLU doubles the gradient", "ReLU sets half of its inputs to zero, so the output variance of a station is half what it would be with a linear unit, and the weights must make up for it", "Deeper networks need larger weights"], answer: 1, why: "Variance bookkeeping: a ReLU station passes on average half the squared signal, so the spread arriving falls by the square root of two at every station. Doubling the weight variance holds it level across twelve stations, slide 6. Glorot's rule is 2/(n_in + n_out), which here equals 1/n because every station is 64 wide." });
   window.addEventListener("themechange", draw);
   draw();
 })();
@@ -602,17 +602,24 @@ function solve(A, b) { const n = b.length; const M = A.map((r, i) => Array.from(
     board.label("curvature of the valley: steep direction " + lam[0].toPrecision(3) + ", flat direction " + lam[1].toPrecision(3) + ", ratio " + cond.toFixed(0), TX, TY + 100, css("--ink"), "left", 12, true);
     board.label("largest step plain descent survives: 2 / " + lam[0].toPrecision(3) + " = " + (2 / lam[0]).toPrecision(2) + "; steps to finish at that rate, about " + Math.round(cond * 3.5).toLocaleString(), TX, TY + 120, css("--muted"), "left", 11);
     // valley map
-    const MX0 = 790, MX1 = 1180, MY0 = 50, MY1 = 500; const spanX = 2.6 * Math.max(Math.abs(wStar[0]), 1e-3), spanY = 2.6 * Math.max(Math.abs(wStar[1]), 1e-3); const cx = wStar[0], cy = wStar[1];
-    const px = w => MX0 + ((w - cx) / spanX + 0.5) * (MX1 - MX0), py = w => MY1 - ((w - cy) / spanY + 0.5) * (MY1 - MY0);
-    board.label("the valley: loss over the two coefficients; dot is the start, cross the optimum", MX0, MY0 - 10, css("--ink"), "left", 12);
+    const MX0 = 790, MX1 = 1180, MY0 = 50, MY1 = 500; const cx = wStar[0], cy = wStar[1];
     let v = [H[0][1], lam[0] - H[0][0]]; if (Math.abs(H[0][1]) < 1e-12) v = [1, 0]; const nv = Math.hypot(v[0], v[1]); v = [v[0] / nv, v[1] / nv];
+    // one scale for both coefficient axes: the window pans to hold the start, the optimum and the contour
+    // through the starting loss, and the drawn shape of the valley is its true shape
+    const semiS = Math.sqrt(2 * (L0 - Lmin) / lam[0]), semiF = Math.sqrt(2 * (L0 - Lmin) / lam[1]);
+    const vx = (MX0 + MX1) / 2, vy = (MY0 + MY1) / 2, ox = cx / 2, oy = cy / 2;
+    const needX = Math.abs(cx) / 2 + Math.hypot(semiS * v[0], semiF * v[1]), needY = Math.abs(cy) / 2 + Math.hypot(semiS * v[1], semiF * v[0]);
+    const uPx = Math.min((MX1 - MX0) * 0.46 / Math.max(needX, 1e-9), (MY1 - MY0) * 0.46 / Math.max(needY, 1e-9));
+    const px = w => vx + (w - ox) * uPx, py = w => vy - (w - oy) * uPx;
+    board.label("the valley: loss over the two coefficients; dot is the start, cross the optimum", MX0, MY0 - 10, css("--ink"), "left", 12);
     ctx.save(); ctx.beginPath(); ctx.rect(MX0, MY0, MX1 - MX0, MY1 - MY0); ctx.clip();
     for (let e = -3; e <= 4; e++) { const c = (L0 - Lmin) * Math.pow(2, e); ctx.strokeStyle = mix(css("--panel"), css("--grey"), 0.55); ctx.lineWidth = 1; ctx.beginPath(); for (let t = 0; t <= 120; t++) { const th = 2 * Math.PI * t / 120, a = Math.sqrt(2 * c / lam[0]) * Math.cos(th), b = Math.sqrt(2 * c / lam[1]) * Math.sin(th); const x = cx + a * v[0] - b * v[1], y = cy + a * v[1] + b * v[0]; if (t === 0) ctx.moveTo(px(x), py(y)); else ctx.lineTo(px(x), py(y)); } ctx.stroke(); }
     runners.forEach(r => { const pts = r.trace.filter((p, i) => i % Math.max(1, Math.floor(r.trace.length / 600)) === 0 || i === r.trace.length - 1).map(p => [px(p[0]), py(p[1])]); board.path(pts, r.color, 1.5); });
     ctx.restore(); ctx.strokeStyle = css("--line"); ctx.strokeRect(MX0, MY0, MX1 - MX0, MY1 - MY0);
     board.dot(px(0), py(0), 5, css("--ink")); board.line(px(cx) - 6, py(cy), px(cx) + 6, py(cy), css("--red"), 2); board.line(px(cx), py(cy) - 6, px(cx), py(cy) + 6, css("--red"), 2);
     board.label("coefficient on load", (MX0 + MX1) / 2, MY1 + 16, css("--muted"), "center", 10); board.label("coefficient on months, up", MX0 + 6, MY0 + 14, css("--muted"), "left", 10);
-    board.label("the map is stretched to fit each axis; the contour spacing tells the shape", MX0, MY1 + 32, css("--muted"), "left", 10);
+    board.label("both axes at one scale: " + uPx.toPrecision(2) + " px per unit of coefficient", MX0, MY1 + 32, css("--muted"), "left", 10);
+    board.label("valley axis ratio, long to short: " + Math.sqrt(cond).toFixed(0) + " to 1", MX0, MY1 + 48, css("--muted"), "left", 10);
     document.getElementById("rcCond").textContent = cond.toFixed(0); runners.forEach((r, k) => { document.getElementById("rcT" + k).textContent = r.dead ? "diverged" : (r.done !== null ? (over ? r.done + " steps" : "running") : (iter >= 10000 ? "not in 10000" : (iter ? "running" : "-"))); });
     document.getElementById("rcGo").disabled = pick === null;
     const lr = Math.pow(10, lrV); const finished = runners.filter(r => r.done !== null).slice().sort((a, b) => a.done - b.done);
@@ -656,12 +663,12 @@ function solve(A, b) { const n = b.length; const M = A.map((r, i) => Array.from(
     return hist;
   }
   const CASES = [
-    { name: "A", cfg: { seed: 9, degree: 18, lr: 0.05, wd: 0, epochs: 400, n: 24 }, dx: "over", rx: ["wd", "early", "data"] },
-    { name: "B", cfg: { seed: 3, degree: 1, lr: 0.05, wd: 0, epochs: 400, n: 24 }, dx: "under", rx: ["cap"] },
-    { name: "C", cfg: { seed: 1, degree: 8, lr: "high", wd: 0, epochs: 400, n: 24 }, dx: "high", rx: ["lrdown"] },
-    { name: "D", cfg: { seed: 4, degree: 5, lr: 0.002, wd: 0, epochs: 400, n: 24 }, dx: "low", rx: ["lrup"] },
-    { name: "E", cfg: { seed: 5, degree: 18, lr: 0.05, wd: 0, epochs: 400, n: 20 }, dx: "over", rx: ["wd", "early", "data"] },
-    { name: "F", cfg: { seed: 5, degree: 5, lr: 0.05, wd: 0, epochs: 40, n: 24 }, dx: "under", rx: ["longer", "lrup"] }
+    { name: "A", cfg: { seed: 9, degree: 18, lr: 0.05, wd: 0, epochs: 400, n: 24 }, dx: "over", rx: ["wd", "early", "data"], hint: "is the red curve turning back up while the black one keeps falling?" },
+    { name: "B", cfg: { seed: 3, degree: 1, lr: 0.05, wd: 0, epochs: 400, n: 24 }, dx: "under", rx: ["cap"], hint: "are both curves high and flat for the last three hundred epochs, close together?" },
+    { name: "C", cfg: { seed: 1, degree: 8, lr: "high", wd: 0, epochs: 400, n: 24 }, dx: "high", rx: ["lrdown"], hint: "is the loss thrashing or climbing?" },
+    { name: "D", cfg: { seed: 4, degree: 5, lr: 0.002, wd: 0, epochs: 400, n: 24 }, dx: "low", rx: ["lrup"], hint: "is the loss creeping down through all four hundred epochs with no turn in sight?" },
+    { name: "E", cfg: { seed: 5, degree: 18, lr: 0.05, wd: 0, epochs: 400, n: 20 }, dx: "over", rx: ["wd", "early", "data"], hint: "is the red curve turning back up while the black one keeps falling?" },
+    { name: "F", cfg: { seed: 5, degree: 5, lr: 0.05, wd: 0, epochs: 40, n: 24 }, dx: "under", rx: ["longer"], hint: "does the axis end at epoch 40 with both curves still falling steeply? A run stopped before it converged is underfitted.", rxhint: "The rate here already brings both curves down; this run was stopped at epoch 40 and needs the remaining epochs." }
   ];
   function lmax(seed, n, d) { const tr = makeData(seed, n); const F = tr.X.map(x => cheb(x, d)); const m = d + 1; const H = []; for (let a = 0; a < m; a++) H.push(new Float64Array(m)); F.forEach(f => { for (let a = 0; a < m; a++) for (let b = 0; b < m; b++) H[a][b] += 2 * f[a] * f[b] / F.length; }); let v = new Float64Array(m).fill(1), l = 1; for (let it = 0; it < 100; it++) { const w = new Float64Array(m); for (let a = 0; a < m; a++) for (let b = 0; b < m; b++) w[a] += H[a][b] * v[b]; l = Math.sqrt(w.reduce((q, x) => q + x * x, 0)); v = w.map(x => x / l); } return l; }
   CASES.forEach(c => { if (c.cfg.lr === "high") c.cfg.lr = 1.03 * 2 / lmax(c.cfg.seed, c.cfg.n, c.cfg.degree); });
@@ -673,22 +680,24 @@ function solve(A, b) { const n = b.length; const M = A.map((r, i) => Array.from(
   function applyRx(cfg, rx) { const c = Object.assign({}, cfg); if (rx === "cap") c.degree = Math.max(6, c.degree * 2); if (rx === "longer") c.epochs = Math.max(400, c.epochs * 4); if (rx === "lrup") c.lr *= 10; if (rx === "lrdown") c.lr /= 10; if (rx === "wd") c.wd = 0.03; if (rx === "data") c.n = 120; return c; }
   function compute() { const c = CASES[cur]; hist0 = train(c.cfg); let cfg = c.cfg; early = false; rxs.forEach(r => { if (r === "early") early = true; else cfg = applyRx(cfg, r); }); hist1 = rxs.length ? train(cfg) : null; }
   function bestEpoch(h) { let b = 0; h.forEach((r, i) => { if (r[1] < h[b][1]) b = i; }); return b; }
-  function panel(h, x0, x1, title, mark) {
-    const y0 = 60, y1 = 440; const n = h.length; const lo = -1.6, hi = 1;
-    const px = i => x0 + i / Math.max(1, n - 1) * (x1 - x0), py = v => y1 - (Math.max(lo, Math.min(hi, Math.log10(Math.max(v, 1e-9)))) - lo) / (hi - lo) * (y1 - y0);
+  function panel(h, x0, x1, title, mark, nAxis) {
+    const y0 = 60, y1 = 440; const n = h.length; const N = Math.max(2, nAxis || n); const lo = -1.6, hi = 1;
+    const px = i => x0 + i / (N - 1) * (x1 - x0), py = v => y1 - (Math.max(lo, Math.min(hi, Math.log10(Math.max(v, 1e-9)))) - lo) / (hi - lo) * (y1 - y0);
     board.label(title, x0, y0 - 12, css("--ink"), "left", 12);
     board.line(x0, y1, x1, y1, css("--line"), 1); board.line(x0, y0, x0, y1, css("--line"), 1);
     [-1.5, -1, -0.5, 0, 0.5, 1].forEach(e => { board.line(x0, py(Math.pow(10, e)), x1, py(Math.pow(10, e)), css("--line"), 1, [2, 4]); board.label(Math.pow(10, e).toFixed(2), x0 - 6, py(Math.pow(10, e)) + 4, css("--muted"), "right", 10, true); });
-    board.label("epoch 1", x0, y1 + 14, css("--muted"), "left", 10, true); board.label("epoch " + n, x1, y1 + 14, css("--muted"), "right", 10, true);
+    board.label("epoch 1", x0, y1 + 14, css("--muted"), "left", 10, true); board.label("epoch " + N, x1, y1 + 14, css("--muted"), "right", 10, true);
+    if (n < N) { board.line(px(n - 1), y0, px(n - 1), y1, css("--grey"), 1, [3, 3]); board.label("this run ends at epoch " + n, px(n - 1) + 5, y0 + 30, css("--muted"), "left", 10, true); }
     board.path(h.map((r, i) => [px(i), py(r[0])]), css("--ink"), 2); board.path(h.map((r, i) => [px(i), py(r[1])]), css("--red"), 2);
     if (mark !== null && mark !== undefined) { board.line(px(mark), y0, px(mark), y1, "#2E7D5B", 2, [5, 4]); board.label("stop here: epoch " + (mark + 1), px(mark) + 4, y0 + 14, "#2E7D5B", "left", 11); board.dot(px(mark), py(h[mark][1]), 5, "#2E7D5B", "#fff"); }
     board.label("black: training   red: validation   log scale", x0, y1 + 30, css("--muted"), "left", 11);
   }
   function draw() {
     board.clear("case " + CASES[cur].name + ": the chart as presented, and the chart after your prescription");
-    panel(hist0, 70, 560, "as presented", null);
+    const nAxis = Math.max(hist0.length, hist1 ? hist1.length : 0);
+    panel(hist0, 70, 560, "as presented", null, nAxis);
     const sealed = hist1 && will === null;
-    if (hist1 && !sealed) panel(hist1, 680, 1170, "after: " + rxs.map(r => RXN[r]).join(" + "), early ? bestEpoch(hist1) : null);
+    if (hist1 && !sealed) { panel(hist1, 680, 1170, "after: " + rxs.map(r => RXN[r]).join(" + "), early ? bestEpoch(hist1) : null, nAxis); board.label("both charts share one epoch axis, 1 to " + nAxis, 70, 496, css("--muted"), "left", 11); }
     else if (sealed) { board.label("after: " + rxs.map(r => RXN[r]).join(" + "), 680, 48, css("--ink"), "left", 12); board.ctx.fillStyle = css("--bg"); board.ctx.fillRect(680, 60, 490, 380); board.label("sealed until you answer the question", 925, 250, css("--muted"), "center", 13); }
     else { board.label("no prescription yet", 680, 60, css("--muted"), "left", 12); }
     const v0 = hist0[hist0.length - 1][1]; let v1 = null, t1 = null; if (hist1) { const e = early ? bestEpoch(hist1) : hist1.length - 1; v1 = hist1[e][1]; t1 = hist1[e][2]; }
@@ -701,10 +710,10 @@ function solve(A, b) { const n = b.length; const M = A.map((r, i) => Array.from(
     document.querySelectorAll("#clinic [data-rx]").forEach(b => b.setAttribute("aria-pressed", rxs.indexOf(b.dataset.rx) >= 0 ? "true" : "false"));
     let msg;
     if (!dx) msg = '<p>Read the two curves and name the pathology, then choose one prescription.</p>';
-    else if (!dxOk) msg = '<div class="ask no">Not ' + DXN[dx] + '. Look again: ' + (c.dx === "over" ? 'is the red curve turning back up while the black one keeps falling?' : c.dx === "under" ? 'are both curves stalled high and close together?' : c.dx === "high" ? 'is the loss thrashing or climbing?' : 'is the loss still creeping down with no turn in sight?') + '</div>';
+    else if (!dxOk) msg = '<div class="ask no">Not ' + DXN[dx] + '. Look again: ' + c.hint + '</div>';
     else if (!rxs.length) msg = '<div class="ask ok">' + DXN[dx] + ', yes. Now prescribe.</div>';
     else if (sealed) msg = '';
-    else if (!rxOk) msg = '<div class="ask no">' + rxs.map(r => RXN[r]).join(' + ') + ' does not treat ' + DXN[c.dx] + '. Validation ' + (v1 === null ? '' : (isFinite(v1) ? 'went from ' + v0.toFixed(3) + ' to ' + v1.toFixed(3) : 'diverged')) + '. Choose the case again to clear the chart.</div>';
+    else if (!rxOk) msg = '<div class="ask no">' + rxs.map(r => RXN[r]).join(' + ') + ' does not treat ' + DXN[c.dx] + ' in case ' + c.name + '. ' + (c.rxhint ? c.rxhint + ' ' : '') + 'Validation ' + (v1 === null ? '' : (isFinite(v1) ? 'went from ' + v0.toFixed(3) + ' to ' + v1.toFixed(3) : 'diverged')) + '. Choose the case again to clear the chart.</div>';
     else if (!improved) msg = '<div class="ask">Right idea, small effect: validation ' + v0.toFixed(3) + ' to ' + v1.toFixed(3) + '. Add a second prescription; they combine.</div>';
     else msg = '<div class="ask ok">Cleared: validation ' + v0.toFixed(3) + ' to ' + v1.toFixed(3) + '. ' + (early ? 'The stopping epoch was chosen by looking at the validation curve, so that number is now a fitted quantity; the third split says ' + t1.toFixed(3) + '.' : 'The third split, never consulted, says ' + t1.toFixed(3) + '.') + '</div>';
     let gate = '';
@@ -802,8 +811,11 @@ function solve(A, b) { const n = b.length; const M = A.map((r, i) => Array.from(
   let layers = [], center = [64, 64], best = null;
   // prediction gate: a parameter bracket is picked before the first layer; the reveal comes with the first covering stack
   let pickP = null; const BRACKETS = ["under 5,000", "5,000 to 20,000", "over 20,000"]; const bracket = p => p < 5000 ? 0 : (p <= 20000 ? 1 : 2);
-  // the fewest parameters of any stack up to eight layers that covers 64 px with a map of at least 8
-  const OPT = (function () { const keys = Object.keys(LAYERS); let bestP = Infinity, bestD = null; function go(depth, rf, jump, n, cin, params, path) { if (rf >= 64 && n >= 8 && params < bestP) { bestP = params; bestD = path.slice(); } if (depth === 8 || params >= bestP) return; keys.forEach(k => { const Lk = LAYERS[k]; const n2 = Math.ceil(n / Lk.s); if (n2 < 8) return; path.push(k); go(depth + 1, rf + (Lk.k - 1) * jump, jump * Lk.s, n2, Lk.pool ? cin : 16, params + (Lk.pool ? 0 : Lk.k * Lk.k * cin * 16 + 16), path); path.pop(); }); } go(0, 1, 1, S, 1, 0, []); return { params: bestP, desc: bestD.map(k => LAYERS[k].name).join(", ") }; })();
+  // two build rules: the bottom layer is a convolution, and the strides below the top may multiply to at most 8,
+  // which leaves a 16 by 16 map on a 128 px input and keeps a two-pixel crack addressable
+  const MAXJ = 8, MAXL = 10;
+  // the fewest parameters of any legal stack up to MAXL layers that covers 64 px
+  const OPT = (function () { const keys = Object.keys(LAYERS); let bestP = Infinity, bestD = null; function go(depth, rf, jump, n, cin, params, path) { if (rf >= 64 && n >= 8 && path.length && params < bestP) { bestP = params; bestD = path.slice(); } if (depth === MAXL || params >= bestP) return; keys.forEach(k => { const Lk = LAYERS[k]; if (depth === 0 && Lk.pool) return; const n2 = Math.ceil(n / Lk.s), j2 = jump * Lk.s; if (n2 < 8 || j2 > MAXJ) return; path.push(k); go(depth + 1, rf + (Lk.k - 1) * jump, j2, n2, Lk.pool ? cin : 16, params + (Lk.pool ? 0 : Lk.k * Lk.k * cin * 16 + 16), path); path.pop(); }); } go(0, 1, 1, S, 1, 0, []); return { params: bestP, desc: bestD.map(k => LAYERS[k].name).join(", "), depth: bestD.length, pools: bestD.filter(k => LAYERS[k].pool).length, first: LAYERS[bestD[0]].name, firstCost: LAYERS[bestD[0]].k * LAYERS[bestD[0]].k * 16 + 16 }; })();
   // the receptive-field square is tweened over 300 ms when a layer is added or removed
   let dispRF = 1, tween = null;
   const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -834,20 +846,20 @@ function solve(A, b) { const n = b.length; const M = A.map((r, i) => Array.from(
     rows.forEach((r, i) => { const y = DY + i * 36; const w = Math.min(560, r.rf * scale); ctx.fillStyle = mix(css("--panel"), css("--blue"), 0.12 + 0.05 * i); ctx.fillRect(DX, y, w, 24); ctx.strokeStyle = css("--blue"); ctx.lineWidth = 1; ctx.strokeRect(DX, y, w, 24); board.label(r.name + ":  sees " + r.rf + " px,  map " + r.n + " x " + r.n + ",  stride so far " + r.jump, DX + w + 8, y + 16, css("--ink"), "left", 11, true); });
     board.label("each layer adds (kernel - 1) x (product of strides below), slide 16", DX, DY + rows.length * 36 + 10, css("--muted"), "left", 11);
     document.getElementById("stRF").textContent = st.rf + " px"; document.getElementById("stOut").textContent = st.n + " x " + st.n; document.getElementById("stPar").textContent = st.params.toLocaleString();
-    const covers = st.rf >= 64 && st.n >= 8;
+    const covers = st.rf >= 64 && st.n >= 8 && st.jump <= MAXJ;
     if (covers && (!best || st.params < best.params)) best = { params: st.params, desc: layers.map(l => LAYERS[l].name).join(", "), depth: layers.length };
     document.getElementById("stBest").textContent = best ? best.params.toLocaleString() + " weights, " + best.depth + " layers" : "-";
-    const stackEl = document.getElementById("stStack"); stackEl.innerHTML = ""; layers.forEach((l, i) => { const b = document.createElement("button"); b.textContent = (i + 1) + ". " + LAYERS[l].name; b.title = "remove"; b.addEventListener("click", () => { layers.splice(i, 1); animateTo(stats().rf); }); stackEl.appendChild(b); });
-    document.querySelectorAll("#stack [data-l]").forEach(b => { b.disabled = pickP === null; });
-    const prompt = '<p class="prompt">Fewest parameters to cover 64 px with a map of at least 8: which bracket?</p>';
+    const stackEl = document.getElementById("stStack"); stackEl.innerHTML = ""; layers.forEach((l, i) => { const b = document.createElement("button"); b.textContent = (i + 1) + ". " + LAYERS[l].name; b.title = "remove"; b.addEventListener("click", () => { layers.splice(i, 1); while (layers.length && LAYERS[layers[0]].pool) layers.shift(); animateTo(stats().rf); }); stackEl.appendChild(b); });
+    document.querySelectorAll("#stack [data-l]").forEach(b => { const L = LAYERS[b.dataset.l]; const firstPool = layers.length === 0 && !!L.pool, overJ = st.jump * L.s > MAXJ; b.disabled = pickP === null || layers.length >= MAXL || firstPool || overJ; b.title = pickP === null ? "pick a bracket first" : (firstPool ? "the bottom layer must be a convolution" : (overJ ? "the strides already multiply to " + st.jump + " and the budget is " + MAXJ : (layers.length >= MAXL ? "ten layers is the limit" : "add on top"))); });
+    const prompt = '<p class="prompt">Fewest parameters to cover 64 px within the stride budget: which bracket?</p>';
     let gate = '';
-    if (pickP === null) gate = '<div class="gate">' + BRACKETS.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div><p>Convolutions cost kernel area times input channels times 16, plus 16 biases; pooling costs nothing. Pick a bracket; the palette unlocks after that, and the answer appears with your first covering stack.</p>';
+    if (pickP === null) gate = '<div class="gate">' + BRACKETS.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div><p>Convolutions cost kernel area times input channels times 16, plus 16 biases; pooling costs nothing. Two rules hold for every stack: the bottom layer is a convolution, and the strides may multiply to at most ' + MAXJ + '. Pick a bracket; the palette unlocks after that, and the answer appears with your first covering stack.</p>';
     else if (!covers) gate = '<p>Your pick: ' + BRACKETS[pickP] + '. Build a stack that covers the spall to see the answer.</p>';
-    else gate = '<div class="ask ' + (bracket(OPT.params) === pickP ? 'ok' : 'no') + '">' + (bracket(OPT.params) === pickP ? 'Right: ' : 'You picked ' + BRACKETS[pickP] + '; ') + 'the fewest is ' + OPT.params.toLocaleString() + ' weights, ' + BRACKETS[bracket(OPT.params)] + ', with the stack ' + OPT.desc + '. Pooling first is free and multiplies the reach of the one convolution that follows; a conv on the single input channel costs sixteen times less than one on sixteen channels.</div>';
-    stepEl.innerHTML = prompt + '<span class="k">' + layers.length + (layers.length === 1 ? ' layer' : ' layers') + ', reach ' + st.rf + ' px, jump ' + st.jump + '</span>' + gate + (layers.length === 0 ? '<p>A unit with no layers above it sees one pixel. Add layers; the red square grows, and the jump is the product of the strides below the top.</p>' : (covers ? '<div class="ask ok">The top unit sees across the spall with a ' + st.n + ' x ' + st.n + ' map, for ' + st.params.toLocaleString() + ' weights. <span class="badge done">covers the spall</span> Other stacks may do it with fewer.</div>' : (st.rf < 64 ? '<div class="ask">Reach ' + st.rf + ' px, the spall is about 60. A pool or a stride doubles what every layer above it adds.</div>' : '<div class="ask no">Reach is enough but the map is ' + st.n + ' x ' + st.n + ': too much stride and there is nothing left to locate the spall on.</div>')));
+    else gate = '<div class="ask ' + (bracket(OPT.params) === pickP ? 'ok' : 'no') + '">' + (bracket(OPT.params) === pickP ? 'Right: ' : 'You picked ' + BRACKETS[pickP] + '; ') + 'the fewest is ' + OPT.params.toLocaleString() + ' weights, ' + BRACKETS[bracket(OPT.params)] + ', in ' + OPT.depth + ' layers: ' + OPT.desc + '. The bottom ' + OPT.first + ' sees one input channel and costs ' + OPT.firstCost.toLocaleString() + ' weights, a sixteenth of the same kernel on sixteen channels; the ' + OPT.pools + ' pools spend the stride budget for nothing and double what every layer above them adds; the reach that remains comes from 3x3 convolutions at 2,320 weights each.</div>';
+    stepEl.innerHTML = prompt + '<span class="k">' + layers.length + (layers.length === 1 ? ' layer' : ' layers') + ', reach ' + st.rf + ' px, jump ' + st.jump + '</span>' + gate + (layers.length === 0 ? '<p>A unit with no layers above it sees one pixel. The bottom layer is a convolution, so the two-pixel crack is read at full resolution before any stride. Add layers; the red square grows, and the jump is the product of the strides below the top.</p>' : (covers ? '<div class="ask ok">The top unit sees across the spall with a ' + st.n + ' x ' + st.n + ' map, for ' + st.params.toLocaleString() + ' weights. <span class="badge done">covers the spall</span> Other stacks may do it with fewer.</div>' : (st.rf < 64 ? '<div class="ask">Reach ' + st.rf + ' px, the spall is about 60. The strides so far multiply to ' + st.jump + ' of the ' + MAXJ + ' allowed, and each pool or stride-2 layer doubles what every layer above it adds.</div>' : '<div class="ask no">Reach is enough and the stride has run past the budget: the map is ' + st.n + ' x ' + st.n + ', too coarse to locate the spall on.</div>')));
     stepEl.querySelectorAll(".gate button").forEach(b => b.addEventListener("click", () => { pickP = parseInt(b.dataset.g, 10); draw(); }));
   }
-  document.querySelectorAll("#stack [data-l]").forEach(b => b.addEventListener("click", () => { if (pickP === null || layers.length >= 10) return; layers.push(b.dataset.l); animateTo(stats().rf); }));
+  document.querySelectorAll("#stack [data-l]").forEach(b => b.addEventListener("click", () => { const L = LAYERS[b.dataset.l]; if (pickP === null || layers.length >= MAXL) return; if (layers.length === 0 && L.pool) return; if (stats().jump * L.s > MAXJ) return; layers.push(b.dataset.l); animateTo(stats().rf); }));
   // clear is the next round: the bracket is asked again
   document.getElementById("stClear").addEventListener("click", () => { layers = []; pickP = null; animateTo(1); });
   board.c.addEventListener("click", ev => { const [mx, my] = board.pos(ev); const x0 = 40, y0 = 50, cell = 420 / S; if (mx < x0 || mx > x0 + 420 || my < y0 || my > y0 + 420) return; center = [Math.round((mx - x0) / cell), Math.round((my - y0) / cell)]; draw(); });
@@ -925,7 +937,8 @@ function solve(A, b) { const n = b.length; const M = A.map((r, i) => Array.from(
   }
   function setGap(v) { gap = Math.max(0, Math.min(90, Math.round(v / 5) * 5)); document.getElementById("lbGap").value = gap; document.getElementById("lbGapOut").textContent = gap; draw(); }
   const gapEl = document.getElementById("lbGap"); gapEl.addEventListener("input", () => setGap(+gapEl.value));
-  document.querySelectorAll("#labels [data-gap]").forEach(b => b.addEventListener("click", () => setGap(+b.dataset.gap)));
+  // the scenario buttons set the gap, and the archive button also sets the trunk it names
+  document.querySelectorAll("#labels [data-gap]").forEach(b => b.addEventListener("click", () => { const tr = b.dataset.settrunk; if (tr) { trunk = tr; pressed(["lbSup", "lbSelf", "lbRand"], tr === "self" ? "lbSelf" : (tr === "rand" ? "lbRand" : "lbSup")); } setGap(+b.dataset.gap); }));
   document.querySelectorAll("#labels [data-trunk]").forEach(b => b.addEventListener("click", () => { trunk = b.dataset.trunk; pressed(["lbSup", "lbSelf", "lbRand"], b.id); draw(); }));
   // reset is the next round: gap 0, supervised trunk, question asked again
   document.getElementById("lbReset").addEventListener("click", () => { trunk = "sup"; pressed(["lbSup", "lbSelf", "lbRand"], "lbSup"); guessN = null; setGap(0); });
