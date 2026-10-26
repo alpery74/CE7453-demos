@@ -272,7 +272,9 @@ canvas.grab { cursor: grab; }
         <div class="btns"><button id="spEqual">Equal bars</button><button id="spSpec">Instrument spec</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>rate, weighted fit (mm / month)</dt><dd id="spRate">-</dd>
-          <dt>standard error of the rate</dt><dd id="spSE">-</dd>
+          <dt>standard error of the rate, from your sigmas</dt><dd id="spSE">-</dd>
+          <dt>sigma0 from the residuals</dt><dd id="spS0">-</dd>
+          <dt>standard error scaled by sigma0</dt><dd id="spSEs">-</dd>
           <dt>rate, equal weights</dt><dd id="spRate0">-</dd>
           <dt>share of total weight, months 1-5</dt><dd id="spShare">-</dd>
           <dt>predicted settlement at month 24 (mm)</dt><dd id="spPred">-</dd>
@@ -283,7 +285,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Weighted least squares minimizes the sum of w_i v_i^2, which is the elastic energy of springs with stiffness w_i stretched by v_i; the fitted line is the rest position. Slide 12's point is that the stiffnesses are a statement about the instruments, not about the data values: the same eight readings give a different rate when the tape readings are trusted as much as the gauge readings. The spec button sets the bars to the manufacturers' numbers, which is where a weight matrix comes from in practice.</p>
+    <p>Weighted least squares minimizes the sum of w_i v_i^2, which is the elastic energy of springs with stiffness w_i stretched by v_i; the fitted line is the rest position. Slide 12's point is that the stiffnesses are a statement about the instruments, not about the data values: the same eight readings give a different rate when the tape readings are trusted as much as the gauge readings. The spec button sets the bars to the manufacturers' numbers, which is where a weight matrix comes from in practice. The standard error of the rate comes from (A'WA)^-1 and inherits the sigmas you declared, which is why sigma0 = sqrt(v'Wv / (m - n)) is reported beside it. Setting every bar to 0.2 mm claims a standard error of 0.020 mm / month on a rate 0.16 below the truth, and sigma0 climbs to 9 to say so; the standard error scaled by sigma0 is 0.185, which covers the gap. The 6 mm step at month 9 is a disturbance the sigmas never describe, and Baarda's data snooping on slide 14 is the test that finds it.</p>
   </div>
 </section>
 
@@ -369,7 +371,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Every frame is ridge regression on a degree-11 polynomial basis with lambda from 1e-6 (frame 1) to 1e2 (frame 8), so frame 1 is interpolation through the twelve stations and frame 8 is almost a straight line. Training error falls monotonically from right to left, so it would always choose frame 1; held-out error traces the U of slide 24. Redrawing the noise shows the two terms of the bias-variance decomposition directly: the left frames change shape from draw to draw (variance), the right frames keep the same wrong shape every time (bias).</p>
+    <p>Every frame fits the same degree-11 Legendre basis with a Tikhonov penalty: lambda times the sum of k^2 c_k^2 over the coefficients, with the constant term exempt. The k^2 weighting charges a wiggly term more than a smooth one, and lambda runs from 1e-6 (frame 1) to 1e2 (frame 8), so frame 1 is interpolation through the twelve stations and frame 8 is almost a straight line. A plain ridge penalty at the same lambdas moves the held-out minimum from frame 5 to frame 6 and flattens the U. Training error falls monotonically from right to left, so it would always choose frame 1; held-out error traces the U of slide 24. Redrawing the noise separates two of the three terms of the decomposition: the left frames change shape from draw to draw (variance), the right frames keep the same wrong shape every time (bias). The third term is the noise in the held-out readings themselves, drawn at 0.8 mm and 0.71 mm rms in the fixed draw used here; it is the floor of the U, and the winning frame scores about 0.8 mm against it.</p>
   </div>
 </section>
 
@@ -441,16 +443,28 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
     // Earth on 31 December with a compass, so a written direction has a reference
     { const cx = 110, cy = 440, E = earth(TPRED); ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.arc(cx, cy, 46, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);
       for (let d = 0; d < 360; d += 30) { const c = Math.cos(d * D2R), s = Math.sin(d * D2R); board.line(cx + 40 * c, cy - 40 * s, cx + 50 * c, cy - 50 * s, css("--grey"), d % 90 === 0 ? 2 : 1); if (d % 90 === 0) board.label(String(d), cx + 64 * c, cy - 64 * s + 4, css("--muted"), "center", 11, true); }
-      board.label("direction in degrees, counterclockwise", cx, cy + 86, css("--muted"), "center", 12); board.label("from the horizontal, as seen from Earth", cx, cy + 102, css("--muted"), "center", 12);
-      board.dot(px(E[0]), py(E[1]), 4, css("--ink"));
+      board.label("direction in degrees, counterclockwise", 10, cy + 86, css("--muted"), "left", 12); board.label("from the horizontal, as seen from Earth", 10, cy + 102, css("--muted"), "left", 12);
+      board.dot(px(E[0]), py(E[1]), 4, css("--ink")); board.label("Earth, 31 Dec", px(E[0]) - 10, py(E[1]) - 8, css("--ink"), "right", 11);
+      // the student's own orbit in December, drawn from the first frame on, with the truth still hidden
+      const dmod = dirTo(a, phi, TPRED), dm = dmod * D2R;
+      board.line(cx, cy, cx + 46 * Math.cos(dm), cy - 46 * Math.sin(dm), css("--orange"), 2.5);
+      board.label("your orbit implies " + deg360(dmod).toFixed(1) + " deg", 10, cy + 124, css("--orange"), "left", 12, true);
       if (guess !== null) { const dg = guess * D2R; board.line(cx, cy, cx + 46 * Math.cos(dg), cy - 46 * Math.sin(dg), css("--grey"), 2); board.line(px(E[0]), py(E[1]), px(E[0] + 4.5 * Math.cos(dg)), py(E[1] + 4.5 * Math.sin(dg)), css("--grey"), 2, [3, 5]); board.label("you wrote " + guess.toFixed(1) + " deg", px(E[0] + 2.4 * Math.cos(dg)), py(E[1] + 2.4 * Math.sin(dg)) - 10, css("--muted"), "center", 12); } }
-    if (predicted) { const E = earth(TPRED), dm = dirTo(a, phi, TPRED) * D2R, dt = dirTo(AT, PHIT, TPRED) * D2R, L = 4.5; board.label("Earth, 31 Dec", px(E[0]) - 10, py(E[1]) - 8, css("--ink"), "right", 11);
-      board.line(px(E[0]), py(E[1]), px(E[0] + L * Math.cos(dm)), py(E[1] + L * Math.sin(dm)), css("--orange"), 2.5); board.line(px(E[0]), py(E[1]), px(E[0] + L * Math.cos(dt)), py(E[1] + L * Math.sin(dt)), css("--ink"), 2, [6, 4]);
-      const CT = ceresAt(AT, PHIT, TPRED); board.dot(px(CT[0]), py(CT[1]), 7, css("--ink")); board.label("Ceres, really, 31 Dec", px(CT[0]) + 10, py(CT[1]) + 16, css("--ink"), "left", 11); board.label("your orbit points here", px(E[0] + 3.6 * Math.cos(dm)), py(E[1] + 3.6 * Math.sin(dm)) - 10, css("--orange"), "center", 11); }
+    { const E = earth(TPRED), dm = dirTo(a, phi, TPRED) * D2R, L = 4.5;
+      board.line(px(E[0]), py(E[1]), px(E[0] + L * Math.cos(dm)), py(E[1] + L * Math.sin(dm)), css("--orange"), 2.5);
+      board.label("your orbit points here", px(E[0] + 3.6 * Math.cos(dm)), py(E[1] + 3.6 * Math.sin(dm)) - 10, css("--orange"), "center", 11);
+      const CM = ceresAt(a, phi, TPRED), CT0 = ceresAt(AT, PHIT, TPRED); board.dot(px(CM[0]), py(CM[1]), 6, css("--orange"), "#fff");
+      // once the truth is on screen the label is dropped where the two positions sit on top of each other
+      if (!predicted || Math.hypot(px(CM[0]) - px(CT0[0]), py(CM[1]) - py(CT0[1])) > 34) board.label("your Ceres, 31 Dec", px(CM[0]) + 10, py(CM[1]) + 26, css("--orange"), "left", 11); }
+    if (predicted) { const E = earth(TPRED), dt = dirTo(AT, PHIT, TPRED) * D2R, L = 4.5;
+      board.line(px(E[0]), py(E[1]), px(E[0] + L * Math.cos(dt)), py(E[1] + L * Math.sin(dt)), css("--ink"), 2, [6, 4]);
+      const CT = ceresAt(AT, PHIT, TPRED); board.dot(px(CT[0]), py(CT[1]), 7, css("--ink")); board.label("Ceres, really, 31 Dec", px(CT[0]) + 10, py(CT[1]) - 10, css("--ink"), "left", 11); }
     // residual strip
     const sx0 = 760, sw = 420, sy0 = 440, sh = 110; ctx.fillStyle = css("--bg"); ctx.fillRect(sx0, sy0, sw, sh); ctx.strokeStyle = css("--line"); ctx.strokeRect(sx0, sy0, sw, sh);
-    board.label("residual per night, observed minus model direction (scale: 1 degree)", sx0, sy0 - 8, css("--ink"), "left", 12); board.line(sx0, sy0 + sh / 2, sx0 + sw, sy0 + sh / 2, css("--line"), 1);
-    r.forEach((v, k) => { const x = sx0 + 10 + k * (sw - 20) / 24, h = Math.max(-sh / 2 + 2, Math.min(sh / 2 - 2, v / 1.0 * (sh / 2))); ctx.fillStyle = Math.abs(v) < 0.1 ? "#2E7D5B" : css("--red"); ctx.fillRect(x, sy0 + sh / 2 - Math.max(0, h), 10, Math.abs(h) || 1); });
+    // the strip autoscales to the current fit, and the caption carries the live scale
+    const rfull = Math.max(0.002, rmax * 1.08), rtxt = rfull >= 1 ? rfull.toFixed(1) + " deg" : (rfull * 60).toFixed(1) + " arcmin";
+    board.label("residual per night, observed minus model", sx0, sy0 - 26, css("--ink"), "left", 12); board.label("strip edge = plus or minus " + rtxt, sx0, sy0 - 8, css("--muted"), "left", 12); board.line(sx0, sy0 + sh / 2, sx0 + sw, sy0 + sh / 2, css("--line"), 1);
+    r.forEach((v, k) => { const x = sx0 + 10 + k * (sw - 20) / 24, h = v / rfull * (sh / 2); ctx.fillStyle = Math.abs(v) < 0.1 ? "#2E7D5B" : css("--red"); ctx.fillRect(x, sy0 + sh / 2 - Math.max(0, h), 10, Math.abs(h) || 1); });
     board.label("1 Jan", sx0 + 10, sy0 + sh + 14, css("--muted"), "left", 10); board.label("11 Feb", sx0 + sw - 10, sy0 + sh + 14, css("--muted"), "right", 10);
     const P = Math.pow(a, 1.5);
     document.getElementById("ceA").textContent = a.toFixed(2); document.getElementById("ceP").textContent = P.toFixed(2); document.getElementById("ceSSE").textContent = S2 < 0.01 ? S2.toExponential(2) : S2.toFixed(3); document.getElementById("ceMax").textContent = (rmax * 60).toFixed(1);
@@ -461,7 +475,7 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
     let html = '<p class="prompt">Where will Ceres be on 31 December? Write a degree first.</p>';
     if (guess === null) html += '<div class="gate"><input type="number" id="ceIn" min="0" max="360" step="0.1" placeholder="0 to 360" aria-label="predicted direction in degrees"><button class="primary" id="ceLock">Lock in</button></div>';
     html += '<span class="k">' + (predicted ? '31 December 1801' : (rmax < 0.1 ? 'the nights agree' : 'fitting January')) + '</span>';
-    if (!predicted) html += '<p>' + (rmax > 1 ? 'Residuals of degrees: the blue dots are nowhere near the red rays. Move Ceres along the orbit first, then adjust the radius; the radius changes the speed as well as the distance.' : (rmax > 0.1 ? 'Close. The residuals are now ' + (rmax * 60).toFixed(0) + ' arcminutes at worst; the noise in the data is about 1 arcminute. Keep going, or predict now and see what a near fit buys you.' : 'Every night within a tenth of a degree.')) + '</p>' + (guess === null ? '<p>Read the direction your orbit implies for 31 December off the compass, type it, and lock it in. The December buttons stay off until then.</p>' : '<p>Locked: ' + guess.toFixed(1) + ' deg. Now predict, or let least squares solve it, and compare.</p>');
+    if (!predicted) html += '<p>' + (rmax > 1 ? 'Residuals of degrees: the blue dots are nowhere near the red rays. Move Ceres along the orbit first, then adjust the radius; the radius changes the speed as well as the distance.' : (rmax > 0.1 ? 'Close. The residuals are now ' + (rmax * 60).toFixed(0) + ' arcminutes at worst; the noise in the data is about 1 arcminute. Keep going, or predict now and see what a near fit buys you.' : 'Every night within a tenth of a degree.')) + '</p>' + (guess === null ? '<p>The orange ray shows where your orbit puts Ceres on 31 December; its direction in degrees is printed under the compass. Type that number and lock it in. The December buttons stay off until then.</p>' : '<p>Locked: ' + guess.toFixed(1) + ' deg. Now predict, or let least squares solve it, and compare.</p>');
     else { const ls = solveLS(), dG = Math.abs(wrap(guess - ls.dir)), gOk = dG <= 0.5;
       html += '<div class="ask ' + (gOk ? 'ok' : 'no') + '">' + (gOk ? 'A point. You wrote ' + guess.toFixed(1) + ' deg; the least squares orbit points at ' + ls.dir.toFixed(1) + ' deg, ' + dG.toFixed(2) + ' deg away.' : 'No point. You wrote ' + guess.toFixed(1) + ' deg; the least squares orbit points at ' + ls.dir.toFixed(1) + ' deg, ' + dG.toFixed(1) + ' deg away. Half a degree is the width of the telescope field.') + '</div>';
       html += '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Your orbit recovers Ceres: its December direction is ' + err.toFixed(2) + ' degrees from where the planet really is. On 31 December 1801 Zach found it within half a degree of Gauss\'s prediction.' : 'Your orbit misses by ' + err.toFixed(1) + ' degrees. January looked fine, and a radius slightly wrong changes the speed, so over 320 unobserved days the error grows into a different patch of sky.') + '</div><p>' + (solved ? 'This is the least squares orbit: the best fit to the 24 nights. Even it is not perfect, because the arc is short and the noise is real; it is good enough to find the planet.' : 'Press the least squares button to see what the best possible fit to these 24 nights predicts, and compare its radius with yours.') + '</p>'; }
@@ -477,7 +491,7 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
   document.getElementById("cePredict").addEventListener("click", () => { if (guess === null) return; predicted = true; draw(); });
   document.getElementById("ceSolve").addEventListener("click", () => { if (guess === null) return; const ls = solveLS(); a = ls.a; phi = ls.phi; solved = true; predicted = true; draw(); });
   document.getElementById("ceReset").addEventListener("click", () => { a = 2.0; phi = 30; predicted = false; solved = false; guess = null; draw(); });
-  quiz(document.getElementById("ceQuiz"), { q: "Gauss's 1801 orbit fit counts as machine learning on slide 7 because", options: ["He used a computer", "He chose a model class, fit its parameters to noisy data by minimizing squared residuals, and was judged on a prediction for data he did not have", "The orbit was an ellipse"], answer: 1, why: "Strip the vocabulary and that is the whole of supervised learning: model class, fit, held-out judgment. The vocabulary changed; the procedure did not." });
+  quiz(document.getElementById("ceQuiz"), { q: "Gauss's 1801 orbit fit counts as machine learning on slide 7 because", options: ["The 24 nights alone determined the shape of the orbit, with no physical model assumed in advance", "He chose a model class, fit its parameters to noisy data by minimizing squared residuals, and was judged on a prediction for data he did not have", "The orbit was an ellipse"], answer: 1, why: "Strip the vocabulary and that is the whole of supervised learning: model class, fit, held-out judgment. The first option is the usual confusion between estimation and learning: gravitation fixed the model class and Gauss estimated two numbers in it, which is how supervised learning works as well. What earns the name learning is the held-out judgment, and Gauss accepted one in December." });
   window.addEventListener("themechange", draw);
   draw();
 })();
@@ -608,20 +622,24 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
     ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(lamp[0], lamp[1], 16, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2; ctx.stroke(); for (let k = 0; k < 8; k++) { const an = k * Math.PI / 4; board.line(lamp[0] + 20 * Math.cos(an), lamp[1] + 20 * Math.sin(an), lamp[0] + 27 * Math.cos(an), lamp[1] + 27 * Math.sin(an), css("--orange"), 2); }
     board.label(gateAns === null ? "lamp (answer the question to unlock it)" : "lamp (drag along the arc)", lamp[0], lamp[1] - 34, css("--orange"), "center", 12);
     // the angle between the residual and the model line
-    { let d = Math.atan2(v[1], v[0]) * 180 / Math.PI - 45; d = ((d % 180) + 180) % 180; if (d > 90) d = 180 - d; board.label("angle from e to the line: " + (Math.hypot(v[0], v[1]) < 1e-6 ? "-" : d.toFixed(1) + " deg"), 900, 60, css("--ink"), "left", 13, true); }
+    { let d = Math.atan2(v[1], v[0]) * 180 / Math.PI - 45; d = ((d % 180) + 180) % 180; if (d > 90) d = 180 - d; board.label("angle from e to the line", 850, 44, css("--ink"), "left", 13); board.label(Math.hypot(v[0], v[1]) < 1e-6 ? "-" : d.toFixed(1) + " deg", 850, 66, css("--ink"), "left", 13, true); }
     // arc
     ctx.strokeStyle = css("--line"); ctx.setLineDash([2, 6]); ctx.beginPath(); for (let k = 0; k <= 40; k++) { const t = (95 + 80 * k / 40) * Math.PI / 180; const dd = a >= 0 ? [Math.cos(t), Math.sin(t)] : [-Math.cos(t), -Math.sin(t)]; const lx = px(x) + dd[0] * (Math.abs(a) * S + L), ly = py(x) - dd[1] * (Math.abs(a) * S + L); if (k === 0) ctx.moveTo(lx, ly); else ctx.lineTo(lx, ly); } ctx.stroke(); ctx.setLineDash([]);
     // side panel on the right: the weighted mean as a balance
-    const bx = 900, by = 120; board.label("the same estimate as arithmetic", bx, by, css("--ink"), "left", 13);
-    board.label("x = (w1 y1 + w2 y2) / (w1 + w2)", bx, by + 24, css("--muted"), "left", 12, true);
-    board.label("w1 / w2 = " + ratio.toFixed(2) + "   so   x = " + (100 + x / 1000).toFixed(4), bx, by + 46, css("--ink"), "left", 12, true);
-    board.label("residual rule from the normal equations", bx, by + 90, css("--ink"), "left", 13); board.label("w1 v1 + w2 v2 = 0", bx, by + 112, css("--muted"), "left", 12, true);
-    board.label((ratio).toFixed(2) + " x (" + v[0].toFixed(2) + ") + 1 x (" + v[1].toFixed(2) + ") = " + (ratio * v[0] + v[1]).toFixed(2), bx, by + 134, css("--ink"), "left", 12, true);
-    board.label("the dashed ellipse is a circle in the lamp's metric:", bx, by + 180, css("--muted"), "left", 12); board.label("the smallest one around y that touches the line", bx, by + 198, css("--muted"), "left", 12); board.label("touches it at the estimate", bx, by + 216, css("--muted"), "left", 12);
-    board.label("Gauss-Markov: use w = 1 / sigma^2 and no linear", bx, by + 262, css("--muted"), "left", 12); board.label("unbiased estimate has a smaller variance", bx, by + 280, css("--muted"), "left", 12);
+    // the right-hand block is anchored at 850 and broken into short lines so it still fits at classroom font size
+    const bx = 850, by = 104; board.label("the same estimate as arithmetic", bx, by, css("--ink"), "left", 13);
+    board.label("x = (w1 y1 + w2 y2) / (w1 + w2)", bx, by + 22, css("--muted"), "left", 12, true);
+    board.label("w1 / w2 = " + ratio.toFixed(2), bx, by + 42, css("--ink"), "left", 12, true);
+    board.label("x = " + (100 + x / 1000).toFixed(4) + " m", bx, by + 62, css("--ink"), "left", 12, true);
+    board.label("residual rule from the", bx, by + 102, css("--ink"), "left", 13); board.label("normal equations", bx, by + 120, css("--ink"), "left", 13);
+    board.label("w1 v1 + w2 v2 = 0", bx, by + 142, css("--muted"), "left", 12, true);
+    board.label(ratio.toFixed(2) + " x (" + v[0].toFixed(2) + ")", bx, by + 162, css("--ink"), "left", 12, true);
+    board.label("+ 1.00 x (" + v[1].toFixed(2) + ") = " + (ratio * v[0] + v[1]).toFixed(2), bx, by + 182, css("--ink"), "left", 12, true);
+    board.label("the dashed ellipse is a circle", bx, by + 222, css("--muted"), "left", 12); board.label("in the lamp's metric: the smallest", bx, by + 240, css("--muted"), "left", 12); board.label("one around y that touches the", bx, by + 258, css("--muted"), "left", 12); board.label("line, and it touches at the estimate", bx, by + 276, css("--muted"), "left", 12);
+    board.label("Gauss-Markov: with w = 1 / sigma^2", bx, by + 316, css("--muted"), "left", 12); board.label("this is the minimum-variance", bx, by + 334, css("--muted"), "left", 12); board.label("linear unbiased estimate", bx, by + 352, css("--muted"), "left", 12);
     document.getElementById("shY").textContent = (100 + y[0] / 1000).toFixed(4) + ", " + (100 + y[1] / 1000).toFixed(4); document.getElementById("shW").textContent = ratio.toFixed(2); document.getElementById("shS").textContent = Math.sqrt(1 / ratio).toFixed(2); document.getElementById("shX").textContent = (100 + x / 1000).toFixed(4) + " m"; document.getElementById("shV").textContent = v[0].toFixed(2) + ", " + v[1].toFixed(2);
     const ok = ratio >= 3.3 && ratio <= 4.8; document.getElementById("shBadge").textContent = ok ? "done: w1 / w2 near 4" : "not yet"; document.getElementById("shBadge").className = "badge" + (ok ? " done" : ""); document.getElementById("shTask").className = "ask" + (ok ? " ok" : "");
-    let html = '<p class="prompt">Move the lamp: when do the residuals stop being perpendicular to the model plane?</p>';
+    let html = '<p class="prompt">When are the residuals perpendicular to the model line?</p>';
     if (gateAns === null) html += '<div class="gate">' + GATE.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div><p>Commit to one answer; the lamp unlocks after that.</p>';
     else html += '<div class="ask ' + (gateAns === GATE_OK ? 'ok' : 'no') + '">' + (gateAns === GATE_OK ? 'Right. ' : 'The answer is: ' + GATE[GATE_OK] + '. ') + 'The residual is W-orthogonal to the line, w1 v1 + w2 v2 = 0. Seen in ordinary coordinates it is perpendicular only when w1 = w2, the lamp at 135 degrees; every other lamp angle tilts the shadow.</div>';
     html += '<span class="k">' + (Math.abs(ratio - 1) < 0.08 ? 'equal weights' : (ratio > 1 ? 'reading 1 trusted more' : 'reading 2 trusted more')) + '</span><p>' + (Math.abs(ratio - 1) < 0.08 ? 'The light falls perpendicular to the line and the shadow is the ordinary projection: the estimate is the plain mean of the two readings.' : 'The light is tilted, so the shadow lands closer to the reading with the larger weight: the estimate is a weighted mean. The residual on the trusted reading is the smaller one.') + '</p><p>sigma1 / sigma2 = 1 / 2 means w1 / w2 = 4. Find the lamp position that gives that ratio and the badge turns green.</p>';
@@ -632,7 +650,7 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
   document.getElementById("shReset").addEventListener("click", () => { y = [-3.0, 3.5]; theta = 135 * Math.PI / 180; gateAns = null; draw(); });
   window.addEventListener("pointermove", ev => { if (!drag) return; const [mx, my] = board.pos(ev); if (drag === "y") { y = [Math.max(-9.5, Math.min(9.5, (mx - CX) / S)), Math.max(-9.5, Math.min(9.5, (CY - my) / S))]; draw(); return; } const x = estimate(); let phi = Math.atan2(-(my - py(x)), mx - px(x)) * 180 / Math.PI; phi = ((phi % 180) + 180) % 180; theta = Math.max(95, Math.min(175, phi)) * Math.PI / 180; draw(); });
   window.addEventListener("pointerup", () => { drag = null; });
-  quiz(document.getElementById("shQuiz"), { q: "Two readings of one height have sigma 1 mm and 3 mm. The right weights are", options: ["3 and 1, proportional to the sigmas", "9 and 1, inverse to the variances", "1 and 1, because weights are a matter of taste"], answer: 1, why: "Weights are inverse variances: 1 / 1^2 = 1 and 1 / 3^2 = 1 / 9, so a ratio of 9 to 1. That is the maximum likelihood weighting for Gaussian noise of unequal spread, and Gauss-Markov makes it the minimum-variance linear unbiased choice even without the Gaussian assumption." });
+  quiz(document.getElementById("shQuiz"), { q: "Two readings of one height have sigma 1 mm and 3 mm. The right weights are", options: ["1 and 3, proportional to the sigmas", "9 and 1, inverse to the variances", "1 and 1, because weights are a matter of taste"], answer: 1, why: "Weights are inverse variances: 1 / 1^2 = 1 and 1 / 3^2 = 1 / 9, so a ratio of 9 to 1. That is the maximum likelihood weighting for Gaussian noise of unequal spread, and Gauss-Markov makes it the minimum-variance linear unbiased choice even without the Gaussian assumption." });
   window.addEventListener("themechange", draw);
   draw();
 })();
@@ -650,6 +668,8 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
   function fit(w) { return wls(T.map(t => [1, t]), Y, w); }
   // standard error of the rate from the weighted normal matrix, sqrt of (A'WA)^-1 [1][1]
   function seRate(w) { const N = [[0, 0], [0, 0]]; T.forEach((t, i) => { N[0][0] += w[i]; N[0][1] += w[i] * t; N[1][0] += w[i] * t; N[1][1] += w[i] * t * t; }); const col = solveLinear(N, [0, 1]); return col ? Math.sqrt(Math.max(0, col[1])) : NaN; }
+  // sigma0 = sqrt(v'Wv / (m - n)): the scale the residuals themselves report, against the declared sigmas
+  function sigma0(w, b) { const q = T.reduce((s, t, i) => s + w[i] * Math.pow(Y[i] - b[0] - b[1] * t, 2), 0); return Math.sqrt(q / (T.length - 2)); }
   // change of the rate when reading i is made ten times more precise (weight times 100)
   function sensitivities(w, rate) { return T.map((t, i) => { const w2 = w.slice(); w2[i] *= 100; return fit(w2)[1] - rate; }); }
   function spring(ctx, x, y1, y2, w) { const k = Math.min(1, w / 4), coils = 3 + Math.round(7 * k), amp = 7, width = 0.8 + 2.4 * k; ctx.strokeStyle = mix(css("--grey"), css("--blue"), k); ctx.lineWidth = width; ctx.beginPath(); ctx.moveTo(x, y1); const n = coils * 2; for (let i = 1; i < n; i++) { const yy = y1 + (y2 - y1) * i / n; ctx.lineTo(x + (i % 2 ? amp : -amp), yy); } ctx.lineTo(x, y2); ctx.stroke(); }
@@ -675,13 +695,14 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
     board.label("a short bar is a stiff spring:", lx, TOP + 270, css("--muted"), "left", 12); board.label("the line cannot leave that reading", lx, TOP + 288, css("--muted"), "left", 12);
     board.label("the sum of w v^2 is the energy", lx, TOP + 320, css("--muted"), "left", 12); board.label("stored in the springs; the fit", lx, TOP + 338, css("--muted"), "left", 12); board.label("is their rest position", lx, TOP + 356, css("--muted"), "left", 12);
     const share = w.slice(0, 5).reduce((s, q) => s + q, 0) / w.reduce((s, q) => s + q, 0);
-    document.getElementById("spRate").textContent = b[1].toFixed(2); document.getElementById("spSE").textContent = "+/- " + seRate(w).toFixed(3); document.getElementById("spRate0").textContent = b0[1].toFixed(2); document.getElementById("spShare").textContent = (100 * share).toFixed(0) + " %"; document.getElementById("spPred").textContent = (b[0] + 24 * b[1]).toFixed(1);
+    const se = seRate(w), s0 = sigma0(w, b);
+    document.getElementById("spRate").textContent = b[1].toFixed(2); document.getElementById("spSE").textContent = "+/- " + se.toFixed(3); document.getElementById("spS0").textContent = s0.toFixed(2); document.getElementById("spSEs").textContent = "+/- " + (se * s0).toFixed(3); document.getElementById("spRate0").textContent = b0[1].toFixed(2); document.getElementById("spShare").textContent = (100 * share).toFixed(0) + " %"; document.getElementById("spPred").textContent = (b[0] + 24 * b[1]).toFixed(1);
     const spec = sig.slice(0, 5).every(s => s >= 0.35 && s <= 0.7) && sig.slice(5).every(s => s >= 2.2 && s <= 4.0);
     document.getElementById("spBadge").textContent = spec ? "done: rate " + b[1].toFixed(2) + " mm / month" : "not yet"; document.getElementById("spBadge").className = "badge" + (spec ? " done" : ""); document.getElementById("spTask").className = "ask" + (spec ? " ok" : "");
     let html = '<p class="prompt">Which single reading, if made ten times more precise, changes the rate most?</p>';
     if (nominee === null) html += '<p>Click a reading on the plot to nominate it. The changes stay hidden until you do.</p>';
     else html += '<div class="ask ' + (nominee === top ? 'ok' : 'no') + '">' + (nominee === top ? 'Right. ' : 'No. ') + 'Month ' + T[top] + ' moves the rate most, by ' + absS[top].toFixed(2) + ' mm / month' + (nominee === top ? '' : '; month ' + T[nominee] + ' moves it by ' + absS[nominee].toFixed(2)) + '. The change scales with the reading\'s residual, its added weight, and its distance from the centre of the time axis' + (top === 6 ? '; the month-9 reading is the one furthest off the line.' : '.') + '</div>';
-    html += '<span class="k">' + (sig.every(s => Math.abs(s - sig[0]) < 1e-9) ? 'equal weights' : 'weighted') + '</span><p>' + (sig.every(s => Math.abs(s - sig[0]) < 1e-9) ? 'All bars the same length, so the blue line sits on the grey one: ordinary least squares. The month-9 tape reading is pulling the rate up to ' + b[1].toFixed(2) + ' mm / month.' : 'The springs differ. Months 1 to 5 carry ' + (100 * share).toFixed(0) + ' % of the total weight, and the rate is ' + b[1].toFixed(2) + ' mm / month against ' + b0[1].toFixed(2) + ' with equal weights.') + ' Its standard error from the weighted normal matrix is ' + seRate(w).toFixed(3) + '; stiffer springs shrink it.</p><p>The true rate that generated the data was 1.80 mm / month. Weights are a statement of what the instruments promised.</p>';
+    html += '<span class="k">' + (sig.every(s => Math.abs(s - sig[0]) < 1e-9) ? 'equal weights' : 'weighted') + '</span><p>' + (sig.every(s => Math.abs(s - sig[0]) < 1e-9) ? 'All bars the same length, so the blue line sits on the grey one: ordinary least squares. The month-9 tape reading is pulling the rate up to ' + b[1].toFixed(2) + ' mm / month.' : 'The springs differ. Months 1 to 5 carry ' + (100 * share).toFixed(0) + ' % of the total weight, and the rate is ' + b[1].toFixed(2) + ' mm / month against ' + b0[1].toFixed(2) + ' with equal weights.') + ' Its standard error from the weighted normal matrix is ' + se.toFixed(3) + ', and that number believes the sigmas you set.</p><p>The residuals report their own scale: sigma0 = sqrt(v\'Wv / (m - n)) is ' + s0.toFixed(2) + ' here. A sigma0 near 1 means the declared sigmas match the scatter. Multiplying the standard error by sigma0 gives ' + (se * s0).toFixed(3) + ', which lets the residuals set the scale; the 6 mm step at month 9 is the largest single contributor to it.</p><p>The true rate that generated the data was 1.80 mm / month. Weights are a statement of what the instruments promised.</p>';
     stepEl.innerHTML = html;
   }
   // nomination by pointer: a press on a reading's dot commits the answer and does not start a drag
@@ -701,7 +722,9 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
   const n = 12, rng = mulberry32(5), g = randn(rng, n);
   const X = [], Y = []; for (let i = 0; i < n; i++) { const x = 0.35 + 0.30 * i / (n - 1); X.push(x); Y.push(75 - 90 * (x - 0.35) + 2.0 * g[i]); }
   const BL = 7; const clean = [X.slice(), Y.slice()]; let bx = X[BL], by = Y[BL];
-  let delta = 30, drag = null;
+  // the loss panel spans +/- DMAX MPa, chosen past the largest residual the blunder can reach (about 62)
+  const DMAX = 70;
+  let delta = DMAX, drag = null;
   // gate: the knee stays fixed and the strip's numbers stay hidden until the student commits
   let gateAns = null; const GATE = ["toward the blunder", "away from the blunder"], GATE_OK = 1;
   const fitB = new Board(document.getElementById("blFit")), lossB = new Board(document.getElementById("blLoss"));
@@ -713,7 +736,9 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
   function huberFit(xs, ys, d) { let b = wls(xs.map(x => [1, x]), ys, null); for (let it = 0; it < 40; it++) { const r = ys.map((y, i) => y - b[0] - b[1] * xs[i]); const w = r.map(v => Math.abs(v) <= d ? 1 : d / Math.abs(v)); b = wls(xs.map(x => [1, x]), ys, w); } return b; }
   const bClean = wls(clean[0].map(x => [1, x]), clean[1], null);
   function draw() {
-    const [xs, ys] = data(), b = huberFit(xs, ys, delta), r = ys.map((y, i) => y - b[0] - b[1] * xs[i]);
+    // at the far-right stop the knee is gone: the loss is the true quadratic and psi is the identity
+    const quad = delta >= DMAX - 3, DE = quad ? Infinity : delta;
+    const [xs, ys] = data(), b = huberFit(xs, ys, DE), r = ys.map((y, i) => y - b[0] - b[1] * xs[i]);
     const bSq = wls(xs.map(x => [1, x]), ys, null), bL1 = huberFit(xs, ys, 0.3);
     fitB.clear("strength against water-cement ratio: drag the orange point anywhere"); const ctx = fitB.ctx;
     fitB.line(L, TOP, L, BOT, css("--line"), 1); fitB.line(L, BOT, R, BOT, css("--line"), 1);
@@ -722,57 +747,57 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
     fitB.line(px(0.3), py(bSq[0] + 0.3 * bSq[1]), px(0.7), py(bSq[0] + 0.7 * bSq[1]), css("--grey"), 1.5, [7, 5]);
     fitB.line(px(0.3), py(bL1[0] + 0.3 * bL1[1]), px(0.7), py(bL1[0] + 0.7 * bL1[1]), css("--grey"), 1.5, [2, 4]);
     fitB.line(px(0.3), py(b[0] + 0.3 * b[1]), px(0.7), py(b[0] + 0.7 * b[1]), css("--blue"), 3);
-    const typical = r.filter((v, i) => i !== BL).map(v => Math.abs(psi(v, delta))).sort((a, c) => a - c)[Math.floor(n / 2)];
-    xs.forEach((x, i) => { const yl = b[0] + b[1] * x; const p = psi(r[i], delta); arrow(ctx, px(x), py(ys[i]), px(x), py(ys[i]) + (ys[i] > yl ? 1 : -1) * Math.min(220, 3.2 * Math.abs(p)), i === BL ? css("--orange") : css("--red"), i === BL ? 3 : 2); fitB.dot(px(x), py(ys[i]), i === BL ? 9 : 5, i === BL ? css("--orange") : css("--ink"), i === BL ? "#fff" : null); });
+    const typical = r.filter((v, i) => i !== BL).map(v => Math.abs(psi(v, DE))).sort((a, c) => a - c)[Math.floor(n / 2)];
+    xs.forEach((x, i) => { const yl = b[0] + b[1] * x; const p = psi(r[i], DE); arrow(ctx, px(x), py(ys[i]), px(x), py(ys[i]) + (ys[i] > yl ? 1 : -1) * Math.min(220, 3.2 * Math.abs(p)), i === BL ? css("--orange") : css("--red"), i === BL ? 3 : 2); fitB.dot(px(x), py(ys[i]), i === BL ? 9 : 5, i === BL ? css("--orange") : css("--ink"), i === BL ? "#fff" : null); });
     fitB.label("arrows: the pull psi(v) of each point on the line, 3.2 px per MPa", L, TOP - 4, css("--muted"), "left", 12);
     fitB.label("dashed grey: squared error   dotted grey: absolute error   blue: the knee you set", L, BOT + 36, css("--muted"), "left", 12);
     // three losses side by side: slope and the blunder's pull under each
     { const sy = BOT + 52, cw = (R - L) / 3, cleanS = bClean[1] / 10;
       const pullOf = (bb, d) => { const rr = ys.map((y, i) => y - bb[0] - bb[1] * xs[i]); const typ = rr.filter((v, i) => i !== BL).map(v => Math.abs(psi(v, d))).sort((p, q) => p - q)[Math.floor(n / 2)]; return typ > 0 ? Math.abs(psi(rr[BL], d)) / typ : 0; };
-      const cols = [["squared error", bSq, pullOf(bSq, 1e9), css("--grey"), [7, 5]], ["Huber, knee " + (delta >= 29 ? "infinity" : delta.toFixed(1)), b, pullOf(b, delta), css("--blue"), []], ["absolute error", bL1, pullOf(bL1, 0.3), css("--grey"), [2, 4]]];
+      const cols = [["squared error", bSq, pullOf(bSq, Infinity), css("--grey"), [7, 5]], [quad ? "squared error" : "Huber, knee " + delta.toFixed(1), b, pullOf(b, DE), css("--blue"), []], ["absolute error", bL1, pullOf(bL1, 0.3), css("--grey"), [2, 4]]];
       cols.forEach((c, k) => { const x0 = L + k * cw; ctx.fillStyle = css("--bg"); ctx.fillRect(x0 + 2, sy, cw - 4, fitB.H - 8 - sy); if (k === 1) { ctx.strokeStyle = css("--blue"); ctx.lineWidth = 1.5; ctx.strokeRect(x0 + 2, sy, cw - 4, fitB.H - 8 - sy); }
         fitB.line(x0 + 12, sy + 18, x0 + 40, sy + 18, c[3], 2.5, c[4]); fitB.label(c[0], x0 + 48, sy + 22, css("--ink"), "left", 13);
         const shown = gateAns !== null; const s = c[1][1] / 10;
-        fitB.label("slope " + (shown ? s.toFixed(2) + " MPa per 0.1 w/c" : "hidden until you answer"), x0 + 12, sy + 44, shown ? css("--ink") : css("--muted"), "left", 12, true);
-        fitB.label(shown ? "off the clean slope by " + (100 * Math.abs(s - cleanS) / Math.abs(cleanS)).toFixed(0) + " %" : "", x0 + 12, sy + 62, Math.abs(s - cleanS) <= 0.05 * Math.abs(cleanS) ? "#2E7D5B" : css("--red"), "left", 12, true);
-        fitB.label(shown ? "blunder pull " + c[2].toFixed(1) + " x typical" : "", x0 + 12, sy + 80, css("--muted"), "left", 12, true); }); }
+        fitB.label(shown ? "slope " + s.toFixed(2) : "answer to reveal", x0 + 12, sy + 44, shown ? css("--ink") : css("--muted"), "left", 12, true);
+        fitB.label(shown ? "off clean by " + (100 * Math.abs(s - cleanS) / Math.abs(cleanS)).toFixed(0) + " %" : "", x0 + 12, sy + 62, Math.abs(s - cleanS) <= 0.05 * Math.abs(cleanS) ? "#2E7D5B" : css("--red"), "left", 12, true);
+        fitB.label(shown ? "pull " + c[2].toFixed(1) + " x typical" : "", x0 + 12, sy + 80, css("--muted"), "left", 12, true); }); }
     // loss panel
-    lossB.clear(gateAns === null ? "the loss: the knee is locked until you answer" : "the loss and its derivative: drag the knee"); const lc = lossB.ctx, LX = 50, LR = lossB.W - 20, T1 = 60, B1 = 250, T2 = 300, B2 = 480, RM = 30;
-    const rx = v => LX + (v + RM) / (2 * RM) * (LR - LX), rho = v => Math.abs(v) <= delta ? v * v / 2 : delta * (Math.abs(v) - delta / 2), rmax = rho(RM) * 1.05;
+    lossB.clear(gateAns === null ? "the loss: the knee is locked until you answer" : "the loss and its derivative: drag the knee"); const lc = lossB.ctx, LX = 50, LR = lossB.W - 20, T1 = 60, B1 = 250, T2 = 300, B2 = 480, RM = DMAX;
+    const rx = v => LX + (v + RM) / (2 * RM) * (LR - LX), rho = v => Math.abs(v) <= DE ? v * v / 2 : DE * (Math.abs(v) - DE / 2), rmax = rho(RM) * 1.05;
     const ry = v => B1 - rho(v) / rmax * (B1 - T1);
     lossB.line(LX, B1, LR, B1, css("--line"), 1); lossB.line(rx(0), T1, rx(0), B1, css("--line"), 1);
-    lc.strokeStyle = css("--grey"); lc.setLineDash([4, 4]); lc.lineWidth = 1.5; lc.beginPath(); for (let k = 0; k <= 100; k++) { const v = -RM + 2 * RM * k / 100; const yy = B1 - (v * v / 2) / rmax * (B1 - T1); if (k === 0) lc.moveTo(rx(v), Math.max(T1 - 10, yy)); else lc.lineTo(rx(v), Math.max(T1 - 10, yy)); } lc.stroke(); lc.setLineDash([]);
+    lc.strokeStyle = css("--grey"); lc.setLineDash([7, 6]); lc.lineWidth = 3; lc.beginPath(); { let pen = false; for (let k = 0; k <= 200; k++) { const v = -RM + 2 * RM * k / 200, yy = B1 - (v * v / 2) / rmax * (B1 - T1); if (yy < T1) { pen = false; continue; } if (pen) lc.lineTo(rx(v), yy); else { lc.moveTo(rx(v), yy); pen = true; } } } lc.stroke(); lc.setLineDash([]);
     lc.strokeStyle = css("--blue"); lc.lineWidth = 2.5; lc.beginPath(); for (let k = 0; k <= 100; k++) { const v = -RM + 2 * RM * k / 100; if (k === 0) lc.moveTo(rx(v), ry(v)); else lc.lineTo(rx(v), ry(v)); } lc.stroke();
     lossB.dot(rx(delta), ry(delta), 9, css("--orange"), "#fff"); lossB.dot(rx(-delta), ry(-delta), 5, css("--orange"));
-    lossB.label("rho(v)", LX, T1 - 8, css("--ink"), "left", 12, true); lossB.label("knee at delta = " + (delta >= 29 ? "infinity (squared error)" : delta.toFixed(1) + " MPa"), rx(0), B1 + 16, css("--orange"), "center", 11, true);
-    lossB.label("-30", rx(-RM), B1 + 30, css("--muted"), "center", 10, true); lossB.label("+30", rx(RM), B1 + 30, css("--muted"), "center", 10, true); lossB.label("residual v (MPa)", rx(0), B1 + 30, css("--muted"), "center", 10);
+    lossB.label("rho(v)", LX, T1 - 8, css("--ink"), "left", 12, true); lossB.label(quad ? "no knee: squared error" : "knee at delta = " + delta.toFixed(1) + " MPa", LR, T1 - 8, css("--orange"), "right", 11, true);
+    lossB.label("-" + RM, rx(-RM), B1 + 22, css("--muted"), "center", 10, true); lossB.label("+" + RM, rx(RM), B1 + 22, css("--muted"), "center", 10, true); lossB.label("residual v (MPa)", rx(0), B1 + 22, css("--muted"), "center", 10);
     lossB.line(LX, (T2 + B2) / 2, LR, (T2 + B2) / 2, css("--line"), 1); lossB.line(rx(0), T2, rx(0), B2, css("--line"), 1);
     const py2 = p => (T2 + B2) / 2 - p / RM * (B2 - T2) / 2;
     lc.strokeStyle = css("--grey"); lc.setLineDash([4, 4]); lc.lineWidth = 1.5; lc.beginPath(); lc.moveTo(rx(-RM), py2(-RM)); lc.lineTo(rx(RM), py2(RM)); lc.stroke(); lc.setLineDash([]);
-    lc.strokeStyle = css("--red"); lc.lineWidth = 2.5; lc.beginPath(); for (let k = 0; k <= 100; k++) { const v = -RM + 2 * RM * k / 100; if (k === 0) lc.moveTo(rx(v), py2(psi(v, delta))); else lc.lineTo(rx(v), py2(psi(v, delta))); } lc.stroke();
-    r.forEach((v, i) => lossB.dot(rx(Math.max(-RM, Math.min(RM, v))), py2(psi(v, delta)), i === BL ? 7 : 4, i === BL ? css("--orange") : css("--ink")));
-    lossB.label("psi(v) = rho'(v), the pull", LX, T2 - 8, css("--ink"), "left", 12, true); lossB.label(delta >= 29 ? "unbounded: a point 10 times further pulls 10 times harder" : "bounded at " + delta.toFixed(1) + ": no point pulls harder than that", LX, B2 + 22, css("--muted"), "left", 11);
+    lc.strokeStyle = css("--red"); lc.lineWidth = 2.5; lc.beginPath(); for (let k = 0; k <= 100; k++) { const v = -RM + 2 * RM * k / 100; if (k === 0) lc.moveTo(rx(v), py2(psi(v, DE))); else lc.lineTo(rx(v), py2(psi(v, DE))); } lc.stroke();
+    r.forEach((v, i) => lossB.dot(rx(Math.max(-RM, Math.min(RM, v))), py2(psi(v, DE)), i === BL ? 7 : 4, i === BL ? css("--orange") : css("--ink")));
+    lossB.label("psi(v) = rho'(v), the pull", LX, T2 - 8, css("--ink"), "left", 12, true); lossB.label(quad ? "unbounded: twice as far pulls twice as hard" : "bounded at " + delta.toFixed(1) + ": the cap on any pull", LX, B2 + 22, css("--muted"), "left", 11);
     // readouts
     const slope = b[1] / 10, cleanSlope = bClean[1] / 10, off = Math.abs(by - (bClean[0] + bClean[1] * bx));
-    document.getElementById("blDelta").textContent = delta >= 29 ? "infinity" : delta.toFixed(1); document.getElementById("blKind").textContent = delta >= 29 ? "squared error" : (delta <= 0.6 ? "absolute error, nearly" : "Huber");
-    document.getElementById("blSlope").textContent = slope.toFixed(2); document.getElementById("blClean").textContent = cleanSlope.toFixed(2); document.getElementById("blPull").textContent = typical > 0 ? (Math.abs(psi(r[BL], delta)) / typical).toFixed(1) + " x" : "-";
+    document.getElementById("blDelta").textContent = quad ? "no knee" : delta.toFixed(1); document.getElementById("blKind").textContent = quad ? "squared error" : (delta <= 0.6 ? "absolute error, nearly" : "Huber");
+    document.getElementById("blSlope").textContent = slope.toFixed(2); document.getElementById("blClean").textContent = cleanSlope.toFixed(2); document.getElementById("blPull").textContent = typical > 0 ? (Math.abs(psi(r[BL], DE)) / typical).toFixed(1) + " x" : "-";
     const ok = off >= 20 && Math.abs(slope - cleanSlope) <= 0.05 * Math.abs(cleanSlope);
-    let best = null; if (off >= 20) { for (let d = 29; d >= 0.3; d -= 0.1) { const bb = huberFit(xs, ys, d); if (Math.abs(bb[1] / 10 - cleanSlope) <= 0.05 * Math.abs(cleanSlope)) { best = d; break; } } }
+    let best = null; if (off >= 20) { for (let d = DMAX - 3.25; d >= 0.3; d -= 0.25) { const bb = huberFit(xs, ys, d); if (Math.abs(bb[1] / 10 - cleanSlope) <= 0.05 * Math.abs(cleanSlope)) { best = d; break; } } }
     document.getElementById("blBadge").textContent = ok ? "done" + (best !== null ? ": any delta up to about " + best.toFixed(1) + " works here" : "") : (off < 20 ? "blunder is only " + off.toFixed(0) + " MPa off" : "slope still off by " + (100 * Math.abs(slope - cleanSlope) / Math.abs(cleanSlope)).toFixed(0) + " %"); document.getElementById("blBadge").className = "badge" + (ok ? " done" : ""); document.getElementById("blTask").className = "ask" + (ok ? " ok" : "");
     let html = '<p class="prompt">Will the absolute loss move the slope toward the blunder or away?</p>';
     if (gateAns === null) html += '<div class="gate">' + GATE.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div><p>Drag the blunder off the line first if you want to see the arrows, then commit. The knee and the strip unlock after that.</p>';
     else { const sSq = bSq[1] / 10, sL1 = bL1[1] / 10; html += '<div class="ask ' + (gateAns === GATE_OK ? 'ok' : 'no') + '">' + (gateAns === GATE_OK ? 'Right. ' : 'The answer is: away from the blunder. ') + 'Under absolute error every point pulls with the same bounded force, so the blunder is outvoted and the slope returns toward the clean one: ' + sL1.toFixed(2) + ' against ' + sSq.toFixed(2) + ' for squared error and ' + cleanSlope.toFixed(2) + ' from clean data.' + (off < 5 ? ' Drag the orange point off the line to see the three slopes separate.' : '') + '</div>'; }
-    html += '<span class="k">' + (off < 5 ? 'no blunder yet' : (delta >= 29 ? 'squared error' : 'bounded influence')) + '</span><p>' + (off < 5 ? 'The orange point is on the line with the others, so all three losses agree. Drag it off the line and watch the arrows.' : (delta >= 29 ? 'The blunder pulls ' + (Math.abs(psi(r[BL], delta)) / typical).toFixed(0) + ' times harder than a typical point, and the line has turned to meet it: slope ' + slope.toFixed(2) + ' against ' + cleanSlope.toFixed(2) + ' from clean data.' : 'The blunder cannot pull harder than ' + delta.toFixed(1) + ' MPa, the same as a point at the knee. Its arrow is capped; the clean points outvote it and the slope is ' + slope.toFixed(2) + '.')) + '</p><p>Slide 21 in one drag: far right is squared error, far left is absolute error, and a knee near the noise level, about 2 MPa here, is Huber. The strip under the plot shows the three answers side by side.</p>';
+    html += '<span class="k">' + (off < 5 ? 'no blunder yet' : (quad ? 'squared error' : 'bounded influence')) + '</span><p>' + (off < 5 ? 'The orange point is on the line with the others, so all three losses agree. Drag it off the line and watch the arrows.' : (quad ? 'The blunder pulls ' + (Math.abs(psi(r[BL], DE)) / typical).toFixed(0) + ' times harder than a typical point, and the line has turned to meet it: slope ' + slope.toFixed(2) + ' against ' + cleanSlope.toFixed(2) + ' from clean data.' : 'The blunder pulls with at most ' + delta.toFixed(1) + ' MPa of force, the same as a point at the knee. Its arrow is capped; the clean points outvote it and the slope is ' + slope.toFixed(2) + '.')) + '</p><p>Slide 21 in one drag: at the right stop the knee leaves the panel and the loss is squared error, far left is absolute error, and a knee near the noise level, about 2 MPa here, is Huber. The strip under the plot shows the three answers side by side.</p>';
     stepEl.innerHTML = html;
     stepEl.querySelectorAll(".gate button").forEach(bt => bt.addEventListener("click", () => { gateAns = parseInt(bt.dataset.g, 10); draw(); }));
   }
   fitB.c.addEventListener("pointerdown", ev => { const [mx, my] = fitB.pos(ev); if (Math.hypot(mx - px(bx), my - py(by)) < 22) drag = "pt"; });
   lossB.c.addEventListener("pointerdown", ev => { if (gateAns === null) return; drag = "knee"; moveKnee(ev); });
-  document.getElementById("blReset").addEventListener("click", () => { bx = X[BL]; by = Y[BL]; delta = 30; gateAns = null; draw(); });
-  function moveKnee(ev) { const [mx] = lossB.pos(ev); const LX = 50, LR = lossB.W - 20; let v = Math.abs((mx - LX) / (LR - LX) * 60 - 30); delta = Math.max(0.3, Math.min(30, v)); if (delta >= 29) delta = 30; draw(); }
+  document.getElementById("blReset").addEventListener("click", () => { bx = X[BL]; by = Y[BL]; delta = DMAX; gateAns = null; draw(); });
+  function moveKnee(ev) { const [mx] = lossB.pos(ev); const LX = 50, LR = lossB.W - 20; let v = Math.abs((mx - LX) / (LR - LX) * 2 * DMAX - DMAX); delta = Math.max(0.3, Math.min(DMAX, v)); draw(); }
   window.addEventListener("pointermove", ev => { if (!drag) return; if (drag === "knee") { moveKnee(ev); return; } const [mx, my] = fitB.pos(ev); bx = Math.max(0.31, Math.min(0.69, 0.30 + (mx - L) / (R - L) * 0.40)); by = Math.max(22, Math.min(108, 20 + (BOT - my) / (BOT - TOP) * 90)); draw(); });
   window.addEventListener("pointerup", () => { drag = null; });
-  quiz(document.getElementById("blQuiz"), { q: "Robustness has a precise meaning on slide 20. Which loss is robust by that definition?", options: ["Squared error, because it is the maximum likelihood loss", "Any loss whose derivative, the influence function, stays bounded as the residual grows", "Any loss that is zero at the fit"], answer: 1, why: "A bounded influence function caps how hard one observation can pull. Absolute error and Huber have it; squared error does not, which is why one blunder can turn the whole line. Huber showed the capped loss is the maximum likelihood answer for Gaussian data contaminated by blunders." });
+  quiz(document.getElementById("blQuiz"), { q: "Robustness has a precise meaning on slide 20. Which loss is robust by that definition?", options: ["Squared error, because it is the maximum likelihood loss", "Any loss whose derivative, the influence function, stays bounded as the residual grows", "Any loss that is zero at the fit"], answer: 1, why: "A bounded influence function caps how hard one observation can pull. Absolute error and Huber have it; squared error does not, which is why one blunder can turn the whole line. Huber's own result is a minimax one: the capped loss is the maximum likelihood estimator for the least favourable density in an epsilon-contamination neighbourhood of the Gaussian, so it is the estimator with the best worst case over that neighbourhood." });
   window.addEventListener("themechange", draw);
   draw();
 })();
@@ -809,15 +834,17 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
     // ridge path
     ctx.strokeStyle = css("--orange"); ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.beginPath(); for (let k = 0; k <= 80; k++) { const lm = Math.pow(10, -3 + 6 * k / 80), ww = ridge(Y, lm); if (k === 0) ctx.moveTo(px(ww[0]), py(ww[1])); else ctx.lineTo(px(ww[0]), py(ww[1])); } ctx.lineTo(px(0), py(0)); ctx.stroke(); ctx.setLineDash([]);
     // refits
+    // at lambda 0 the ridge refits are the least squares refits, so only the grey series is drawn
+    const shrinking = lam > 0;
     refits.ls.forEach(p => map.dot(px(p[0]), py(p[1]), 3, mix(css("--panel"), css("--grey"), 0.8)));
-    refits.rd.forEach(p => map.dot(px(p[0]), py(p[1]), 3, mix(css("--panel"), css("--blue"), 0.85)));
+    if (shrinking) refits.rd.forEach(p => map.dot(px(p[0]), py(p[1]), 3, mix(css("--panel"), css("--blue"), 0.85)));
     // prior circle
     ctx.strokeStyle = css("--red"); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(px(0), py(0), radius * S, 0, 2 * Math.PI); ctx.stroke(); ctx.fillStyle = mix(css("--panel"), css("--red"), 0.08); ctx.fill();
     map.dot(px(radius * Math.cos(-0.6)), py(radius * Math.sin(-0.6)), 8, css("--red"), "#fff"); map.label(gateAns === null ? "rim (answer first)" : "rim (drag)", px(radius * Math.cos(-0.6)) + 12, py(radius * Math.sin(-0.6)) + 14, css("--red"), "left", 12);
     map.dot(px(WT[0]), py(WT[1]), 7, css("--ink")); map.label("truth (2, 1)", px(WT[0]) + 10, py(WT[1]) - 8, css("--ink"), "left", 12, true);
     map.dot(px(wLS[0]), py(wLS[1]), 6, css("--grey"), "#fff"); map.label("least squares", px(wLS[0]) + 10, py(wLS[1]) + 16, css("--muted"), "left", 12);
-    map.dot(px(w[0]), py(w[1]), 8, css("--orange"), "#fff"); map.label("with the prior", px(w[0]) + 12, py(w[1]) - 10, css("--orange"), "left", 12);
-    map.label("grey dots: least squares on 40 redraws of the noise   blue dots: the same with this prior", 16, map.H - 14, css("--muted"), "left", 12);
+    if (shrinking) { map.dot(px(w[0]), py(w[1]), 8, css("--orange"), "#fff"); map.label("with the prior", px(w[0]) + 12, py(w[1]) - 10, css("--orange"), "left", 12); }
+    map.label(shrinking ? "grey: least squares on 40 redraws of the noise   blue: the same 40 with this prior" : "grey: least squares on 40 redraws of the noise   blue: appears once the rim is inside", 16, map.H - 14, css("--muted"), "left", 12);
     // the augmented matrix
     mat.clear("the same thing as pseudo observations"); const m = mat.ctx, x0 = 60, y0 = 56, cw = 60, rh = 14;
     mat.label("z1", x0 + cw / 2, y0 - 8, css("--muted"), "center", 11, true); mat.label("z2", x0 + 1.5 * cw, y0 - 8, css("--muted"), "center", 11, true); mat.label("y", x0 + 2 * cw + 50, y0 - 8, css("--muted"), "center", 11, true);
@@ -829,13 +856,13 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
     const sdOf = pts => { const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length, my = pts.reduce((s, p) => s + p[1], 0) / pts.length; return [Math.sqrt(pts.reduce((s, p) => s + (p[0] - mx) ** 2 + (p[1] - my) ** 2, 0) / pts.length), mx, my]; };
     const sLS = sdOf(refits.ls), sR = sdOf(refits.rd);
     document.getElementById("vaR").textContent = radius.toFixed(2) + (radius >= rLS ? " (no shrinkage)" : ""); document.getElementById("vaLam").textContent = lam < 0.01 ? lam.toExponential(1) : lam.toFixed(2); document.getElementById("vaW").textContent = w[0].toFixed(2) + ", " + w[1].toFixed(2);
-    document.getElementById("vaSdLS").textContent = sLS[0].toFixed(2); document.getElementById("vaSdR").textContent = sR[0].toFixed(2); document.getElementById("vaBias").textContent = Math.hypot(sR[1] - WT[0], sR[2] - WT[1]).toFixed(2) + " (least squares: " + Math.hypot(sLS[1] - WT[0], sLS[2] - WT[1]).toFixed(2) + ")";
+    document.getElementById("vaSdLS").textContent = sLS[0].toFixed(2); document.getElementById("vaSdR").textContent = shrinking ? sR[0].toFixed(2) : "-"; document.getElementById("vaBias").textContent = shrinking ? Math.hypot(sR[1] - WT[0], sR[2] - WT[1]).toFixed(2) + " (least squares: " + Math.hypot(sLS[1] - WT[0], sLS[2] - WT[1]).toFixed(2) + ")" : Math.hypot(sLS[1] - WT[0], sLS[2] - WT[1]).toFixed(2) + " (least squares)";
     let html = '<p class="prompt">Which coefficient gives way first, cement or binder?</p>';
     if (gateAns === null) html += '<div class="gate">' + GATE.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div><p>Commit, then drag the rim inward. The verdict appears after the first shrink.</p>';
     else if (radius >= rLS) html += '<p>Locked: ' + GATE[gateAns] + '. Drag the rim inward to see.</p>';
     else { const drop = [Math.abs(wLS[0]) - Math.abs(w[0]), Math.abs(wLS[1]) - Math.abs(w[1])], first = drop[0] >= drop[1] ? 0 : 1, ok = gateAns === first;
       html += '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No. ') + GATE[first] + ' gives way: w1 went from ' + wLS[0].toFixed(2) + ' to ' + w[0].toFixed(2) + ' and w2 from ' + wLS[1].toFixed(2) + ' to ' + w[1].toFixed(2) + '. The solution slides along the valley floor first, the direction the data cannot resolve, so one coefficient falls while the other ' + (drop[1 - first] < 0 ? 'rises' : 'barely moves') + '; only a strong prior pulls both toward zero.</div>'; }
-    html += '<span class="k">' + (radius >= rLS ? 'prior too wide to matter' : (lam > 5 ? 'strong prior' : 'mild prior')) + '</span><p>' + (radius >= rLS ? 'The circle contains the least squares point, so the prior changes nothing. Look at the grey dots: on other draws of the noise, least squares lands anywhere along the valley, because the two predictors say almost the same thing and the data cannot tell them apart.' : 'The solution is where the valley first touches the circle, and it has walked ' + Math.hypot(w[0] - wLS[0], w[1] - wLS[1]).toFixed(2) + ' from least squares toward the origin. The blue dots are tighter than the grey ones (' + sR[0].toFixed(2) + ' against ' + sLS[0].toFixed(2) + ') and their centre has moved off the truth by ' + Math.hypot(sR[1] - WT[0], sR[2] - WT[1]).toFixed(2) + '.') + '</p><p>Variance bought with bias. Where to stop is the next tab.</p>';
+    html += '<span class="k">' + (radius >= rLS ? 'prior too wide to matter' : (lam > 5 ? 'strong prior' : 'mild prior')) + '</span><p>' + (radius >= rLS ? 'The circle contains the least squares point, so lambda is 0 and the solution is the least squares one. Only the grey dots are drawn: on other draws of the noise, least squares lands anywhere along the valley, because the two predictors say almost the same thing and the data cannot tell them apart. Drag the rim inward and the blue series appears beside them.' : 'The solution is where the valley first touches the circle, and it has walked ' + Math.hypot(w[0] - wLS[0], w[1] - wLS[1]).toFixed(2) + ' from least squares toward the origin. The blue dots are tighter than the grey ones (' + sR[0].toFixed(2) + ' against ' + sLS[0].toFixed(2) + ') and their centre has moved off the truth by ' + Math.hypot(sR[1] - WT[0], sR[2] - WT[1]).toFixed(2) + '.') + '</p><p>Variance bought with bias. Where to stop is the next tab.</p>';
     stepEl.innerHTML = html;
     stepEl.querySelectorAll(".gate button").forEach(bt => bt.addEventListener("click", () => { gateAns = parseInt(bt.dataset.g, 10); draw(); }));
   }
@@ -869,7 +896,7 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
   function draw() {
     const fits = LAMS.map(fitFrame), tr = fits.map(c => rms(c, XT, YT)), te = fits.map(c => rms(c, XH, YH)), best = te.indexOf(Math.min.apply(null, te));
     const done = revealed && shown >= NF, vis = k => revealed && k < shown;
-    board.clear("eight fits to the same twelve stations; click the frame you bet on"); const ctx = board.ctx;
+    board.clear("eight fits to the same twelve stations, penalty lambda x sum of k^2 c_k^2; click the frame you bet on"); const ctx = board.ctx;
     fits.forEach((c, k) => { const x0 = FX0 + k * (FW + GAP), on = pick === k, win = done && k === best;
       ctx.fillStyle = on ? mix(css("--panel"), css("--orange"), 0.12) : css("--bg"); ctx.fillRect(x0, FY, FW, FH); ctx.strokeStyle = on ? css("--orange") : (win ? "#2E7D5B" : css("--line")); ctx.lineWidth = on || win ? 3 : 1; ctx.strokeRect(x0, FY, FW, FH); ctx.lineWidth = 1;
       const sx = x => x0 + 8 + x * (FW - 16), sy = y => FY + FH - 30 - (y + 4) / 20 * (FH - 50);
@@ -891,7 +918,7 @@ function arrow(ctx, x1, y1, x2, y2, color, width) { const ang = Math.atan2(y2 - 
     let html = '<p class="prompt">Bet on one frame. Would you keep the bet if the noise is redrawn?</p>';
     if (!revealed) html += '<span class="k">' + (lastPick === null ? 'place your bet' : 'the noise is redrawn') + '</span><p>' + (lastPick === null ? 'Frame 1 passes close to every training station; frame 8 is almost a straight line. Training error, the black curve, already says frame 1 wins. The held-out stations have not been seen by any frame.' : 'New training noise, same eight held-out stations. Your last bet was frame ' + (lastPick + 1) + (lastBest !== null ? ' and frame ' + (lastBest + 1) + ' won' : '') + '. Keep it by clicking the same frame, or move it.') + '</p><p>' + (pick === null ? 'Click a frame.' : 'Frame ' + (pick + 1) + ' chosen. Reveal.') + '</p>';
     else if (!done) html += '<span class="k">revealing</span><p>Held-out scores appear one frame at a time, ' + shown + ' of ' + NF + ' so far. The lowest one wins.</p>';
-    else html += '<span class="k">the reveal</span><div class="ask ' + (pick === best ? 'ok' : (Math.abs(pick - best) === 1 ? '' : 'no')) + '">' + (pick === best ? 'Your frame wins. ' : (Math.abs(pick - best) === 1 ? 'One frame off. ' : 'Not this time. ')) + 'Frame ' + (best + 1) + ' has the lowest held-out error, ' + te[best].toFixed(2) + ' mm; frame 1, which training error prefers, scores ' + te[0].toFixed(2) + ' and frame 8 scores ' + te[7].toFixed(2) + '.' + (lastPick !== null ? (pick === lastPick ? ' You kept the bet' : ' You moved the bet from frame ' + (lastPick + 1)) + (lastBest === best ? ', and the winning frame is the same as last round.' : ', and the winning frame moved from ' + (lastBest + 1) + ' to ' + (best + 1) + '.') : '') + '</div><p>The red curve is the U of slide 24. Press Redraw for a new round: the left frames change shape with every draw of the noise, the right frames do not, and the minimum of the U barely moves. Decide whether to keep your bet.</p>';
+    else html += '<span class="k">the reveal</span><div class="ask ' + (pick === best ? 'ok' : (Math.abs(pick - best) === 1 ? '' : 'no')) + '">' + (pick === best ? 'Your frame wins. ' : (Math.abs(pick - best) === 1 ? 'One frame off. ' : 'Not this time. ')) + 'Frame ' + (best + 1) + ' has the lowest held-out error, ' + te[best].toFixed(2) + ' mm; frame 1, which training error prefers, scores ' + te[0].toFixed(2) + ' and frame 8 scores ' + te[7].toFixed(2) + '.' + (lastPick !== null ? (pick === lastPick ? ' You kept the bet' : ' You moved the bet from frame ' + (lastPick + 1)) + (lastBest === best ? ', and the winning frame is the same as last round.' : ', and the winning frame moved from ' + (lastBest + 1) + ' to ' + (best + 1) + '.') : '') + '</div><p>The red curve is the U of slide 24. The eight held-out readings carry 0.71 mm rms of noise of their own, so the bottom of the U sits near 0.8 mm however good the frame is: that floor is the third term of the decomposition, beside bias and variance.</p><p>Press Redraw for a new round: the left frames change shape with every draw of the noise, the right frames keep their shape, and the minimum of the U barely moves. Decide whether to keep your bet.</p>';
     stepEl.innerHTML = html;
   }
   function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
