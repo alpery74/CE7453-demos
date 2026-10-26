@@ -224,7 +224,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>The weights are softmax(s) and the output is the sum of w_i v_i, the two lines on slide 5. Because the weights are positive and sum to one, every output lies inside the convex hull of the values: attention can only interpolate what the encoder offered. The hull is drawn once the unreachable ring has been named. In query mode the scores are q dot k_i over the square root of d, with the keys set equal to the values for display, and dragging the query is what a trained decoder does when it changes what it needs, slide 7.</p>
+    <p>The weights are softmax(s) and the output is the sum of w_i v_i, the two lines on slide 5. Because the weights are positive and sum to one, every output lies inside the convex hull of the values: attention can only interpolate what the encoder offered. The hull is drawn once the unreachable ring has been named. In query mode each score is 3 q dot k_i over the square root of d with d = 2, the keys are set equal to the values for display, and the gain of 3 puts the scores on the range the hand-drawn bars cover. Dragging the query is what a trained decoder does when it changes what it needs, slide 7.</p>
   </div>
 </section>
 
@@ -242,14 +242,14 @@ canvas.grab { cursor: grab; }
           <dt>key dimension d</dt><dd id="scDv">-</dd>
           <dt>typical raw score size, sqrt(d)</dt><dd id="scTyp">-</dd>
           <dt>largest weight, raw / scaled</dt><dd id="scMaxW">-</dd>
-          <dt>gradient through the softmax, raw / scaled</dt><dd id="scGrad">-</dd>
+          <dt>Frobenius norm of the Jacobian, raw / scaled</dt><dd id="scGrad">-</dd>
         </dl>
       </div>
       <div class="panel quiz" id="scQuiz"></div>
     </div>
   </div>
   <div class="caption">
-    <p>A dot product of d independent unit-variance terms has variance d, so the raw scores spread by about sqrt(d): 2 at d = 4, 8 at d = 64, 23 at d = 512. The softmax of scores that far apart is a one-hot vector, and the derivative of a one-hot softmax is zero, so the layer cannot learn. Dividing by sqrt(d) puts the scores back on a scale of one at every width, which is the justification on slide 8. The bar under each fan is the Frobenius norm of the softmax Jacobian, the factor that multiplies every gradient passing through the layer; the fan of lines is the head view used by attention visualizers such as BertViz.</p>
+    <p>A dot product of d independent unit-variance terms has variance d, so the raw scores spread by about sqrt(d): 2 at d = 4, 8 at d = 64, 23 at d = 512. The softmax of scores that far apart is a one-hot vector, and the derivative of a one-hot softmax is zero, so the layer cannot learn. Dividing by sqrt(d) puts the scores back on a scale of one at every width, which is the justification on slide 8. The bar under each fan is the Frobenius norm of the softmax Jacobian, drawn on an axis from 0 to 0.50, the largest value that norm can take over eight keys, with the uniform-weight value sqrt(7)/8 = 0.33 marked. The norm goes to 0 as the weights become one-hot, which is the saturation the raw fan reaches at width, and it peaks at 0.50 when two keys split the weight, so at the foot of the ladder the raw bar can stand above the uniform mark. The bound on how much the layer amplifies a gradient is the spectral norm of the same Jacobian, which is 0.125 at the uniform weight and at most the Frobenius norm drawn here. The fan of lines is the head view used by attention visualizers such as BertViz.</p>
   </div>
 </section>
 
@@ -260,7 +260,7 @@ canvas.grab { cursor: grab; }
   <div class="stage">
     <div>
       <div class="heads" id="hdHeads"></div>
-      <div class="plot" style="margin-top:12px"><canvas id="hdStrip" width="1200" height="170"></canvas></div>
+      <div class="plot" style="margin-top:12px"><canvas id="hdStrip" width="1200" height="210"></canvas></div>
     </div>
     <div class="side">
       <div class="panel step" id="hdStep"></div>
@@ -274,7 +274,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Four relations that real heads learn on their own, slide 14: a local head that reads the neighbouring steps, an anchor head that keeps returning to one position such as the start of the record, an offset head that reads a fixed number of steps back, and a periodic head that reads the same phase of a cycle. The maps are a record of where the weight went, slide 10; whether the attended position mattered is a separate question that the value vectors decide.</p>
+    <p>Four relations that real heads learn on their own, slide 14: a local head that reads the neighbouring steps, an anchor head that keeps returning to one position such as the start of the record, an offset head that reads a fixed number of steps back, and a periodic head that reads the same phase of a cycle, five steps long in this record. Row and column indices are printed every four positions and the weight scale is under the maps. The maps are a record of where the weight went, slide 10; whether the attended position mattered is a separate question that the value vectors decide.</p>
   </div>
 </section>
 
@@ -285,7 +285,7 @@ canvas.grab { cursor: grab; }
   <div class="stage">
     <div class="plot">
       <canvas id="poStrip" class="grab" width="1200" height="300"></canvas>
-      <canvas id="poCode" class="hit" width="1200" height="330"></canvas>
+      <canvas id="poCode" class="hit" width="1200" height="470"></canvas>
     </div>
     <div class="side">
       <div class="panel step" id="poStep"></div>
@@ -301,7 +301,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Self attention is permutation equivariant: permute the inputs and the outputs are permuted the same way, with no other change, which is the whole of slide 15's problem. The sinusoidal code gives every position a vector of sines and cosines at wavelengths from a few steps to thousands, drawn here as a barcode; hover a column and the others are tinted by their similarity to it, which falls off with distance in both directions. A learned table does the same job inside its length and has nothing to say beyond it.</p>
+    <p>Self attention is permutation equivariant: permute the inputs and the outputs are permuted the same way, with no other change, which is the whole of slide 15's problem. The sinusoidal code gives every position a vector of sines and cosines, drawn here as a barcode of 32 frequency pairs at base 150: the wavelength constant of pair i is 150 to the power i over 32, running from 1 to 128 positions, and the row repeats every 2 pi times that constant, so the periods run from 6 to 806 positions. Each row is labelled with its period. Hover a column and the others are tinted by their cosine similarity to it, which falls from 1.00 at the hovered position to roughly 0.25 at the far end of the 32 positions drawn, with a ripple of 0.02 along the way. A code of four pairs oscillates over this window, and a real model uses hundreds of pairs over thousands of positions. A learned table does the same job inside its length and has nothing to say beyond it.</p>
   </div>
 </section>
 
@@ -326,7 +326,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Position t is asked for the value at t + 1. If its row may read any column at or beyond t + 1, the model can copy the answer, the training loss there falls to nothing, and nothing useful is learned: leakage by architecture, slide 17. If the row may read nothing, the position predicts from nothing. The mask that is honest everywhere and wastes nothing is the lower triangle including the diagonal, implemented by setting the blocked scores to minus infinity before the softmax. Padding gets the same treatment in the columns.</p>
+    <p>Position t is asked for the value at t + 1. If its row may read column t + 1, the model copies the answer and the training loss there falls to zero. If it may read a column past t + 1, it leans on the future: those positions correlate with the target in a real record, so the loss drops below what an honest row reaches while the target itself stays hidden. Both are leakage by architecture, slide 17. If the row may read nothing, the position predicts from nothing. The mask that is honest everywhere and wastes nothing is the lower triangle including the diagonal, implemented by setting the blocked scores to minus infinity before the softmax. Padding gets the same treatment in the columns.</p>
   </div>
 </section>
 
@@ -400,7 +400,7 @@ function quiz(el, spec) {
     else if (gateAns === OUTSIDE) gate = '<div class="ask ok">Right. Target 3 lies outside the shaded convex hull of the six values. Softmax weights are positive and sum to one, so the output star never leaves the hull; no scores and no query reach that ring. The encoder has to offer a state there first.</div>';
     else gate = '<div class="ask no">No. Target ' + (gateAns + 1) + ' lies inside the shaded convex hull, so some set of scores reaches it. Target 3 is the one outside: softmax weights are positive and sum to one, so the output star never leaves the hull.</div>';
     const task = done ? '<span class="k">target ' + (round + 1) + ' reached</span><div class="ask ok">Within 0.10 with largest weight ' + doneW.toFixed(2) + '. ' + (doneW > 0.9 ? 'That is nearly a hard lookup: one state carries the output.' : 'That is a soft lookup: several states share the output.') + '</div><p>Press Next target.</p>'
-      : '<span class="k">target ' + (round + 1) + ' of ' + TARGETS.length + '</span><p>' + (mode === "hand" ? 'Drag the six score bars. A high score makes that state dominate the blend; equal scores give the plain average. Drag the orange query arrow on the plane to let a dot product set the scores instead.' : 'Drag the query arrow. Each score is the dot product of the query with that state, so the query decides which states count. Drag a bar to take the scores back by hand.') + '</p><p>Bring the output star within 0.10 of the red ring.</p>';
+      : '<span class="k">target ' + (round + 1) + ' of ' + TARGETS.length + '</span><p>' + (mode === "hand" ? 'Drag the six score bars. A high score makes that state dominate the blend; equal scores give the plain average. Drag the orange query arrow on the plane to let a dot product set the scores.' : 'Drag the query arrow. Each score is 3 q . k_i / sqrt(d) with d = 2 here, so the query decides which states count; the gain of 3 puts the scores on the same range the bars cover. Drag a bar to take the scores back by hand.') + '</p><p>Bring the output star within 0.10 of the red ring.</p>';
     stepEl.innerHTML = gate + task;
   }
   function draw() {
@@ -422,7 +422,7 @@ function quiz(el, spec) {
     ctx.fillStyle = css("--ink"); ctx.beginPath(); for (let k = 0; k < 10; k++) { const r = k % 2 ? 6 : 13, a = Math.PI / 5 * k - Math.PI / 2; ctx.lineTo(px(o[0]) + r * Math.cos(a), py(o[1]) + r * Math.sin(a)); } ctx.closePath(); ctx.fill();
     { ctx.strokeStyle = mode === "query" ? css("--orange") : alpha(css("--orange"), 0.45); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(px(0), py(0)); ctx.lineTo(px(q[0]), py(q[1])); ctx.stroke(); ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.arc(px(q[0]), py(q[1]), 9, 0, 2 * Math.PI); ctx.fill(); plane.label(mode === "query" ? "query q (drag)" : "query q: drag it to score with a dot product", px(q[0]) + 12, py(q[1]) - 10, css("--orange"), "left", 12); }
     plane.label(gateAns === null ? "click the numbered ring that no blend can reach; ribbon width is the weight on that state" : "ribbon width is the weight on that state", 16, plane.H - 14, css("--muted"), "left", 12);
-    bars.clear(mode === "hand" ? "scores (drag the bars) and softmax weights" : "scores q . k / sqrt(d) from the query; drag a bar to take over by hand"); const b = bars.ctx, L = 70, mid = bars.H / 2 + 10, scl = 42;
+    bars.clear(mode === "hand" ? "scores (drag the bars) and softmax weights" : "scores 3 q . k / sqrt(d) from the query; drag a bar to take over by hand"); const b = bars.ctx, L = 70, mid = bars.H / 2 + 10, scl = 42;
     b.strokeStyle = css("--line"); b.beginPath(); b.moveTo(L - 10, mid); b.lineTo(bars.W - 100, mid); b.stroke(); bars.label("score 0", L - 14, mid + 4, css("--muted"), "right", 11, true);
     scores().forEach((v, i) => { const x = L + i * 52; b.fillStyle = PAL[i]; b.fillRect(x, Math.min(mid, mid - v * scl), 26, Math.abs(v * scl)); bars.label("h" + (i + 1), x + 13, mid + 190, PAL[i], "center", 12, true); bars.label(v.toFixed(1), x + 13, (v >= 0 ? mid - v * scl - 6 : mid - v * scl + 14), css("--ink"), "center", 11, true); });
     w.forEach((v, i) => { const x = L + i * 52; b.fillStyle = mix(css("--panel"), PAL[i], 0.5); b.fillRect(x, mid + 172 - v * 150, 26, v * 150); });
@@ -440,7 +440,7 @@ function quiz(el, spec) {
   document.getElementById("blNext").addEventListener("click", () => { if (!done) played++; round = (round + 1) % TARGETS.length; if (round === 0) { reached = 0; played = 0; } done = false; s = new Array(N).fill(0); text(); draw(); });
   document.getElementById("blWhy").addEventListener("click", () => { gateAns = null; text(); draw(); });
   document.getElementById("blReset").addEventListener("click", () => { s = new Array(N).fill(0); q = [0.5, 0.5]; draw(); });
-  quiz(document.getElementById("blQuiz"), { q: "Why must the choice of encoder state be soft rather than a hard pick of the best one?", options: ["A soft blend is cheaper to compute", "A hard pick has no gradient, so the scoring function could never be learned", "Soft blends are more accurate in every case"], answer: 1, why: "An argmax is piecewise constant: a small change in the scores changes nothing until it flips, so no gradient reaches the scorer. The softmax is a differentiable relaxation of the pick, and that is what lets the model learn where to look." });
+  quiz(document.getElementById("blQuiz"), { q: "Attention blends the states with a softmax. A hard pick of the single best state is also trainable, so what does the softmax give the model?", options: ["A soft blend is cheaper to compute", "The softmax is differentiable in the scores, so the scorer gets a low-variance gradient from the same backward pass", "Soft blends are more accurate in every case"], answer: 1, why: "Backpropagation passes nothing through an argmax, which is piecewise constant in the scores. Hard attention is trained anyway, by a score-function estimator (REINFORCE, as in Xu et al. 2015) or by a Gumbel-softmax relaxation; both estimators have high variance and need many samples or a temperature schedule. The softmax has a closed-form derivative, so one backward pass hands the scorer a low-variance gradient." });
   window.addEventListener("themechange", draw); text(); draw();
 })();
 
@@ -460,7 +460,7 @@ function quiz(el, spec) {
   function text(extra) {
     const prompt = '<p class="prompt">At d = 1024, what share of the weight sits on one key without scaling?</p>';
     if (extra) { stepEl.innerHTML = prompt + extra; return; }
-    if (share === null) stepEl.innerHTML = prompt + '<div class="gate">' + SHARES.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div><span class="k">how to read the bench</span><p>Each line is the weight the query gives a key; thicker is more. The number under each heading is the largest weight on that fan. The bar under a fan is the size of the gradient that passes back through its softmax.</p><p>The ladder is locked at its foot until you commit to a share above. Up to d = 128 it then moves freely; to go higher, click the key in the raw fan that you think will hold the weight.</p>';
+    if (share === null) stepEl.innerHTML = prompt + '<div class="gate">' + SHARES.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div><span class="k">how to read the bench</span><p>Each line is the weight the query gives a key; thicker is more. The number under each heading is the largest weight on that fan. The bar under a fan is the Frobenius norm of the Jacobian of that softmax, printed on an axis from 0 to 0.50 with the uniform-weight value 0.33 marked.</p><p>The ladder is locked at its foot until you commit to a share above. Up to d = 128 it then moves freely; to go higher, click the key in the raw fan that you think will hold the weight.</p>';
     else if (pred === null) stepEl.innerHTML = prompt + '<p>Your answer: ' + SHARES[share] + '.</p><span class="k">one more commitment</span><p>Click the key in the raw fan that you think will hold the largest weight at d = 1024. The ladder unlocks after that.</p>';
     else stepEl.innerHTML = prompt + '<p>Your answer: ' + SHARES[share] + ', on k' + (pred + 1) + '.</p><span class="k">bet placed</span><p>The ladder is unlocked. Drag q up to d = 1024 and read the largest weight on each fan.</p>';
     stepEl.querySelectorAll(".gate button").forEach(bt => bt.addEventListener("click", () => { share = parseInt(bt.dataset.g, 10); text(); draw(); }));
@@ -477,8 +477,16 @@ function quiz(el, spec) {
       s.forEach((v, k) => { const ky = 80 + k * 54; ctx.strokeStyle = alpha(css("--orange"), 0.15 + 0.85 * w[k]); ctx.lineWidth = 1 + 14 * w[k]; ctx.beginPath(); ctx.moveTo(f.x0 + 30, qy); ctx.lineTo(f.x1 - 34, ky); ctx.stroke(); ctx.lineWidth = 1; });
       s.forEach((v, k) => { const ky = 80 + k * 54; const isPred = !f.scaled && pred === k, isWin = revealed && !f.scaled && revealed.win === k; ctx.fillStyle = css("--bg"); ctx.fillRect(f.x1 - 34, ky - 14, 68, 28); ctx.strokeStyle = isWin ? "#2E7D5B" : (isPred ? css("--orange") : css("--line")); ctx.lineWidth = isPred || isWin ? 2.5 : 1; ctx.strokeRect(f.x1 - 34, ky - 14, 68, 28); ctx.lineWidth = 1; board.label("k" + (k + 1) + "  " + w[k].toFixed(2), f.x1, ky + 4, css("--ink"), "center", 11, true); board.label(v.toFixed(1), f.x1 + 44, ky + 4, css("--muted"), "left", 11, true); });
       board.label("score", f.x1 + 44, 78 - 14, css("--muted"), "left", 11);
-      // gradient bar
-      const bx = f.x0 - 30, by = 500, bw = f.x1 + 70 - bx; ctx.strokeStyle = css("--line"); ctx.strokeRect(bx, by - 12, bw, 12); const frac = Math.min(1, J / 0.35); ctx.fillStyle = mix(css("--red"), "#2E7D5B", frac); ctx.fillRect(bx + 1, by - 11, (bw - 2) * frac, 10); board.label("gradient through the softmax " + J.toFixed(3) + (J < 0.02 ? "  saturated: nothing trains" : (J < 0.15 ? "  sharp" : "  healthy")), bx, by - 18, J < 0.02 ? css("--red") : css("--muted"), "left", 11);
+      // Jacobian bar, on a printed axis over the range the measure can take: 0 at a one-hot
+      // weight, JMAX = 0.5 at a two-way tie, JUNI = sqrt(7)/8 = 0.33 at the uniform weight
+      const bx = f.x0 - 30, by = 496, bw = f.x1 + 70 - bx, JMAX = 0.5, JUNI = Math.sqrt(NK - 1) / NK;
+      board.label("Frobenius norm of the softmax Jacobian " + J.toFixed(3) + (J < 0.02 ? "  saturated" : ""), bx, by - 18, J < 0.02 ? css("--red") : css("--muted"), "left", 11);
+      ctx.strokeStyle = css("--line"); ctx.strokeRect(bx, by - 12, bw, 12);
+      ctx.fillStyle = J < 0.02 ? css("--red") : css("--blue"); ctx.fillRect(bx + 1, by - 11, (bw - 2) * Math.min(1, J / JMAX), 10);
+      for (let t = 0; t <= 10; t++) { const tx = bx + bw * t / 10; ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(tx, by); ctx.lineTo(tx, by + (t % 5 === 0 ? 5 : 3)); ctx.stroke(); }
+      board.label("0", bx, by + 17, css("--muted"), "left", 11, true); board.label("0.50", bx + bw, by + 17, css("--muted"), "right", 11, true);
+      const ux = bx + bw * JUNI / JMAX; ctx.strokeStyle = css("--ink"); ctx.setLineDash([3, 2]); ctx.beginPath(); ctx.moveTo(ux, by - 13); ctx.lineTo(ux, by + 5); ctx.stroke(); ctx.setLineDash([]);
+      board.label("uniform " + JUNI.toFixed(2), ux, by + 17, css("--ink"), "center", 11, true);
     });
     // ladder
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(LX - 22, LY0 + 10); ctx.lineTo(LX - 22, LY1 - 10); ctx.moveTo(LX + 22, LY0 + 10); ctx.lineTo(LX + 22, LY1 - 10); ctx.stroke(); ctx.lineWidth = 1;
@@ -490,7 +498,7 @@ function quiz(el, spec) {
   }
   function reveal() {
     const sc = raw(); let win = 0; sc.forEach((v, i) => { if (v > sc[win]) win = i; }); const w = softmax(sc), wm = Math.max.apply(null, w), ws = softmax(sc.map(v => v / Math.sqrt(RUNGS[rung]))), wsm = Math.max.apply(null, ws), b = bucket(wm), shareOk = b === share, keyOk = win === pred; revealed = { win };
-    text('<div class="ask ' + (shareOk && keyOk ? 'ok' : 'no') + '">' + (shareOk ? 'Right on the share: ' : 'Share answer was off: ') + 'without scaling, k' + (win + 1) + ' holds ' + wm.toFixed(3) + ' of the weight, ' + (100 * wm).toFixed(1) + ' %. ' + (keyOk ? 'You picked the right key.' : 'You picked k' + (pred + 1) + '.') + ' On the scaled fan the largest weight is ' + wsm.toFixed(3) + ' and the raw gradient bar reads ' + jac(w).toFixed(4) + '.</div><p>The raw scores spread over tens of units, the softmax has become a one-hot pick, and almost no gradient passes. The scaled fan on the right kept its shape at every rung: dividing by sqrt(d) is what makes the layer trainable at width.</p>');
+    text('<div class="ask ' + (shareOk && keyOk ? 'ok' : 'no') + '">' + (shareOk ? 'Right on the share: ' : 'Share answer was off: ') + 'without scaling, k' + (win + 1) + ' holds ' + wm.toFixed(3) + ' of the weight, ' + (100 * wm).toFixed(1) + ' %. ' + (keyOk ? 'You picked the right key.' : 'You picked k' + (pred + 1) + '.') + ' On the scaled fan the largest weight is ' + wsm.toFixed(3) + ' and the raw Jacobian norm reads ' + jac(w).toFixed(4) + ' against 0.33 for an even eight-way split.</div><p>The raw scores spread over tens of units, the softmax has become a one-hot pick, and almost no gradient passes. The scaled fan on the right kept its shape at every rung: dividing by sqrt(d) is what makes the layer trainable at width.</p>');
   }
   board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (Math.hypot(mx - LX, my - rungY(rung)) < 22) { drag = true; return; } const f = fans[0]; if (mx >= f.x1 - 34 && mx <= f.x1 + 34) { const k = Math.round((my - 80) / 54); if (k >= 0 && k < NK && my >= 80 + k * 54 - 14 && my <= 80 + k * 54 + 14 && !revealed && share !== null) { pred = k; text(); draw(); } } });
   window.addEventListener("pointermove", ev => { if (!drag) return; const [, my] = board.pos(ev); let best = 0; RUNGS.forEach((r, i) => { if (Math.abs(rungY(i) - my) < Math.abs(rungY(best) - my)) best = i; }); if (lockedAt(best)) { best = share === null ? 0 : 5; text('<span class="k">locked</span><p>' + (share === null ? 'Before d = 8, answer the question above' : 'Before d = 256, click the key in the raw fan that you think will hold the largest weight') + '.</p>' + (share === null ? '<div class="gate">' + SHARES.map((o, i) => '<button data-g="' + i + '">' + o + '</button>').join('') + '</div>' : '')); stepEl.querySelectorAll(".gate button").forEach(bt => bt.addEventListener("click", () => { share = parseInt(bt.dataset.g, 10); text(); draw(); })); } if (best !== rung) { rung = best; if (rung === TOP && !revealed && !locked()) reveal(); draw(); } });
@@ -502,14 +510,15 @@ function quiz(el, spec) {
 
 /* ================= 3. READ THE HEADS ================= */
 (function heads() {
-  const T = 16, OFF = 3, KINDS = [{ k: "local", name: "local: the neighbouring steps" }, { k: "anchor", name: "anchor: one fixed position" }, { k: "offset", name: "offset: three steps back" }, { k: "periodic", name: "periodic: the same phase of a cycle" }];
+  const T = 16, OFF = 3, PER = 5, KINDS = [{ k: "local", name: "local: the neighbouring steps" }, { k: "anchor", name: "anchor: one fixed position" }, { k: "offset", name: "offset: three steps back" }, { k: "periodic", name: "periodic: the same phase of the five-step cycle" }];
   let seed = 3, order = [], mats = [], labels = [null, null, null, null], checked = false, score = 0, played = 0, hover = null, boards = [], labBtns = [];
   const strip = new Board(document.getElementById("hdStrip")), wrap = document.getElementById("hdHeads"), stepEl = document.getElementById("hdStep");
-  const REC = []; { const rng = mulberry32(21); for (let j = 0; j < T; j++) REC.push(Math.sin(2 * Math.PI * j / 5) + 0.6 * (rng() - 0.5)); }
-  const MAPH = 260, RECY = 272, RECH = 60, CVH = 350, cell = MAPH / T;
-  function matrix(kind, rng) { const M = []; const anchor = Math.floor(rng() * 3), off = OFF, per = 4 + Math.floor(rng() * 2); for (let i = 0; i < T; i++) { const s = []; for (let j = 0; j < T; j++) { let v = -2; if (kind === "local") v = -Math.abs(i - j) * 1.6; else if (kind === "anchor") v = j === anchor ? 2.5 : (Math.abs(i - j) < 1 ? 0.5 : -2); else if (kind === "offset") v = (i - j === off) ? 3 : (i - j === off - 1 || i - j === off + 1 ? 0.5 : -2); else v = ((i - j) % per === 0 && j <= i) ? 2.2 : -2; if (kind === "offset" && i < off) v = j === 0 ? 1.5 : -2; s.push(v + 0.5 * (rng() - 0.5)); } M.push(softmax(s)); } return M; }
+  const REC = []; { const rng = mulberry32(21); for (let j = 0; j < T; j++) REC.push(Math.sin(2 * Math.PI * j / PER) + 0.6 * (rng() - 0.5)); }
+  // the map is inset by MX on the left and MY on the top so the position indices fit
+  const MX = 26, MY = 18, MAPW = 230, RECY = 272, RECH = 60, CVH = 350, cell = MAPW / T;
+  function matrix(kind, rng) { const M = []; const anchor = Math.floor(rng() * 3), off = OFF, per = PER; for (let i = 0; i < T; i++) { const s = []; for (let j = 0; j < T; j++) { let v = -2; if (kind === "local") v = -Math.abs(i - j) * 1.6; else if (kind === "anchor") v = j === anchor ? 2.5 : (Math.abs(i - j) < 1 ? 0.5 : -2); else if (kind === "offset") v = (i - j === off) ? 3 : (i - j === off - 1 || i - j === off + 1 ? 0.5 : -2); else v = ((i - j) % per === 0 && j <= i) ? 2.2 : -2; if (kind === "offset" && i < off) v = j === 0 ? 1.5 : -2; s.push(v + 0.5 * (rng() - 0.5)); } M.push(softmax(s)); } return M; }
   function make() { const rng = mulberry32(seed); order = [0, 1, 2, 3]; for (let i = 3; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } mats = order.map(k => matrix(KINDS[k].k, rng)); labels = [null, null, null, null]; checked = false; hover = null; }
-  function rowAt(bd, ev) { const [, my] = bd.pos(ev); const i = Math.floor(my / cell); return i >= 0 && i < T ? i : null; }
+  function rowAt(bd, ev) { const [, my] = bd.pos(ev); const i = Math.floor((my - MY) / cell); return i >= 0 && i < T ? i : null; }
   function build() {
     wrap.innerHTML = ""; boards = []; labBtns = [];
     mats.forEach((M, h) => {
@@ -525,12 +534,14 @@ function quiz(el, spec) {
   function paint() {
     boards.forEach((bd, h) => {
       const M = mats[h], ctx = bd.ctx; bd.clear("");
-      for (let i = 0; i < T; i++) for (let j = 0; j < T; j++) { ctx.fillStyle = mix(css("--panel"), css("--blue"), Math.min(1, M[i][j] * 1.6)); ctx.fillRect(j * cell, i * cell, cell + 0.5, cell + 0.5); }
+      for (let i = 0; i < T; i++) for (let j = 0; j < T; j++) { ctx.fillStyle = mix(css("--panel"), css("--blue"), Math.min(1, M[i][j] * 1.6)); ctx.fillRect(MX + j * cell, MY + i * cell, cell + 0.5, cell + 0.5); }
+      // position indices every four rows and columns: queries down the left, keys across the top
+      for (let t = 0; t < T; t += 4) { bd.label(String(t + 1), MX + t * cell + cell / 2, MY - 5, css("--muted"), "center", 10, true); bd.label(String(t + 1), MX - 4, MY + t * cell + cell / 2 + 4, css("--muted"), "right", 10, true); }
       const on = hover && hover.h === h;
-      if (on) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.strokeRect(1, hover.i * cell, MAPH - 2, cell); ctx.lineWidth = 1; }
+      if (on) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.strokeRect(MX, MY + hover.i * cell, MAPW, cell); ctx.lineWidth = 1; }
       // the record under the map: sixteen readings as bars, lit by the weight the hovered query gives them
-      const mid = RECY + RECH / 2 + 4; ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(MAPH, mid); ctx.stroke();
-      for (let j = 0; j < T; j++) { const w = on ? M[hover.i][j] : 0, hgt = REC[j] * 22; if (on && w > 0.05) { ctx.fillStyle = alpha(css("--blue"), Math.min(0.85, 0.15 + 1.2 * w)); ctx.fillRect(j * cell, RECY, cell, RECH); } ctx.fillStyle = on ? (w > 0.05 ? css("--ink") : alpha(css("--grey"), 0.35)) : alpha(css("--grey"), 0.6); ctx.fillRect(j * cell + 2, Math.min(mid, mid - hgt), cell - 4, Math.abs(hgt)); if (on && hover.i === j) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.strokeRect(j * cell + 1, RECY - 2, cell - 2, RECH + 4); ctx.lineWidth = 1; } }
+      const mid = RECY + RECH / 2 + 4; ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(MX, mid); ctx.lineTo(MX + MAPW, mid); ctx.stroke();
+      for (let j = 0; j < T; j++) { const w = on ? M[hover.i][j] : 0, hgt = REC[j] * 22; if (on && w > 0.05) { ctx.fillStyle = alpha(css("--blue"), Math.min(0.85, 0.15 + 1.2 * w)); ctx.fillRect(MX + j * cell, RECY, cell, RECH); } ctx.fillStyle = on ? (w > 0.05 ? css("--ink") : alpha(css("--grey"), 0.35)) : alpha(css("--grey"), 0.6); ctx.fillRect(MX + j * cell + 2, Math.min(mid, mid - hgt), cell - 4, Math.abs(hgt)); if (on && hover.i === j) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.strokeRect(MX + j * cell + 1, RECY - 2, cell - 2, RECH + 4); ctx.lineWidth = 1; } }
       bd.label(on ? "query " + (hover.i + 1) + " reads the blue readings" : "the record: hover a row above", 4, CVH - 6, on ? css("--ink") : css("--muted"), "left", 12);
       labBtns[h].forEach((b, ki) => { b.setAttribute("aria-pressed", labels[h] === ki ? "true" : "false"); b.classList.remove("right", "wrong"); if (checked) { if (ki === order[h]) b.classList.add("right"); else if (labels[h] === ki) b.classList.add("wrong"); } });
     });
@@ -540,9 +551,11 @@ function quiz(el, spec) {
     const x0 = 60, w = (strip.W - 120) / T;
     for (let j = 0; j < T; j++) { const v = hover ? mats[hover.h][hover.i][j] : 0; c.fillStyle = mix(css("--panel"), css("--blue"), Math.min(1, v * 1.6)); c.fillRect(x0 + j * w + 3, 60, w - 6, 50); c.strokeStyle = css("--line"); c.strokeRect(x0 + j * w + 3, 60, w - 6, 50); strip.label(String(j + 1), x0 + j * w + w / 2, 128, css("--muted"), "center", 11, true); strip.label(REC[j].toFixed(2), x0 + j * w + w / 2, 144, css("--muted"), "center", 11, true); if (hover && hover.i === j) { c.strokeStyle = css("--orange"); c.lineWidth = 3; c.strokeRect(x0 + j * w + 1, 58, w - 2, 54); c.lineWidth = 1; } if (hover && v > 0.08) strip.label(v.toFixed(2), x0 + j * w + w / 2, 50, css("--ink"), "center", 11, true); }
     strip.label("orange: the query position; blue: weight on each key position; the second line is the reading's value", x0, strip.H - 6, css("--muted"), "left", 12);
+    // the weight scale for all four maps: the map tint reaches full blue at a weight of 0.62
+    { const kx = 960, ky = 170, kw = 200, NS = 25; for (let i = 0; i < NS; i++) { c.fillStyle = mix(css("--panel"), css("--blue"), i / (NS - 1)); c.fillRect(kx + i * kw / NS, ky, kw / NS + 0.5, 12); } c.strokeStyle = css("--line"); c.strokeRect(kx, ky, kw, 12); strip.label("weight, all four maps", kx, ky - 6, css("--muted"), "left", 11); strip.label("0", kx, ky + 26, css("--muted"), "left", 11, true); strip.label("0.62", kx + kw, ky + 26, css("--muted"), "right", 11, true); }
   }
-  function text() { stepEl.innerHTML = '<p class="prompt">Which head is the local one? Which looks three steps back?</p><span class="k">the task</span><p>Each head has learned one relation. Match the four relations to the four maps. Rows are query positions, top to bottom; columns are key positions, left to right; dark is high weight.</p><p>Hover or press a row: the record under that map lights the readings the query reads, with the query itself outlined in orange. Label all four heads, then check.</p>'; }
-  document.getElementById("hdCheck").addEventListener("click", () => { checked = true; played++; const right = labels.filter((l, h) => l === order[h]).length; if (right === 4) score++; const loc = order.indexOf(0) + 1, off = order.indexOf(2) + 1; stepEl.innerHTML = '<p class="prompt">Which head is the local one? Which looks three steps back?</p><div class="ask ' + (right === 4 ? 'ok' : 'no') + '">' + right + ' of 4 heads labelled correctly. Head ' + loc + ' is the local one and head ' + off + ' looks three steps back.</div><p>Local heads show a diagonal band; anchor heads a bright column; offset heads a diagonal shifted by a fixed number of columns; periodic heads a comb of stripes. Trained models show all four, and nobody assigned them: the maps are evidence of what the model reads, and nothing more.</p>'; paint(); });
+  function text() { stepEl.innerHTML = '<p class="prompt">Which head is the local one? Which looks three steps back?</p><span class="k">the task</span><p>Each head has learned one relation. Match the four relations to the four maps. Rows are query positions, top to bottom; columns are key positions, left to right; both are indexed every four positions, and the key under the maps gives the weight each tint stands for.</p><p>Hover or press a row: the record under that map lights the readings the query reads, with the query itself outlined in orange. Label all four heads, then check.</p>'; }
+  document.getElementById("hdCheck").addEventListener("click", () => { checked = true; played++; const right = labels.filter((l, h) => l === order[h]).length; if (right === 4) score++; const loc = order.indexOf(0) + 1, off = order.indexOf(2) + 1; stepEl.innerHTML = '<p class="prompt">Which head is the local one? Which looks three steps back?</p><div class="ask ' + (right === 4 ? 'ok' : 'no') + '">' + right + ' of 4 heads labelled correctly. Head ' + loc + ' is the local one and head ' + off + ' looks three steps back.</div><p>Local heads show a diagonal band; anchor heads a bright column; offset heads a diagonal shifted by a fixed number of columns; periodic heads a comb of stripes five columns apart, the period of this record. Trained models show all four, and nobody assigned them: the maps are evidence of what the model reads, and nothing more.</p>'; paint(); });
   document.getElementById("hdNew").addEventListener("click", () => { seed += 1; make(); build(); text(); paint(); });
   quiz(document.getElementById("hdQuiz"), { q: "A head puts 0.9 of its weight on position 1 for every query. What may you conclude?", options: ["Position 1 is the most important input for the prediction", "The head reads position 1; whether that matters depends on the value vector there, which may carry almost nothing", "The model is broken"], answer: 1, why: "Attention weight records where the head looks. Anchor heads often park weight on a start token whose value is near zero, which acts as a no-op. Influence needs its own evidence, such as ablating the position and measuring the change, the same discipline as permutation importance." });
   window.addEventListener("themechange", paint); make(); build(); text(); paint();
@@ -554,8 +567,15 @@ function quiz(el, spec) {
   const X = []; for (let t = 0; t < T; t++) X.push(Array.from(randn(rng0, D)));
   const Wq = [], Wk = [], Wv = []; for (let i = 0; i < D; i++) { Wq.push(Array.from(randn(rng0, D)).map(v => v * 0.7)); Wk.push(Array.from(randn(rng0, D)).map(v => v * 0.7)); Wv.push(Array.from(randn(rng0, D)).map(v => v * 0.7)); }
   const mv = (W, x) => W.map(r => r.reduce((s, v, i) => s + v * x[i], 0));
-  const PEMAX = 32, PED = 8; const pe = p => { const v = []; for (let i = 0; i < PED / 2; i++) { const wl = Math.pow(100, 2 * i / PED); v.push(Math.sin(p / wl), Math.cos(p / wl)); } return v; };
+  // The sinusoidal code: PAIRS frequency pairs, wavelength constant PBASE^(i/PAIRS), so row i
+  // repeats every 2 pi times that constant. Thirty-two pairs at base 150 run the constant from 1
+  // to 128 positions, which is what makes the cosine similarity fall off over the 32 positions
+  // drawn. Four pairs at base 100 give a sum of four cosines that oscillates over this window.
+  const PEMAX = 32, PAIRS = 32, PED = 2 * PAIRS, PBASE = 150;
+  const pewl = i => Math.pow(PBASE, i / PAIRS);
+  const pe = p => { const v = []; for (let i = 0; i < PAIRS; i++) { const wl = pewl(i); v.push(Math.sin(p / wl), Math.cos(p / wl)); } return v; };
   const strip = new Board(document.getElementById("poStrip")), code = new Board(document.getElementById("poCode"));
+  const CX0 = 150, CW = (code.W - 220) / PEMAX, CH = 5, CY0 = 46, SIMY = 374;
   let perm = ID.slice(), mode = "none", base = null, ref = 8, anim = null, slide = 1, prevPerm = null, dragCard = null, dragPos = null, gateAns = null, judged = null;
   const CARDS = [{ m: "none", name: "no tag", color: css("--grey") }, { m: "sin", name: "sinusoidal tag", color: css("--orange") }, { m: "table", name: "learned table tag (32 rows)", color: css("--blue") }], CARDX = [60, 330, 600], CARDY = 236, CARDW = 240, CARDH = 44;
   function inputs(order) { return order.map((tok, pos) => { const x = X[tok].slice(); if (mode === "sin") { const p = pe(pos); for (let i = 0; i < D; i++) x[i] += 0.8 * p[i]; } else if (mode === "table") { const g = randn(mulberry32(500 + pos), D); for (let i = 0; i < D; i++) x[i] += 0.8 * g[i]; } return x; }); }
@@ -582,13 +602,25 @@ function quiz(el, spec) {
     strip.label("the tray: drag a card up onto the record", 860, CARDY + 27, css("--muted"), "left", 12);
     if (dragCard !== null && dragPos) { const cd = CARDS[dragCard]; c.fillStyle = alpha(cd.color, 0.6); c.fillRect(dragPos[0] - CARDW / 2, dragPos[1] - CARDH / 2, CARDW, CARDH); strip.label(cd.name, dragPos[0], dragPos[1] + 5, "#fff", "center", 13); }
     document.getElementById("poMode").textContent = mode === "none" ? "none" : (mode === "sin" ? "sinusoidal" : "learned table");
-    code.clear(mode === "table" ? "a learned position table: 32 rows of free parameters, nothing beyond" : "the sinusoidal position code, 8 dimensions by 32 positions (hover a column)"); const k = code.ctx, cx0 = 90, cw = (code.W - 150) / PEMAX, ch = 22, cy0 = 50;
-    const refv = mode === "table" ? Array.from(randn(mulberry32(500 + ref), PED)) : pe(ref);
-    for (let p = 0; p < PEMAX; p++) { const v = mode === "table" ? Array.from(randn(mulberry32(500 + p), PED)) : pe(p); let dot = 0, n1 = 0, n2 = 0; for (let i = 0; i < PED; i++) { dot += v[i] * refv[i]; n1 += v[i] * v[i]; n2 += refv[i] * refv[i]; } const sim = dot / Math.sqrt(n1 * n2); for (let i = 0; i < PED; i++) { const g = (v[i] + 1.5) / 3; k.fillStyle = mix(css("--panel"), css("--ink"), Math.max(0, Math.min(1, g))); k.fillRect(cx0 + p * cw, cy0 + i * ch, cw - 1, ch - 1); } k.fillStyle = mix(css("--panel"), css("--orange"), Math.max(0, sim)); k.fillRect(cx0 + p * cw, cy0 + PED * ch + 8, cw - 1, 18); if (p === ref) { k.strokeStyle = css("--orange"); k.lineWidth = 3; k.strokeRect(cx0 + p * cw - 1, cy0 - 2, cw + 1, PED * ch + 30); k.lineWidth = 1; } if (p % 4 === 0) code.label(String(p + 1), cx0 + p * cw + cw / 2, cy0 + PED * ch + 44, css("--muted"), "center", 11, true); }
-    for (let i = 0; i < PED; i++) code.label(i % 2 === 0 ? "sin, wl " + Math.pow(100, i / PED).toFixed(0) : "cos", cx0 - 8, cy0 + i * ch + 15, css("--muted"), "right", 11, true);
-    code.label("similarity to the position under the pointer (orange, cosine)", cx0, cy0 + PED * ch + 62, css("--muted"), "left", 12);
-    code.label("position (wl is the wavelength of the row, in positions)", code.W / 2, code.H - 10, css("--muted"), "center", 12);
-    if (mode === "none") { k.fillStyle = mix(css("--panel"), css("--grey"), 0.55); k.fillRect(cx0 - 4, cy0 - 4, PEMAX * cw + 8, PED * ch + 34); code.label("no position code is added in this mode", code.W / 2, cy0 + PED * ch / 2 + 6, css("--ink"), "center", 15); }
+    code.clear(mode === "table" ? "a learned position table: 32 rows of free parameters, nothing beyond" : "the sinusoidal position code, " + PED + " dimensions by 32 positions, base " + PBASE + " (hover a column)"); const k = code.ctx, cx0 = CX0, cw = CW, ch = CH, cy0 = CY0;
+    const refv = mode === "table" ? Array.from(randn(mulberry32(500 + ref), PED)) : pe(ref), sims = [];
+    for (let p = 0; p < PEMAX; p++) {
+      const v = mode === "table" ? Array.from(randn(mulberry32(500 + p), PED)) : pe(p); let dot = 0, n1 = 0, n2 = 0;
+      for (let i = 0; i < PED; i++) { dot += v[i] * refv[i]; n1 += v[i] * v[i]; n2 += refv[i] * refv[i]; }
+      const sim = dot / Math.sqrt(n1 * n2); sims.push(sim);
+      for (let i = 0; i < PED; i++) { const g = (v[i] + 1.5) / 3; k.fillStyle = mix(css("--panel"), css("--ink"), Math.max(0, Math.min(1, g))); k.fillRect(cx0 + p * cw, cy0 + i * ch, cw - 1, ch + 0.5); }
+      // the similarity row carries the sign: orange for a positive cosine, blue for a negative one
+      k.fillStyle = sim >= 0 ? mix(css("--panel"), css("--orange"), Math.min(1, sim)) : mix(css("--panel"), css("--blue"), Math.min(1, -sim));
+      k.fillRect(cx0 + p * cw, SIMY, cw - 1, 18);
+      if (p === ref) { k.strokeStyle = css("--orange"); k.lineWidth = 3; k.strokeRect(cx0 + p * cw - 1, cy0 - 2, cw + 1, SIMY + 22 - cy0); k.lineWidth = 1; }
+      if (p % 4 === 0) code.label(String(p + 1), cx0 + p * cw + cw / 2, SIMY + 34, css("--muted"), "center", 11, true);
+    }
+    // the similarity values go on after every tint is laid down, so a wide number is not painted over
+    for (let p = 0; p < PEMAX; p++) if (p % 4 === 0 || p === ref) code.label(sims[p].toFixed(2), cx0 + p * cw + cw / 2, SIMY + 13, css("--ink"), "center", 10, true);
+    for (let i = 0; i < PAIRS; i++) if (i % 4 === 0 || i === PAIRS - 1) code.label(mode === "table" ? "dim " + (2 * i + 1) : "period " + (2 * Math.PI * pewl(i)).toFixed(0), cx0 - 8, cy0 + 2 * i * ch + 11, css("--muted"), "right", 11, true);
+    code.label("cosine similarity to the position under the pointer: orange positive, blue negative, printed every fourth column", cx0, SIMY + 52, css("--muted"), "left", 12);
+    code.label(mode === "table" ? "position; every row is a free parameter, one value per position" : "position; each labelled row is a sine of that period in positions and the row under it the matching cosine", code.W / 2, code.H - 10, css("--muted"), "center", 12);
+    if (mode === "none") { k.fillStyle = mix(css("--panel"), css("--grey"), 0.55); k.fillRect(cx0 - 4, cy0 - 4, PEMAX * cw + 8, SIMY + 26 - cy0); code.label("no position code is added in this mode", code.W / 2, cy0 + (SIMY - cy0) / 2 + 6, css("--ink"), "center", 15); }
   }
   function text() {
     const prompt = '<p class="prompt">Shuffle the record. Does any output change?</p>';
@@ -605,7 +637,7 @@ function quiz(el, spec) {
   }
   function shuffle() { if (gateAns === null) return; const rng = mulberry32(Date.now() % 100000); prevPerm = perm.slice(); const p = perm.slice(); for (let i = T - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; } perm = p; judged = change(perm).maxd; text(); animate(); }
   function animate() { if (anim) cancelAnimationFrame(anim); slide = 0; const t0 = performance.now(); (function f(now) { slide = Math.min(1, (now - t0) / 600); draw(); if (slide < 1) anim = requestAnimationFrame(f); })(t0); }
-  const hoverCode = ev => { const [mx] = code.pos(ev); const p = Math.floor((mx - 90) / ((code.W - 150) / PEMAX)); if (p >= 0 && p < PEMAX && p !== ref) { ref = p; draw(); } };
+  const hoverCode = ev => { const [mx] = code.pos(ev); const p = Math.floor((mx - CX0) / CW); if (p >= 0 && p < PEMAX && p !== ref) { ref = p; draw(); } };
   code.c.addEventListener("pointermove", hoverCode); code.c.addEventListener("pointerdown", hoverCode);
   document.getElementById("poShuffle").addEventListener("click", shuffle);
   document.getElementById("poRestore").addEventListener("click", () => { prevPerm = perm.slice(); perm = ID.slice(); animate(); });
@@ -625,18 +657,27 @@ function quiz(el, spec) {
   function len() { return padded ? 4 : T; }
   function train() {
     losses = []; const L = len();
-    for (let i = 0; i < L - 1; i++) { let cheat = false, ctx = 0, padRead = false; for (let j = 0; j < T; j++) if (allow[i][j]) { if (j >= i + 1 && j < L) cheat = true; if (j >= L) padRead = true; if (j <= i) ctx++; } losses.push({ cheat, ctx, padRead, loss: cheat ? 0.0 : (ctx === 0 ? 1.0 : 1.0 - 0.6 * (1 - Math.exp(-0.7 * ctx))) }); }
+    // Two different failures: reading k at i+1 hands the row its own target, so its loss goes to
+    // zero. Reading further ahead leaks future context that correlates with the target, so the
+    // loss falls below what an honest row reaches and stays above zero.
+    for (let i = 0; i < L - 1; i++) {
+      let copy = false, fut = 0, ctx = 0, padRead = false;
+      for (let j = 0; j < T; j++) if (allow[i][j]) { if (j === i + 1) copy = true; else if (j > i + 1 && j < L) fut++; if (j >= L) padRead = true; if (j <= i) ctx++; }
+      const honest = ctx === 0 ? 1.0 : 1.0 - 0.6 * (1 - Math.exp(-0.7 * ctx));
+      const loss = copy ? 0.0 : (fut > 0 ? honest - (honest - 0.15) * (1 - Math.exp(-0.8 * fut)) : honest);
+      losses.push({ copy: copy, fut: fut, cheat: copy || fut > 0, ctx: ctx, padRead: padRead, loss: loss });
+    }
     trained = true;
   }
   function text() {
     const prompt = '<p class="prompt">Open one cell above the diagonal. Which row\'s loss drops for the wrong reason?</p>';
     let body;
     if (stage === 0) body = '<span class="k">step 1 of 2</span><p>The grid starts as the causal mask: every row reads itself and its past. Click one blocked cell above the diagonal to open it.</p>' + (note ? '<p>' + note + '</p>' : '') + '<p>A blocked cell is a score set to minus infinity before the softmax, so its weight is exactly zero.</p>';
-    else if (stage === 1) body = '<span class="k">step 2 of 2</span><p>Cell q' + (cell.i + 1) + ', k' + (cell.j + 1) + ' is open. Click the row label on the left for the row you think now learns nothing. Train unlocks after that.</p>';
+    else if (stage === 1) body = '<span class="k">step 2 of 2</span><p>Cell q' + (cell.i + 1) + ', k' + (cell.j + 1) + ' is open. Click the row label on the left for the row whose loss the open cell pulls down. Train unlocks after that.</p>';
     else if (!judged) body = '<span class="k">committed</span><p>You named q' + (named + 1) + '. Press Train and read the loss bars.</p>';
     else {
-      const ok = named === cell.i, i = cell.i, j = cell.j;
-      body = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No, the row is q' + (i + 1) + '. ') + 'q' + (i + 1) + ' is asked for x' + (i + 2) + ' and may now read k' + (j + 1) + ', which is at or beyond that value. It copies the answer, its loss falls to zero, and nothing is learned there. Every other row still has to predict.</div><p>Now block cells until every row is honest and still reads as much as it can. Allow all shows every row cheating at once.</p>';
+      const ok = named === cell.i, i = cell.i, j = cell.j, ahead = j - i - 1;
+      body = '<div class="ask ' + (ok ? 'ok' : 'no') + '">' + (ok ? 'Right. ' : 'No, the row is q' + (i + 1) + '. ') + 'q' + (i + 1) + ' is asked for x' + (i + 2) + ' and may now read k' + (j + 1) + ', ' + (ahead === 0 ? 'which is that value. It copies the answer, its loss falls to zero, and nothing is learned there.' : 'which lies ' + ahead + ' position' + (ahead === 1 ? '' : 's') + ' past that value. The row reads the future: in a correlated record k' + (j + 1) + ' carries information about x' + (i + 2) + ', so the loss drops below what an honest row reaches while the target itself stays hidden and the loss stays above zero. The model leans on context it will not have at inference.') + ' Every other row still has to predict.</div><p>Now block cells until every row is honest and still reads as much as it can. Allow all shows every row cheating at once.</p>';
     }
     stepEl.innerHTML = prompt + body;
     trainBtn.disabled = stage < 2;
@@ -655,14 +696,14 @@ function quiz(el, spec) {
         ctx.fillStyle = pad ? mix(css("--panel"), css("--red"), a ? 0.25 : 0.06) : (a ? mix(css("--panel"), css("--blue"), 0.55) : css("--bg")); ctx.fillRect(X + 2, Y + 2, s - 4, s - 4); ctx.strokeStyle = css("--line"); ctx.strokeRect(X + 2, Y + 2, s - 4, s - 4);
         board.label(a ? "read" : "-inf", X + s / 2, Y + s / 2 + 5, a ? css("--ink") : css("--muted"), "center", 14, true);
         if (cell && cell.i === i && cell.j === j && stage >= 1) { ctx.strokeStyle = css("--orange"); ctx.lineWidth = 3; ctx.strokeRect(X + 4, Y + 4, s - 8, s - 8); ctx.lineWidth = 1; }
-        if (trained && i < L - 1 && a && j >= i + 1 && j < L) { ctx.strokeStyle = css("--red"); ctx.lineWidth = 3; ctx.strokeRect(X + 4, Y + 4, s - 8, s - 8); ctx.lineWidth = 1; }
+        if (trained && i < L - 1 && a && j >= i + 1 && j < L) { ctx.strokeStyle = j === i + 1 ? css("--red") : css("--orange"); ctx.lineWidth = 3; ctx.strokeRect(X + 4, Y + 4, s - 8, s - 8); ctx.lineWidth = 1; }
       }
-      if (trained && i < L - 1) { const r = losses[i], bx = ox + T * s + 40; ctx.fillStyle = css("--bg"); ctx.fillRect(bx, oy + i * s + 22, LBW, 32); ctx.fillStyle = r.cheat ? css("--red") : (r.ctx === 0 ? css("--grey") : "#2E7D5B"); ctx.fillRect(bx, oy + i * s + 22, LBW * r.loss, 32); board.label((r.cheat ? "loss 0.00: copied the answer" : (r.ctx === 0 ? "loss 1.00: nothing to read" : "loss " + r.loss.toFixed(2) + ": honest, " + r.ctx + " of " + (i + 1) + " past values")) + (r.padRead ? ", reads pad" : ""), bx + 8, oy + i * s + 44, r.cheat ? css("--red") : css("--ink"), "left", 13, true); }
+      if (trained && i < L - 1) { const r = losses[i], bx = ox + T * s + 40, col = r.copy ? css("--red") : (r.fut > 0 ? css("--orange") : (r.ctx === 0 ? css("--grey") : "#2E7D5B")); ctx.fillStyle = css("--bg"); ctx.fillRect(bx, oy + i * s + 22, LBW, 32); ctx.fillStyle = col; ctx.fillRect(bx, oy + i * s + 22, LBW * r.loss, 32); board.label((r.copy ? "loss 0.00: read x" + (i + 2) + ", its own target" : (r.fut > 0 ? "loss " + r.loss.toFixed(2) + ": read " + r.fut + " position" + (r.fut === 1 ? "" : "s") + " past its target" : (r.ctx === 0 ? "loss 1.00: nothing to read" : "loss " + r.loss.toFixed(2) + ": honest, " + r.ctx + " of " + (i + 1) + " past values"))) + (r.padRead ? ", reads pad" : ""), bx + 8, oy + i * s + 44, r.copy ? css("--red") : css("--ink"), "left", 13, true); }
     }
-    if (stage === 1) board.label("click the row label that will learn nothing", 16, oy - 18, css("--orange"), "left", 14);
+    if (stage === 1) board.label("click the row label whose loss the open cell pulls down", 16, oy - 18, css("--orange"), "left", 14);
     if (trained) board.label("training loss per query position after training", ox + T * s + 40, oy - 12, css("--muted"), "left", 14);
     else if (stage >= 2) board.label("press Train to see the loss per row", ox + T * s + 40, oy - 12, css("--muted"), "left", 14);
-    if (trained) { const cheat = losses.filter(r => r.cheat).length, blind = losses.filter(r => !r.cheat && r.ctx === 0).length, ctxN = losses.reduce((a, r) => a + (r.cheat ? 0 : r.ctx), 0), maxCtx = losses.reduce((a, r, i) => a + i + 1, 0), padR = losses.some(r => r.padRead); document.getElementById("mkCheat").textContent = cheat; document.getElementById("mkBlind").textContent = blind; document.getElementById("mkCtx").textContent = ctxN + " / " + maxCtx; const v = document.getElementById("mkVerdict"); v.hidden = false; const perfect = cheat === 0 && blind === 0 && ctxN === maxCtx && !padR; v.className = "ask " + (perfect ? "ok" : (cheat ? "no" : "")); v.textContent = perfect ? "Honest everywhere and nothing wasted: this is the causal mask, the lower triangle with the diagonal" + (padded ? ", with the padding columns blocked too" : "") + "." : (cheat ? cheat + (cheat === 1 ? " row can" : " rows can") + " read a position at or beyond the one it predicts. Its loss collapses to zero and it learns to copy, which is leakage built into the architecture." : (blind ? blind + (blind === 1 ? " row reads" : " rows read") + " nothing and must guess." : (padR ? "Honest, but some rows read padding, which contributes noise from positions that do not exist." : "Honest, but " + (maxCtx - ctxN) + " past values are blocked that could have been read."))); }
+    if (trained) { const copies = losses.filter(r => r.copy).length, leaks = losses.filter(r => !r.copy && r.fut > 0).length, cheat = copies + leaks, blind = losses.filter(r => !r.cheat && r.ctx === 0).length, ctxN = losses.reduce((a, r) => a + (r.cheat ? 0 : r.ctx), 0), maxCtx = losses.reduce((a, r, i) => a + i + 1, 0), padR = losses.some(r => r.padRead); document.getElementById("mkCheat").textContent = cheat; document.getElementById("mkBlind").textContent = blind; document.getElementById("mkCtx").textContent = ctxN + " / " + maxCtx; const v = document.getElementById("mkVerdict"); v.hidden = false; const perfect = cheat === 0 && blind === 0 && ctxN === maxCtx && !padR; v.className = "ask " + (perfect ? "ok" : (cheat ? "no" : "")); v.textContent = perfect ? "Honest everywhere and nothing wasted: this is the causal mask, the lower triangle with the diagonal" + (padded ? ", with the padding columns blocked too" : "") + "." : (cheat ? (copies ? copies + (copies === 1 ? " row can read its own target and copies it, loss zero. " : " rows can read their own target and copy it, loss zero. ") : "") + (leaks ? leaks + (leaks === 1 ? " row reads a position past its target and leans on the future" : " rows read a position past their target and lean on the future") + ", loss below what an honest row reaches. " : "") + "That is leakage built into the architecture." : (blind ? blind + (blind === 1 ? " row reads" : " rows read") + " nothing and must guess." : (padR ? "Honest, but some rows read padding, which contributes noise from positions that do not exist." : "Honest, but " + (maxCtx - ctxN) + " past values are blocked that could have been read."))); }
     else { document.getElementById("mkCheat").textContent = "-"; document.getElementById("mkBlind").textContent = "-"; document.getElementById("mkCtx").textContent = "-"; }
   }
   board.c.addEventListener("pointerdown", ev => {
@@ -697,7 +738,7 @@ function quiz(el, spec) {
     const hide = "<span class='t'>-</span>";
     ledger.innerHTML = '<div class="head"><span>one attention layer on ' + RECORDS[rec].name + '</span><span>T = ' + T.toLocaleString() + '</span></div>' +
       '<div><span>score matrix entries, T x T</span>' + (open ? '<span>' + fmt(c.pairs) + '</span>' : hide) + '</div>' +
-      '<div><span>multiply-adds for the scores, 2 T^2 d (d = ' + DM + ')</span>' + (open ? '<span>' + fmt(c.flops) + '</span>' : hide) + '</div>' +
+      '<div><span>floating-point operations for the scores, 2 T^2 d (d = ' + DM + '), one multiply and one add per term</span>' + (open ? '<span>' + fmt(c.flops) + '</span>' : hide) + '</div>' +
       '<div class="kernel" id="coKernel"' + (open ? ' style="cursor:pointer" title="click to switch the kernel"' : '') + '><span>' + (open ? (tiled ? 'memory with a tiled softmax, T x d x 2 bytes (the matrix is never stored); click to store the matrix instead' : 'memory for the matrix, ' + HEADS + ' heads x T^2 x 2 bytes; click to switch to a tiled softmax') : 'memory for the matrix, ' + HEADS + ' heads x T^2 x 2 bytes') + '</span>' + (open ? '<span class="' + (c.matBytes > cap ? 'warn' : 'good') + '">' + bytes(c.matBytes) + '</span>' : hide) + '</div>' +
       '<div><span>key-value cache at inference, 2 x ' + LAYERS + ' layers x T x d x 2 bytes</span>' + (open ? '<span class="' + (c.cache > cap ? 'warn' : 'good') + '">' + bytes(c.cache) + '</span>' : hide) + '</div>' +
       '<div class="total"><span>memory, this layer plus the cache</span>' + (open ? '<span class="' + (c.total > cap2 ? 'warn' : 'good') + '">' + bytes(c.total) + (c.total > cap2 ? '  over both cards' : (c.total > cap ? '  fits the 80 GB card only' : '  fits both cards')) + '</span>' : hide) + '</div>';
