@@ -180,6 +180,8 @@ canvas.grab { cursor: grab; }
 .cal .m.retrain::after { content: "R"; position: absolute; right: 3px; top: 1px; color: var(--blue); font-weight: 600; font-size: 11px; }
 .legend2 { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
 .legend2 span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; background: var(--c); }
+.legend2 span.ol::before { box-shadow: inset 0 0 0 2px var(--o); }
+.legend2 span.wide::before { width: 30px; }
 .big { font-family: var(--mono); font-size: 24px; font-weight: 600; }
 </style>
 
@@ -214,7 +216,7 @@ canvas.grab { cursor: grab; }
         <div class="btns"><button class="primary" id="ctGrad" disabled>Let gradient descent take over</button><button id="ctShuffle">Scramble</button></div>
         <dl class="readout" style="margin-top:10px">
           <dt>your loss</dt><dd id="ctLoss">-</dd>
-          <dt>best possible with five pairs</dt><dd id="ctBest">-</dd>
+          <dt>best possible on this circle</dt><dd id="ctBest">-</dd>
           <dt>photos that retrieve their own caption</dt><dd id="ctAcc">-</dd>
           <dt>your best so far</dt><dd id="ctRecord">-</dd>
         </dl>
@@ -223,7 +225,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>The loss is the symmetric InfoNCE of slide 6: for each photo a softmax over the five captions at temperature tau, and the same for each caption over the photos. Coinciding pairs are not enough; the pairs must also be spread apart, because every other caption in the batch is a negative. At tau = 0.1 the softmax is sharp and the loss rewards separation; at tau = 0.5 it is soft and plateaus early, which is why CLIP learns its temperature.</p>
+    <p>The loss is the symmetric InfoNCE of slide 6: for each photo a softmax over the five captions at temperature tau, and the same for each caption over the photos. Coinciding pairs are not enough; the pairs must also be spread apart, because every other caption in the batch is a negative. At tau = 0.1 the softmax is sharp and the loss falls close to zero as soon as each photo wins its own caption; at tau = 0.5 the softmax is soft, every other caption keeps weight however far apart the pairs sit, and the best layout on this circle still scores 0.442, which is why CLIP learns its temperature. The floor also depends on the embedding dimension: five pairs placed as a regular simplex in four dimensions score 0.284 at tau = 0.5, below anything reachable on a circle, which is why CLIP embeds on a 512-dimensional sphere.</p>
   </div>
 </section>
 
@@ -254,16 +256,16 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>Each word has a direction in the shared space, close to the concept it names and, for words like "cracked" or "steel", between two concepts. The query is the mean direction of its words, which is how a text tower treats a phrase to first order. Generic words pull the query toward the middle and cost recall; a specific word is worth more than three vague ones, which is the wording effect on slide 7.</p>
+    <p>Each word has a direction in the shared space, close to the concept it names and, for words like "cracked" or "steel", between two concepts. The query here is the mean direction of its words. A CLIP text tower is a causal transformer read at its end-of-sequence token; its embeddings show bag-of-words behaviour, with word order weakly represented and one off-topic word moving the whole query, and the averaging in this demo stands in for that documented failure mode. A word that names the concept retrieves all three of its photos on its own, while a word that sits in a gap between clusters retrieves a mixture, which is the wording effect on slide 7.</p>
   </div>
 </section>
 
 <!-- ============ 3. TRIAGE: the inspector's queue ============ -->
 <section class="demo" id="triage" role="tabpanel">
   <h2>The inspector's queue: review the top of the list and count what you caught</h2>
-  <p class="lead">Two hundred photos from a site visit, twenty of them real defects, sorted by the model's score with the most suspicious first. Drag the orange review line to set how many the inspector will review, pick a detector by clicking one of the three score-histogram cards under the queue, type how many of the twenty defects you expect the review to find, then flip the cards.</p>
+  <p class="lead">Two hundred photos from a site visit, twenty of them real defects, sorted by the model's score with the most suspicious first. Drag the orange review line to set how many the inspector will review, pick a detector by clicking one of the three score-distribution cards under the queue, type how many of the twenty defects you expect the review to find, then flip the cards.</p>
   <div class="stage">
-    <div class="plot"><canvas id="trGrid" class="grab" width="1200" height="650"></canvas></div>
+    <div class="plot"><canvas id="trGrid" class="grab" width="1200" height="700"></canvas></div>
     <div class="side">
       <div class="panel step" id="trStep"></div>
       <div class="panel">
@@ -307,7 +309,7 @@ canvas.grab { cursor: grab; }
     </div>
   </div>
   <div class="caption">
-    <p>The real system is x(t+1) = A x(t) + B u(t) with a slow damped rotation; the learned model has a perturbed A. Your click sets u toward the point you chose. The planner solves a least-squares problem inside the model for a horizon of twelve steps, as on slide 17; replanning after every real observation is what closes the loop, slide 18. With a large model error the plan-once trajectory ends far from the target while the replanning one still arrives, because each observation corrects the model's drift before it compounds.</p>
+    <p>The real system is x(t+1) = A x(t) + B u(t) with a slow damped rotation; the learned model has a perturbed A. Your click sets u toward the point you chose. The replanning planner solves a least-squares problem inside the model over a twelve-step horizon and applies the first input, as on slide 17; the plan-once planner solves one twenty-step problem at the start and runs all twenty inputs open loop. Replanning after every real observation is what closes the loop, slide 18. With a large model error the plan-once trajectory ends far from the target while the replanning one still arrives, because each observation corrects the model's drift before it compounds.</p>
   </div>
 </section>
 
@@ -318,7 +320,7 @@ canvas.grab { cursor: grab; }
   <div class="stage">
     <div class="panel">
       <div class="cal" id="drCal"></div>
-      <div class="legend2"><span style="--c:#D6E3F2">inputs steady</span><span style="--c:#C9731F">inputs drifting (index above 0.5)</span><span style="--c:#E3F2EA">error in band</span><span style="--c:#B3261E">error out of band</span><span style="--c:#D9DDE3">labels not in yet</span></div>
+      <div class="legend2"><span class="wide" style="--c:linear-gradient(90deg,#D6E3F2,#C9731F)">top half: drift index, 0 to 2</span><span class="ol" style="--c:#E7B079;--o:#6E3C08">index above 0.5, the alarm</span><span class="wide" style="--c:linear-gradient(90deg,#E3F2EA,#B3261E)">bottom half: held-out error</span><span class="ol" style="--c:#D98A80;--o:#5E0F0B">error out of band</span><span style="--c:#D9DDE3">labels not in yet</span></div>
       <div style="margin-top:14px;font-size:14px">running cost <span class="big" id="drCost">0</span> <span class="badge" id="drMonth">month 0</span></div>
       <div class="meter" style="margin-top:6px"><i id="drMeter" style="width:0%"></i></div>
     </div>
@@ -420,8 +422,8 @@ function glyph(ctx, kind, x, y, w, h, tone) {
     const ratio = (L - B);
     let html = '<p class="prompt">Tau 0.1 against 0.5: at which setting can you get the loss near zero by hand?</p>';
     if (pick === null) html += '<div class="bet"><button id="ctPick01">tau = 0.1</button><button id="ctPick05">tau = 0.5</button></div><p>Choose first. The markers, the thermometer and the gradient button unlock after the choice, and the temperature is set to your pick so you can test it.</p>';
-    else html += '<div class="ask ' + (pick === 0.1 ? 'ok' : 'no') + '">' + (pick === 0.1 ? 'Right. At tau 0.1 five coincident pairs spread evenly score ' + best(0.1).toFixed(3) + '. At tau 0.5 the same layout scores ' + best(0.5).toFixed(3) + ', because the soft softmax keeps weight on the four negatives however far apart the pairs sit.' : 'No. At tau 0.5 the best possible layout still scores ' + best(0.5).toFixed(3) + '; the soft softmax keeps weight on the four negatives however far apart the pairs sit. At tau 0.1 the same layout scores ' + best(0.1).toFixed(3) + '.') + '</div>' +
-      '<span class="k">' + (ratio < 0.05 ? 'at the optimum' : (A === N ? 'all retrieved, not yet optimal' : 'keep going')) + '</span>' + (A < N ? '<p>' + (N - A) + ' of the photos still pick the wrong caption. Bring each P next to its own C first.</p>' : (ratio < 0.05 ? '<div class="ask ok">Your loss ' + L.toFixed(3) + ' is within 0.05 of the best possible, ' + B.toFixed(3) + '. The ten points sit as five coincident pairs spread evenly around the circle.</div>' : '<div class="ask">Every photo retrieves its caption, and the loss is ' + L.toFixed(3) + ' against a possible ' + B.toFixed(3) + '. Matched pairs that sit close to <i>other</i> pairs are still penalized: spread the five pairs apart.</div>')) + '<p>Drag the thermometer and watch the same layout score differently. At tau = 0.5 the gap between a good and a perfect layout almost vanishes.</p>';
+    else html += '<div class="ask ' + (pick === 0.1 ? 'ok' : 'no') + '">' + (pick === 0.1 ? 'Right. At tau 0.1 five coincident pairs spread evenly score ' + best(0.1).toFixed(3) + '. At tau 0.5 the same layout scores ' + best(0.5).toFixed(3) + ', because the soft softmax keeps weight on the four negatives however far apart the pairs sit.' : 'No. At tau 0.5 the best layout on this circle still scores ' + best(0.5).toFixed(3) + '; the soft softmax keeps weight on the four negatives however far apart the pairs sit. At tau 0.1 the same layout scores ' + best(0.1).toFixed(3) + '.') + '</div>' +
+      '<span class="k">' + (ratio < 0.05 ? 'at the optimum' : (A === N ? 'all retrieved, not yet optimal' : 'keep going')) + '</span>' + (A < N ? '<p>' + (N - A) + ' of the photos still pick the wrong caption. Bring each P next to its own C first.</p>' : (ratio < 0.05 ? '<div class="ask ok">Your loss ' + L.toFixed(3) + ' is within 0.05 of the best on this circle, ' + B.toFixed(3) + '. The ten points sit as five coincident pairs spread evenly around the circle.</div>' : '<div class="ask">Every photo retrieves its caption, and the loss is ' + L.toFixed(3) + ' against ' + B.toFixed(3) + ', the best on this circle. Matched pairs that sit close to <i>other</i> pairs are still penalized: spread the five pairs apart.</div>')) + '<p>Drag the thermometer and watch the same layout score differently. At tau = 0.1 the gap between a good and a perfect layout almost vanishes, because the sharp softmax saturates once each photo wins its own caption.</p>';
     stepEl.innerHTML = html;
     const b1 = document.getElementById("ctPick01"), b5 = document.getElementById("ctPick05");
     if (b1) { b1.addEventListener("click", () => commit(0.1)); b5.addEventListener("click", () => commit(0.5)); }
@@ -442,7 +444,7 @@ function glyph(ctx, kind, x, y, w, h, tone) {
 /* ================= 2. WRITE THE QUERY ================= */
 (function retrieval() {
   const concepts = ["spalling concrete", "corroded rebar", "cracked asphalt", "clogged culvert"], centers = [0.3, 1.9, 3.4, 5.0];
-  const WORDS = [["spalling", 0.3], ["concrete", 0.55], ["flaking", 0.2], ["surface", 1.0], ["rebar", 1.9], ["corroded", 1.8], ["rusty", 1.15], ["steel", 2.75], ["asphalt", 3.4], ["pavement", 3.6], ["pothole", 3.2], ["cracked", 2.6], ["culvert", 5.0], ["clogged", 4.85], ["drain", 5.2], ["debris", 4.5], ["damage", 1.3], ["photo", 2.9]];
+  const WORDS = [["spalling", 0.3], ["concrete", 0.55], ["flaking", 0.2], ["surface", 1.0], ["rebar", 1.9], ["corroded", 1.8], ["rusty", 1.15], ["steel", 2.75], ["asphalt", 3.4], ["pavement", 3.6], ["pothole", 3.2], ["cracked", 2.6], ["culvert", 5.0], ["clogged", 4.85], ["drain", 5.2], ["debris", 4.5], ["damage", 5.7], ["photo", 2.9]];
   const rng = mulberry32(21), photos = []; for (let c = 0; c < 4; c++) for (let k = 0; k < 3; k++) { const a = centers[c] + (rng() - 0.5) * 0.7; photos.push({ c, a, name: concepts[c].split(" ")[1] + " " + (k + 1) }); }
   const widx = w => WORDS.findIndex(x => x[0] === w);
   // round 4 is the wrong-chip round: a three-chip query is given, its top three are plausible and wrong, and the student names the chip that hurt before editing
@@ -471,7 +473,7 @@ function glyph(ctx, kind, x, y, w, h, tone) {
       if (gate) html += '<p>The query holds three chips already. The top result is ' + top.name + ' and only ' + hits + ' of the three culverts made the top three. Which chip hurt? Click it in the word list.</p>';
       else html += '<div class="ask ' + (blame === R.culprit ? 'ok' : 'no') + '">' + (blame === R.culprit ? 'Right. Cracked sits between rebar and asphalt, far from the culvert cluster, and one far chip moves the mean of three by a third of its distance. ' : 'No. ' + blame.charAt(0).toUpperCase() + blame.slice(1) + ' sits near the culvert cluster. Cracked sits between rebar and asphalt, and one far chip moves the mean of three by a third of its distance. ') + 'Remove cracked and the culverts return.</div>' + (done ? '<div class="ask ok">Solved with ' + used.length + (used.length === 1 ? ' word.' : ' words.') + ' Next target: the same culverts with as few words as you can.</div>' : '<p>The chips are editable again. Fix the query: ' + hits + ' of 3 culverts in the top three.</p>');
     } else {
-      html += '<p class="prompt">Target: <b>' + concepts[target] + '</b>. Get all three of its photos into the top three.</p>' + tag + (done ? '<div class="ask ok">Solved with ' + used.length + (used.length === 1 ? ' word.' : ' words.') + (used.length > 1 ? ' Try Clear and solve it with one: the most specific word usually does it alone.' : ' One specific word beats any phrase built from vague ones.') + '</div>' : (q ? '<div class="ask">' + hits + ' of 3 in the top three. ' + (costly ? 'Generic words like damage, photo or surface pull the query toward the middle of the space and help no concept.' : (hits === 2 ? 'Close: one word is nudging the query toward a neighbouring concept. Remove it or add the exact term.' : 'Add the word that names the thing itself.')) + '</div>' : '<p>Each word is a direction; the query is their mean. Start with one chip and read the ranking.</p>'));
+      html += '<p class="prompt">Target: <b>' + concepts[target] + '</b>. Get all three of its photos into the top three.</p>' + tag + (done ? '<div class="ask ok">Solved with ' + used.length + (used.length === 1 ? ' word.' : ' words.') + (used.length > 1 ? ' Try Clear and solve it with one: the most specific word usually does it alone.' : ' One specific word beats any phrase built from vague ones.') + '</div>' : (q ? '<div class="ask">' + hits + ' of 3 in the top three. ' + (costly ? 'Damage, photo and surface each sit in a gap between two clusters, so each one on its own ranks a mixture. Add the word that names the thing itself.' :(hits === 2 ? 'Close: one word is nudging the query toward a neighbouring concept. Remove it or add the exact term.' : 'Add the word that names the thing itself.')) + '</div>' : '<p>Each word is a direction; the query is their mean. Start with one chip and read the ranking.</p>'));
     }
     stepEl.innerHTML = html;
   }
@@ -490,7 +492,11 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   let seed = 2, dp = "mid", budget = 40, pred = null, flipped = false, showAll = false, items = null, dragLine = false;
   const CARDS = [["weak", "weak detector"], ["mid", "middle detector"], ["strong", "strong detector"]];
   function make() { const rng = mulberry32(seed); items = []; for (let i = 0; i < n; i++) items.push({ rel: i < K, z: randn(rng, 2)[0] }); }
-  function sorted() { return items.map(it => ({ rel: it.rel, s: it.z + (it.rel ? DP[dp] : 0) })).sort((a, b) => b.s - a.s); }
+  function scoresFor(key) { return items.map(it => ({ rel: it.rel, s: it.z + (it.rel ? DP[key] : 0) })).sort((a, b) => b.s - a.s); }
+  function sorted() { return scoresFor(dp); }
+  // the score at the review line for one detector: the budget-th highest score in this site visit
+  function cutFor(key) { const q = scoresFor(key); return q[Math.min(q.length - 1, Math.max(0, budget - 1))].s; }
+  function cardRect(i) { return { x: 60 + i * 370, y: 40 + 10 * 44 + 62, w: 350, h: 130 }; }
   const stepEl = document.getElementById("trStep");
   const DNAME = { weak: "weak", mid: "middle", strong: "strong" };
   function text() { stepEl.innerHTML = '<p class="prompt">At a budget of ' + budget + ' with the ' + DNAME[dp] + ' detector, how many of the 20 defects are caught? Type a number.</p><span class="k">before you flip</span><p>The cards are the queue, highest score at the top left. The first ' + budget + ' are inside the review line; drag the line to change the budget.</p><p>Twenty of the 200 are defects. Type the number in the box below, then flip. The three cards under the queue are three detectors: click one.</p>'; }
@@ -515,10 +521,23 @@ function glyph(ctx, kind, x, y, w, h, tone) {
     board.label("review line (drag): the inspector looks at the " + budget + " cards above it, " + (100 * budget / n).toFixed(0) + " % of the queue", ox + cols * cw, oy + rows * ch + 20, css("--orange"), "right", 12);
     board.label("unflipped cards show the model's score; red is a confirmed defect", ox, oy + rows * ch + 20, css("--muted"), "left", 12);
     // detector cards: score histograms of ok photos and defects
-    const cy0 = oy + rows * ch + 40; board.label("the detector (click a card): how far its scores separate defects from the rest", ox, cy0 + 12, css("--ink"), "left", 12);
-    CARDS.forEach((cd, i) => { const x = ox + i * 370, y = cy0 + 22, w = 350, h = 92, on = dp === cd[0]; ctx.fillStyle = on ? mix(css("--panel"), css("--blue"), 0.12) : css("--bg"); ctx.fillRect(x, y, w, h); ctx.strokeStyle = on ? css("--blue") : css("--line"); ctx.lineWidth = on ? 2.5 : 1; ctx.strokeRect(x, y, w, h); ctx.lineWidth = 1;
-      const d = DP[cd[0]], sc = 40, base = y + h - 12; const curve = (mu, color) => { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); for (let k = 0; k <= 80; k++) { const z = -3 + 7 * k / 80; const yy = base - 62 * Math.exp(-0.5 * (z - mu) ** 2); const xx = x + 20 + (z + 3) / 7 * (w - 40); if (k) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); } ctx.stroke(); ctx.lineWidth = 1; };
-      curve(0, mix(css("--panel"), css("--blue"), 0.6)); curve(d, css("--red")); board.label(cd[1] + ", d' = " + d.toFixed(1), x + 10, y + 16, on ? css("--blue") : css("--ink"), "left", 12); board.label("ok photos", x + 24, base - 4, mix(css("--panel"), css("--blue"), 0.8), "left", 10); board.label("defects", x + w - 24, base - 4, css("--red"), "right", 10); });
+    const cy0 = oy + rows * ch + 40; board.label("the detector (click a card): the score distributions, scaled to 180 ok photos and 20 defects, with the review cut at this budget", ox, cy0 + 12, css("--ink"), "left", 12);
+    CARDS.forEach((cd, i) => { const r = cardRect(i), on = dp === cd[0], d = DP[cd[0]];
+      ctx.fillStyle = on ? mix(css("--panel"), css("--blue"), 0.12) : css("--bg"); ctx.fillRect(r.x, r.y, r.w, r.h); ctx.strokeStyle = on ? css("--blue") : css("--line"); ctx.lineWidth = on ? 2.5 : 1; ctx.strokeRect(r.x, r.y, r.w, r.h); ctx.lineWidth = 1;
+      const left = r.x + 24, right = r.x + r.w - 14, base = r.y + r.h - 32, topY = r.y + 30, Z0 = -3.2, Z1 = 5.2, PK = (base - topY) * 0.94;
+      const zx = z => left + (z - Z0) / (Z1 - Z0) * (right - left);
+      const area = (mu, cnt, line, fill) => { ctx.beginPath(); ctx.moveTo(zx(Z0), base); for (let k = 0; k <= 100; k++) { const z = Z0 + (Z1 - Z0) * k / 100; ctx.lineTo(zx(z), base - PK * (cnt / (n - K)) * Math.exp(-0.5 * (z - mu) * (z - mu))); } ctx.lineTo(zx(Z1), base); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = line; ctx.lineWidth = 1.8; ctx.stroke(); ctx.lineWidth = 1; };
+      area(0, n - K, mix(css("--panel"), css("--blue"), 0.75), mix(css("--panel"), css("--blue"), 0.22));
+      area(d, K, css("--red"), mix(css("--panel"), css("--red"), 0.4));
+      ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(zx(Z0), base); ctx.lineTo(zx(Z1), base); ctx.stroke();
+      [-2, 0, 2, 4].forEach(z => { ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(zx(z), base); ctx.lineTo(zx(z), base + 4); ctx.stroke(); board.label(String(z), zx(z), base + 15, css("--muted"), "center", 10, true); });
+      board.label("model score", (left + right) / 2, base + 27, css("--muted"), "center", 10);
+      const cut = cutFor(cd[0]), cl = zx(cut) > right - 64 ? "right" : "left";
+      ctx.strokeStyle = css("--orange"); ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(zx(cut), base); ctx.lineTo(zx(cut), topY - 4); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+      board.label("cut " + cut.toFixed(1), zx(cut) + (cl === "right" ? -4 : 4), topY - 6, css("--orange"), cl, 10, true);
+      board.label(cd[1] + ", d' = " + d.toFixed(1), r.x + 10, r.y + 18, on ? css("--blue") : css("--ink"), "left", 12);
+      board.label("180 ok photos", zx(0), base - PK * 0.45, css("--blue"), "center", 10);
+      board.label("20 defects", zx(d + 1.4), base - PK * (K / (n - K)) - 8, css("--red"), "left", 10); });
     const found = q.slice(0, budget).filter(it => it.rel).length;
     document.getElementById("trN").textContent = budget; document.getElementById("trFound").textContent = flipped ? found + " of " + K : "-"; document.getElementById("trRecall").textContent = flipped ? (100 * found / K).toFixed(0) + " %" : "-"; document.getElementById("trPrec").textContent = flipped ? (100 * found / budget).toFixed(0) + " %" : "-";
   }
@@ -531,7 +550,7 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   }
   function reset() { flipped = false; showAll = false; pred = null; document.getElementById("trPredN").value = ""; document.getElementById("trPredNote").textContent = "then flip"; document.getElementById("trFlip").disabled = true; text(); draw(); }
   document.getElementById("trPredN").addEventListener("input", ev => { if (flipped) return; const v = parseInt(ev.target.value, 10); if (isNaN(v) || v < 0 || v > 20) { pred = null; document.getElementById("trFlip").disabled = true; return; } pred = v; document.getElementById("trFlip").disabled = false; });
-  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); const cols = 20, cw = 54, ch = 44, ox = 60, oy = 40; const bx = ox + (budget % cols) * cw, by = oy + Math.floor(budget / cols) * ch; const onLine = (my >= by - 10 && my <= by + ch + 10 && mx >= ox - 10 && mx <= ox + cols * cw + 10); if (onLine) { dragLine = true; return; } const cy0 = oy + 10 * ch + 62; if (my >= cy0 && my <= cy0 + 92) { const i = Math.floor((mx - ox) / 370); if (i >= 0 && i < 3 && mx - ox - i * 370 <= 350) { dp = CARDS[i][0]; reset(); } } });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); const cols = 20, cw = 54, ch = 44, ox = 60, oy = 40; const bx = ox + (budget % cols) * cw, by = oy + Math.floor(budget / cols) * ch; const onLine = (my >= by - 10 && my <= by + ch + 10 && mx >= ox - 10 && mx <= ox + cols * cw + 10); if (onLine) { dragLine = true; return; } for (let i = 0; i < 3; i++) { const r = cardRect(i); if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) { dp = CARDS[i][0]; reset(); return; } } });
   window.addEventListener("pointermove", ev => { if (!dragLine) return; const [mx, my] = board.pos(ev); const cols = 20, cw = 54, ch = 44, ox = 60, oy = 40; const col = Math.max(0, Math.min(cols, Math.round((mx - ox) / cw))), row = Math.max(0, Math.min(9, Math.floor((my - oy) / ch))); const b = Math.max(5, Math.min(195, row * cols + col)); if (b !== budget) { budget = b; if (flipped || pred !== null) reset(); else { text(); draw(); } } });
   window.addEventListener("pointerup", () => { dragLine = false; });
   document.getElementById("trFlip").addEventListener("click", flip);
@@ -547,7 +566,7 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   const th = 0.25, damp = 0.985, A = [[damp * Math.cos(th), -damp * Math.sin(th)], [damp * Math.sin(th), damp * Math.cos(th)]], B = 0.12, target = [1.5, 0.6], x0 = [-1.8, -1.2], TOT = 20, H = 12, lam = 0.02, UMAX = 2.5;
   const board = new Board(document.getElementById("wmPlane"));
   const px = v => board.W / 2 + v * 95, py = v => board.H / 2 - v * 95;
-  const INS = { x: 940, y: 24, w: 244, h: 170, cx: 1040, cy: 120 }, EDIR = [0.6, 0.8];
+  const INS = { x: 930, y: 10, w: 254, h: 198 }, ZOOM = 70;
   let dragErr = false, seed = 5, Enoise = null, err = 0.2, x = null, t = 0, path = [], ghosts = [], lastGap = null, finals = { you: null, k1: null, once: null }, finished = false, planPaths = { k1: null, once: null };
   // the model-error handle is a slider row drawn on the plane under the inset; the planners stay locked until the student commits to one
   const SL = { x0: 960, x1: 1160, y: 246, lo: 0.02, hi: 0.6 }, slx = v => SL.x0 + (v - SL.lo) / (SL.hi - SL.lo) * (SL.x1 - SL.x0);
@@ -557,9 +576,10 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   const mm = (M, N) => [[M[0][0] * N[0][0] + M[0][1] * N[1][0], M[0][0] * N[0][1] + M[0][1] * N[1][1]], [M[1][0] * N[0][0] + M[1][1] * N[1][0], M[1][0] * N[0][1] + M[1][1] * N[1][1]]];
   function model() { return [[A[0][0] + err * Enoise[0][0], A[0][1] + err * Enoise[0][1]], [A[1][0] + err * Enoise[1][0], A[1][1] + err * Enoise[1][1]]]; }
   function solve(Mtx, rhs) { const n = rhs.length, M = Mtx.map((r, i) => r.concat([rhs[i]])); for (let p = 0; p < n; p++) { let best = p; for (let r = p + 1; r < n; r++) if (Math.abs(M[r][p]) > Math.abs(M[best][p])) best = r; const tmp = M[p]; M[p] = M[best]; M[best] = tmp; for (let r = p + 1; r < n; r++) { const f = M[r][p] / M[p][p]; if (f === 0) continue; for (let j = p; j <= n; j++) M[r][j] -= f * M[p][j]; } } const out = new Array(n).fill(0); for (let p = n - 1; p >= 0; p--) { let s = M[p][n]; for (let j = p + 1; j < n; j++) s -= M[p][j] * out[j]; out[p] = s / M[p][p]; } return out; }
-  function plan(Ah, xs) { const pw = [[[1, 0], [0, 1]]]; for (let i = 1; i <= H; i++) pw.push(mm(Ah, pw[i - 1])); const n = 2 * H, G = [], r = []; for (let k = 1; k <= H; k++) { const free = mul(pw[k], xs); r.push(target[0] - free[0], target[1] - free[1]); const row0 = new Array(n).fill(0), row1 = new Array(n).fill(0); for (let j = 0; j < k; j++) { const M = pw[k - 1 - j]; row0[2 * j] = M[0][0] * B; row0[2 * j + 1] = M[0][1] * B; row1[2 * j] = M[1][0] * B; row1[2 * j + 1] = M[1][1] * B; } G.push(row0, row1); } const GG = []; for (let a = 0; a < n; a++) { GG.push(new Array(n).fill(0)); for (let b = 0; b < n; b++) { let s = 0; for (let i = 0; i < G.length; i++) s += G[i][a] * G[i][b]; GG[a][b] = s + (a === b ? lam : 0); } } const Gr = new Array(n).fill(0); for (let a = 0; a < n; a++) { let s = 0; for (let i = 0; i < G.length; i++) s += G[i][a] * r[i]; Gr[a] = s; } const u = solve(GG, Gr); const out = []; for (let j = 0; j < H; j++) out.push([u[2 * j], u[2 * j + 1]]); return out; }
+  function plan(Ah, xs, hor) { const Hh = hor || H; const pw = [[[1, 0], [0, 1]]]; for (let i = 1; i <= Hh; i++) pw.push(mm(Ah, pw[i - 1])); const n = 2 * Hh, G = [], r = []; for (let k = 1; k <= Hh; k++) { const free = mul(pw[k], xs); r.push(target[0] - free[0], target[1] - free[1]); const row0 = new Array(n).fill(0), row1 = new Array(n).fill(0); for (let j = 0; j < k; j++) { const M = pw[k - 1 - j]; row0[2 * j] = M[0][0] * B; row0[2 * j + 1] = M[0][1] * B; row1[2 * j] = M[1][0] * B; row1[2 * j + 1] = M[1][1] * B; } G.push(row0, row1); } const GG = []; for (let a = 0; a < n; a++) { GG.push(new Array(n).fill(0)); for (let b = 0; b < n; b++) { let s = 0; for (let i = 0; i < G.length; i++) s += G[i][a] * G[i][b]; GG[a][b] = s + (a === b ? lam : 0); } } const Gr = new Array(n).fill(0); for (let a = 0; a < n; a++) { let s = 0; for (let i = 0; i < G.length; i++) s += G[i][a] * r[i]; Gr[a] = s; } const u = solve(GG, Gr); const out = []; for (let j = 0; j < Hh; j++) out.push([u[2 * j], u[2 * j + 1]]); return out; }
   function realStep(xs, u, rng) { const nx = mul(A, xs); nx[0] += B * u[0] + 0.01 * (rng() - 0.5); nx[1] += B * u[1] + 0.01 * (rng() - 0.5); return nx; }
-  function runPlanner(k) { const Ah = model(), rng = mulberry32(seed + 100); let xs = x0.slice(), u = [], out = [xs.slice()]; for (let i = 0; i < TOT; i++) { if (i % k === 0 || !u.length) u = plan(Ah, xs); const ut = u.shift(); xs = realStep(xs, ut, rng); out.push(xs.slice()); } return out; }
+  // k = 1 replans from the true state before every step; k = TOT solves one plan of TOT inputs at the start and executes it blind
+  function runPlanner(k) { const Ah = model(), rng = mulberry32(seed + 100), open = k >= TOT; let xs = x0.slice(), u = open ? plan(Ah, xs, TOT) : [], out = [xs.slice()]; for (let i = 0; i < TOT; i++) { if (!open && i % k === 0) u = plan(Ah, xs); const ut = u.shift(); xs = realStep(xs, ut, rng); out.push(xs.slice()); } return out; }
   const stepEl = document.getElementById("wmStep");
   function restart(full) { x = x0.slice(); t = 0; path = [x.slice()]; ghosts = []; lastGap = null; finished = false; finals.you = null; planPaths = { k1: null, once: null }; finals.k1 = null; finals.once = null; if (full) { pick = null; gateRes = null; } text(); draw(); }
   function head() {
@@ -572,7 +592,7 @@ function glyph(ctx, kind, x, y, w, h, tone) {
   function setStep(html) { stepEl.innerHTML = head() + html; wire(); }
   function text() { setStep('<span class="k">your turn, step ' + (t + 1) + ' of ' + TOT + '</span><p>Click anywhere on the plane. The push goes toward your click, capped at a fixed strength. The grey ghost marks where the learned model says you will land; the blue dot is where you really land.</p>' + (t > 2 ? '<p>Notice the ghost and the real dot disagree by a different amount each step. You are correcting for that with every click, which is exactly what the replanning planner does.</p>' : '')); }
   function runBoth() { planPaths.k1 = runPlanner(1); let e = planPaths.k1[TOT]; finals.k1 = Math.hypot(e[0] - target[0], e[1] - target[1]); planPaths.once = runPlanner(TOT); e = planPaths.once[TOT]; finals.once = Math.hypot(e[0] - target[0], e[1] - target[1]); }
-  function commit(v) { pick = v; err = 0.5; runBoth(); gateRes = { once: finals.once, k1: finals.k1 }; setStep('<span class="k">the comparison</span><p>Both planners optimize a twelve-step plan inside the learned model. The green path throws its plan away after each real step and plans again from where it actually is; the dashed grey path trusts its first plan to the end. Drag the handle to another error and run them again with the buttons' + (finished ? '.' : ', or keep piloting by hand.') + '</p>'); draw(); }
+  function commit(v) { pick = v; err = 0.5; runBoth(); gateRes = { once: finals.once, k1: finals.k1 }; setStep('<span class="k">the comparison</span><p>Both planners optimize inside the learned model. The green path solves a twelve-step plan, applies its first input and plans again from where it actually is; the dashed grey path solves one twenty-step plan at the start and executes all twenty inputs. Drag the handle to another error and run them again with the buttons' + (finished ? '.' : ', or keep piloting by hand.') + '</p>'); draw(); }
   function draw() {
     board.clear("the plane: click to push toward that point"); const ctx = board.ctx;
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; for (let v = -3; v <= 3; v++) { ctx.beginPath(); ctx.moveTo(px(v), py(-3)); ctx.lineTo(px(v), py(3)); ctx.moveTo(px(-3), py(v)); ctx.lineTo(px(3), py(v)); ctx.stroke(); }
@@ -589,11 +609,19 @@ function glyph(ctx, kind, x, y, w, h, tone) {
     // inset: the learned model against the real dynamics
     ctx.fillStyle = css("--panel"); ctx.fillRect(INS.x, INS.y, INS.w, INS.h); ctx.strokeStyle = css("--line"); ctx.strokeRect(INS.x, INS.y, INS.w, INS.h);
     board.label("one step from here, no push:", INS.x + 10, INS.y + 18, css("--ink"), "left", 12); board.label("real (blue) and the learned model (grey ghost)", INS.x + 10, INS.y + 34, css("--muted"), "left", 10);
-    const rt = [INS.cx + 70, INS.cy - 20], gt = [rt[0] + err * 150 * EDIR[0], rt[1] + err * 150 * EDIR[1]];
-    ctx.strokeStyle = css("--blue"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(INS.cx - 40, INS.cy + 10); ctx.lineTo(rt[0], rt[1]); ctx.stroke(); ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(rt[0], rt[1], 7, 0, 2 * Math.PI); ctx.fill();
-    ctx.strokeStyle = css("--grey"); ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(INS.cx - 40, INS.cy + 10); ctx.lineTo(gt[0], gt[1]); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; ctx.fillStyle = mix(css("--panel"), css("--grey"), 0.7); ctx.beginPath(); ctx.arc(gt[0], gt[1], 10, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--ink"); ctx.stroke();
-    ctx.fillStyle = css("--ink"); ctx.beginPath(); ctx.arc(INS.cx - 40, INS.cy + 10, 5, 0, 2 * Math.PI); ctx.fill();
-    board.label("set by the handle below", INS.x + 10, INS.y + INS.h - 10, css("--muted"), "left", 11); board.label("error " + err.toFixed(2), INS.x + INS.w - 10, INS.y + INS.h - 10, css("--ink"), "right", 12, true);
+    // both endpoints come from the state the run is in now, so the discrepancy grows with distance from the origin
+    const ia = { x: INS.x + 10, y: INS.y + 44, w: INS.w - 20, h: INS.h - 68 }, ax = ia.x + ia.w / 2, ay = ia.y + ia.h / 2;
+    const rt = mul(A, x), gt = mul(model(), x), ins = p => [ax + (p[0] - x[0]) * ZOOM, ay - (p[1] - x[1]) * ZOOM];
+    const rp = ins(rt), gp = ins(gt);
+    ctx.save(); ctx.beginPath(); ctx.rect(ia.x, ia.y, ia.w, ia.h); ctx.clip();
+    ctx.strokeStyle = css("--grey"); ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(gp[0], gp[1]); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; ctx.fillStyle = mix(css("--panel"), css("--grey"), 0.7); ctx.beginPath(); ctx.arc(gp[0], gp[1], 9, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = css("--ink"); ctx.stroke();
+    ctx.strokeStyle = css("--blue"); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(rp[0], rp[1]); ctx.stroke(); ctx.fillStyle = css("--blue"); ctx.beginPath(); ctx.arc(rp[0], rp[1], 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = css("--ink"); ctx.beginPath(); ctx.arc(ax, ay, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.restore();
+    board.label("now", ax - 9, ay + 15, css("--muted"), "right", 10);
+    ctx.strokeStyle = css("--muted"); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(ia.x + 4, ia.y + ia.h - 5); ctx.lineTo(ia.x + 4 + 0.5 * ZOOM, ia.y + ia.h - 5); ctx.stroke(); ctx.lineWidth = 1;
+    board.label("0.5 units", ia.x + 9 + 0.5 * ZOOM, ia.y + ia.h - 1, css("--muted"), "left", 10);
+    board.label("one-step gap " + Math.hypot(gt[0] - rt[0], gt[1] - rt[1]).toFixed(2) + " units", INS.x + 10, INS.y + INS.h - 10, css("--muted"), "left", 11); board.label("error " + err.toFixed(2), INS.x + INS.w - 10, INS.y + INS.h - 10, css("--ink"), "right", 12, true);
     // the slider row: a labelled track with a draggable handle
     board.label("model error (drag the handle)", SL.x0 - 20, SL.y - 20, css("--ink"), "left", 12); board.label(err.toFixed(2), SL.x1 + 24, SL.y - 20, css("--red"), "right", 12, true);
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(SL.x0, SL.y); ctx.lineTo(SL.x1, SL.y); ctx.stroke(); ctx.strokeStyle = css("--red"); ctx.beginPath(); ctx.moveTo(SL.x0, SL.y); ctx.lineTo(slx(err), SL.y); ctx.stroke(); ctx.lineCap = "butt"; ctx.lineWidth = 1;
@@ -615,7 +643,7 @@ function glyph(ctx, kind, x, y, w, h, tone) {
     let u = [(wx - x[0]) / B * 0.3, (wy - x[1]) / B * 0.3]; const un = Math.hypot(u[0], u[1]); if (un > UMAX) u = [u[0] / un * UMAX, u[1] / un * UMAX];
     const Ah = model(), ghost = mul(Ah, x); ghost[0] += B * u[0]; ghost[1] += B * u[1]; ghosts.push(ghost);
     const rng = mulberry32(seed + 200 + t); x = realStep(x, u, rng); path.push(x.slice()); t++; lastGap = Math.hypot(ghost[0] - x[0], ghost[1] - x[1]);
-    if (t >= TOT) { finished = true; finals.you = Math.hypot(x[0] - target[0], x[1] - target[1]); setStep('<span class="k">your run is over</span><div class="ask">You ended ' + finals.you.toFixed(2) + ' from the target. ' + (pick === null ? 'Now commit to a planner above; both then run on the same system and model.' : 'Run the two planners again on the same system and model.') + '</div><p>Both planners optimize a twelve-step plan inside the learned model. One throws the plan away after each real step and plans again from where it actually is; the other trusts its first plan to the end.</p>'); } else text();
+    if (t >= TOT) { finished = true; finals.you = Math.hypot(x[0] - target[0], x[1] - target[1]); setStep('<span class="k">your run is over</span><div class="ask">You ended ' + finals.you.toFixed(2) + ' from the target. ' + (pick === null ? 'Now commit to a planner above; both then run on the same system and model.' : 'Run the two planners again on the same system and model.') + '</div><p>Both planners optimize inside the learned model. One solves a twelve-step plan, applies its first input and plans again from where it actually is; the other solves one twenty-step plan at the start and executes all twenty inputs.</p>'); } else text();
     draw();
   });
   document.getElementById("wmRestart").addEventListener("click", () => restart(true));
@@ -650,8 +678,10 @@ function glyph(ctx, kind, x, y, w, h, tone) {
       const d = document.createElement("div"); d.className = "m" + (t === month - 1 && running ? " now" : "") + (retrains.includes(t) ? " retrain" : "");
       const seen = t < month, labelled = t < month - LAG;
       const top = document.createElement("span"), bot = document.createElement("span");
-      top.style.background = seen ? (driftIdx(t, retrains) > alarm ? "#C9731F" : "#D6E3F2") : "transparent";
-      bot.style.background = labelled ? (errAt(t, retrains) > base * band ? "#B3261E" : "#E3F2EA") : (seen ? "#D9DDE3" : "transparent");
+      // both halves are graded by size, and the alarm and the out-of-band flag are drawn as an inset outline
+      const di = driftIdx(t, retrains), er = errAt(t, retrains);
+      if (seen) { top.style.background = mix("#D6E3F2", "#C9731F", Math.min(1, di / CAP)); if (di > alarm) top.style.boxShadow = "inset 0 0 0 2px #6E3C08"; } else top.style.background = "transparent";
+      if (labelled) { bot.style.background = mix("#E3F2EA", "#B3261E", Math.min(1, Math.max(0, (er / base - 1) / 0.8))); if (er > base * band) bot.style.boxShadow = "inset 0 0 0 2px #5E0F0B"; } else bot.style.background = seen ? "#D9DDE3" : "transparent";
       const lab = document.createElement("span"); lab.className = "lab"; lab.textContent = t + 1;
       d.appendChild(top); d.appendChild(bot); d.appendChild(lab); cal.appendChild(d);
     }
@@ -666,7 +696,7 @@ function glyph(ctx, kind, x, y, w, h, tone) {
     timer = setTimeout(tick, speed);
   }
   function commit(v) { if (!paused) return; pick = v; paused = false; if (v === "now") retrains.push(month - 1); render(); document.getElementById("drRetrain").disabled = false; stepEl.innerHTML = head() + onCall(); timer = setTimeout(tick, speed); }
-  function onCall() { return '<span class="k">on call</span><p>Months are filling in. The top half of a tile turns orange when the input drift index passes 0.5. The bottom half stays grey until the labels for that month arrive, three months later.</p><p>Retrain too early and you pay 3 for nothing, and a change still under way will set the alarm off again; too late and you pay 2 for every month the model is out of band.</p>'; }
+  function onCall() { return '<span class="k">on call</span><p>Months are filling in. The top half of a tile deepens toward orange as the input drift index grows, and takes a dark outline once the index passes 0.5; the shade stops deepening in the month the site change is complete. The bottom half stays grey until the labels for that month arrive, three months later, then shades from green to red with the size of the error, with a dark outline on the months out of band.</p><p>Retrain too early and you pay 3 for nothing, and a change still under way will set the alarm off again; too late and you pay 2 for every month the model is out of band.</p>'; }
   function finish() {
     finishedRun = true; document.getElementById("drRetrain").disabled = true;
     const mine = cost(retrains, M - 1), inp = simulate("input"), errp = simulate("error"), ci = cost(inp, M - 1), ce = cost(errp, M - 1), none = cost([], M - 1);
