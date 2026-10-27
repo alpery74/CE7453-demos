@@ -87,7 +87,7 @@ section.demo.active { display: block; }
   border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
 }
 .btns button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
-.btns button:disabled { opacity: 0.5; cursor: default; }
+.btns button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(1); }
 .btns button[aria-pressed="true"] { background: var(--blue-soft); border-color: var(--blue); }
 .readout { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
 .readout dt { color: var(--muted); }
