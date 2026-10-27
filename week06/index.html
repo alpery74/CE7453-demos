@@ -153,7 +153,7 @@ body.classroom .grid { grid-template-columns: minmax(0, 1fr) 360px; }
 .gate button { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
 .gate button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
 .gate button:disabled { opacity: 0.5; cursor: default; }
-.btns button:disabled { opacity: 0.5; cursor: default; }
+.btns button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(1); }
 .records button:disabled { opacity: 0.5; cursor: default; }
 .step .prompt { font-weight: 500; margin: 0 0 6px; }
 canvas.hit { cursor: pointer; }
