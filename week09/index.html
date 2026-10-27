@@ -158,7 +158,7 @@ canvas.grab { cursor: grab; }
 .score { font-family: var(--mono); font-size: 22px; font-weight: 600; }
 .gate { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; align-items: center; }
 .gate button { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
-.gate button:disabled, .btns button:disabled, .bet button:disabled { opacity: 0.5; cursor: default; }
+.gate button:disabled, .btns button:disabled, .bet button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(1); }
 .step .prompt { margin: 0 0 6px; font-weight: 600; }
 canvas.hit, canvas.grab { touch-action: none; }
 </style>
