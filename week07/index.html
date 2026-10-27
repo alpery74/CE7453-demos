@@ -160,7 +160,7 @@ canvas.grab { cursor: grab; }
 .gate button { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
 .gate button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
 .gate button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
-.gate button:disabled, .btns button:disabled { opacity: 0.5; cursor: default; }
+.gate button:disabled, .btns button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(1); }
 .gate input[type="number"] { font: inherit; font-family: var(--mono); font-size: 14px; width: 112px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
 .rule { font-family: var(--mono); font-size: 13.5px; line-height: 1.6; color: var(--ink); }
 .rule b { color: var(--blue); font-weight: 500; }
