@@ -289,6 +289,7 @@ canvas.pen { cursor: crosshair; }
       <div class="panel step" id="prStep"></div>
       <div class="panel">
         <div class="btns"><button class="primary" id="prFlip" disabled>Flip the cards</button><button id="prNext" disabled>Next step</button><button id="prRestart">Restart</button></div>
+        <div id="prHint" style="margin-top:8px;font-size:12.5px;color:var(--muted);line-height:1.45"></div>
         <dl class="readout" style="margin-top:10px">
           <dt>your bet</dt><dd id="prBet">-</dd>
           <dt>caught</dt><dd id="prCaught">-</dd>
@@ -759,7 +760,8 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
 (function promise() {
   const board = new Board(document.getElementById("prPlot")), stepEl = document.getElementById("prStep");
   const NC = 60, NT = 100, SD_CLAY = 7.3, SD_CLAIM = 5.0, Z90 = 1.645, PRED = 42;
-  const CX0 = 40, CY0 = 60, CELL = 36, SX0 = 480, SX1 = 1160, SY0 = 60, SY1 = 400, SCALE_Y = 470;
+  const CX0 = 40, CY0 = 60, CELL = 36, SX0 = 480, SX1 = 1160, SY0 = 60, SY1 = 400, SCALE_Y = 500;
+  const BX0 = CX0 - 12, BX1 = CX0 + 10 * CELL + 12, BY0 = 446, BY1 = 540;
   const rngC = mulberry32(51), rngT = mulberry32(120);
   const calib = []; for (let i = 0; i < NC; i++) calib.push(Math.abs(SD_CLAY * gauss(rngC)));
   const sorted = calib.slice().sort((a, b) => a - b);
@@ -773,7 +775,15 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
     board.label("100 held-out cases from the clay region", CX0, CY0 - 10, css("--ink"), "left", 12);
     board.label(flipped > 0 ? "caught " + caught + " of " + flipped : "unflipped", CX0, CY0 + 10 * CELL + 18, css("--ink"), "left", 13, true);
     // bet scale (step 1)
-    if (step === 1) { board.line([[CX0, SCALE_Y], [CX0 + 10 * CELL, SCALE_Y]], css("--ink"), 1.5); for (let v = 50; v <= 100; v += 10) { const x = CX0 + (v - 50) / 50 * 10 * CELL; board.line([[x, SCALE_Y - 6], [x, SCALE_Y + 6]], css("--ink")); board.label(String(v), x, SCALE_Y + 22, css("--muted"), "center", 11, true); } if (bet === null) board.label("click the scale: how many of the 100 will the band catch?", CX0, SCALE_Y - 14, css("--muted"), "left", 12); if (bet !== null) { const x = CX0 + (bet - 50) / 50 * 10 * CELL; ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.moveTo(x, SCALE_Y - 2); ctx.lineTo(x - 7, SCALE_Y - 14); ctx.lineTo(x + 7, SCALE_Y - 14); ctx.closePath(); ctx.fill(); board.label("your bet " + bet, x, SCALE_Y - 20, css("--orange"), "center", 12, true); } }
+    if (step === 1) {
+      ctx.fillStyle = css("--bg"); ctx.fillRect(BX0, BY0, BX1 - BX0, BY1 - BY0);
+      ctx.strokeStyle = bet === null ? css("--orange") : css("--line"); ctx.lineWidth = bet === null ? 2 : 1; ctx.strokeRect(BX0, BY0, BX1 - BX0, BY1 - BY0); ctx.lineWidth = 1;
+      board.label(bet === null ? "Click anywhere on this scale to bet" : "your bet: " + bet + " of 100", BX0 + 10, BY0 + 21, bet === null ? css("--orange") : css("--ink"), "left", 13);
+      board.label(bet === null ? "the buttons on the right unlock once you do" : "how many of the 100 the claimed band will catch", BX0 + 10, BY0 + 37, css("--muted"), "left", 11);
+      board.line([[CX0, SCALE_Y], [CX0 + 10 * CELL, SCALE_Y]], css("--ink"), 1.5);
+      for (let v = 50; v <= 100; v += 10) { const x = CX0 + (v - 50) / 50 * 10 * CELL; board.line([[x, SCALE_Y - 6], [x, SCALE_Y + 6]], css("--ink")); board.label(String(v), x, SCALE_Y + 22, css("--muted"), "center", 11, true); }
+      if (bet !== null) { const x = CX0 + (bet - 50) / 50 * 10 * CELL; ctx.fillStyle = css("--orange"); ctx.beginPath(); ctx.moveTo(x, SCALE_Y - 2); ctx.lineTo(x - 7, SCALE_Y - 14); ctx.lineTo(x + 7, SCALE_Y - 14); ctx.closePath(); ctx.fill(); board.label(String(bet), x, SCALE_Y - 20, css("--orange"), "center", 12, true); }
+    }
     // staircase
     const bw = (SX1 - SX0) / NC, qmax = sorted[NC - 1] * 1.08, sy = v => SY1 - (SY1 - SY0) * v / qmax;
     board.label(step === 1 ? "sixty calibration residuals, sorted (not yet in use)" : "sixty calibration residuals |y - yhat|, sorted: the staircase", SX0, SY0 - 10, css("--ink"), "left", 12);
@@ -794,11 +804,15 @@ function se(d2, ell, s2) { return s2 * Math.exp(-d2 / (2 * ell * ell)); }
     const pcov = rank / (NC + 1), csd = 100 * Math.sqrt(pcov * (1 - pcov) / (NC + 2));
     if (step !== 1) txt = '<span class="k">step 2 of 2</span><p>Drag the orange cut. Rank k promises k over 61 and charges the k-th residual as half width. Put it where the promise reads 90, then flip. The last few steps of the staircase are where the width climbs: that is the price of 99.</p>' + (flipped === NT ? '<p>Caught ' + caught + ' of 100 with half width ' + half.toFixed(1) + ' mm. The promise is ' + (100 * pcov).toFixed(0) + ' percent, marginal over the draw of the calibration set and over the test case. Conditional on these sixty residuals the coverage of this band is about ' + (100 * pcov).toFixed(0) + ' plus or minus ' + csd.toFixed(0) + ' points, so it is a statement about a long run of cases at this width. The Change the region tab carries this band to the sand.</p>' : '');
     stepEl.innerHTML = txt;
+    document.getElementById("prHint").textContent = step === 1
+      ? (bet === null ? "Flip the cards and Next step are locked until you bet. The scale is at the foot of the cards, on the left."
+        : (flipped < NT ? "Next step unlocks once all hundred cards are flipped." : "Next step is ready: it wraps the model in a conformal band."))
+      : "Step 2 of 2. Drag the orange cut along the staircase, then flip again. Restart goes back to step 1.";
     document.getElementById("prFlip").disabled = (step === 1 && bet === null) || (anim !== null);
     document.getElementById("prNext").disabled = !(flipped === NT && step < 2);
   }
   function flip() { if (anim) return; flipped = 0; caught = 0; const tick = () => { if (flipped >= NT) { anim = null; draw(); return; } if (Math.abs(T[flipped]) <= half) caught++; flipped++; draw(); anim = setTimeout(tick, 28); }; anim = setTimeout(tick, 10); }
-  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (step >= 2 && Math.abs(mx - (SX0 + rank * (SX1 - SX0) / NC)) < 16 && my >= SY0 - 16 && my <= SY1 + 8) { dragCut = true; return; } if (step === 1 && flipped === 0 && my > SCALE_Y - 24 && my < SCALE_Y + 26 && mx >= CX0 && mx <= CX0 + 10 * CELL) { bet = Math.round(50 + (mx - CX0) / (10 * CELL) * 50); draw(); } });
+  board.c.addEventListener("pointerdown", ev => { const [mx, my] = board.pos(ev); if (step >= 2 && Math.abs(mx - (SX0 + rank * (SX1 - SX0) / NC)) < 16 && my >= SY0 - 16 && my <= SY1 + 8) { dragCut = true; return; } if (step === 1 && flipped === 0 && my > BY0 && my < BY1 && mx >= BX0 && mx <= BX1) { bet = Math.round(50 + Math.max(0, Math.min(1, (mx - CX0) / (10 * CELL))) * 50); draw(); } });
   window.addEventListener("pointermove", ev => { if (!dragCut) return; const [mx] = board.pos(ev); const r = Math.max(1, Math.min(NC, Math.round((mx - SX0) / ((SX1 - SX0) / NC)))); if (r !== rank) { rank = r; half = sorted[rank - 1]; flipped = 0; caught = null; draw(); } });
   window.addEventListener("pointerup", () => { dragCut = false; });
   document.getElementById("prFlip").addEventListener("click", flip);
